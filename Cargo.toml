@@ -5,14 +5,12 @@ edition = "2021"
 rust-version = "1.74"
 description = "Agent Console Dashboard daemon"
 
+[workspace]
+
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-tokio = { version = "1.49", features = ["rt", "rt-multi-thread", "signal", "macros", "net", "io-util", "sync", "time"] }
+tokio = { version = "1.49", features = ["rt-multi-thread", "signal", "macros", "sync"] }
 fork = "0.6"
-tracing = "0.1"
-
-[dev-dependencies]
-tempfile = "3"
 
 [dev-dependencies]
 cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }

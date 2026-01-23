@@ -88,13 +88,8 @@ mod tests {
     #[test]
     fn test_custom_socket_path() {
         // Verify custom socket path can be specified
-        let cli = Cli::try_parse_from([
-            "agent-console",
-            "daemon",
-            "--socket",
-            "/custom/path.sock",
-        ])
-        .unwrap();
+        let cli = Cli::try_parse_from(["agent-console", "daemon", "--socket", "/custom/path.sock"])
+            .unwrap();
         match cli.command {
             Commands::Daemon { socket, .. } => {
                 assert_eq!(socket, PathBuf::from("/custom/path.sock"));
@@ -225,13 +220,8 @@ mod tests {
     #[test]
     fn test_socket_relative_path() {
         // Verify relative socket path is accepted
-        let cli = Cli::try_parse_from([
-            "agent-console",
-            "daemon",
-            "--socket",
-            "./local.sock",
-        ])
-        .unwrap();
+        let cli =
+            Cli::try_parse_from(["agent-console", "daemon", "--socket", "./local.sock"]).unwrap();
         match cli.command {
             Commands::Daemon { socket, .. } => {
                 assert_eq!(socket, PathBuf::from("./local.sock"));

@@ -3,8 +3,7 @@
 //! This module provides process lifecycle management, daemonization, and the
 //! main entry point for running the daemon.
 
-pub mod server;
-pub use server::SocketServer;
+pub mod store;
 
 use crate::DaemonConfig;
 use fork::{daemon, Fork};
@@ -12,7 +11,6 @@ use std::error::Error;
 use tokio::runtime::Runtime;
 use tokio::signal;
 use tokio::signal::unix::{signal as unix_signal, SignalKind};
-use tokio::sync::broadcast;
 
 /// Result type alias for daemon operations.
 pub type DaemonResult<T> = Result<T, Box<dyn Error>>;
@@ -26,8 +24,8 @@ pub type DaemonResult<T> = Result<T, Box<dyn Error>>;
 ///
 /// Panics if the SIGTERM signal handler cannot be registered.
 async fn wait_for_shutdown() {
-    let mut sigterm = unix_signal(SignalKind::terminate())
-        .expect("Failed to register SIGTERM handler");
+    let mut sigterm =
+        unix_signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
 
     tokio::select! {
         _ = signal::ctrl_c() => {
@@ -48,9 +46,9 @@ async fn wait_for_shutdown() {
 /// # Arguments
 ///
 /// * `nochdir` - If false, changes the working directory to `/`.
-///               If true, keeps the current working directory.
+///   If true, keeps the current working directory.
 /// * `noclose` - If false, redirects stdin/stdout/stderr to /dev/null.
-///               If true, keeps the standard file descriptors.
+///   If true, keeps the standard file descriptors.
 ///
 /// # Returns
 ///
@@ -72,10 +70,10 @@ pub fn daemonize_process(nochdir: bool, noclose: bool) -> DaemonResult<()> {
             // Parent exits immediately
             std::process::exit(0);
         }
-        Err(e) => Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to daemonize: {}", e),
-        ))),
+        Err(e) => Err(Box::new(std::io::Error::other(format!(
+            "Failed to daemonize: {}",
+            e
+        )))),
     }
 }
 
@@ -123,37 +121,18 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
     // Create Tokio runtime AFTER daemonization
     // Using current_thread runtime for simpler daemon workloads
     let runtime = Runtime::new().map_err(|e| {
-        Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to create Tokio runtime: {}", e),
-        )) as Box<dyn Error>
+        Box::new(std::io::Error::other(format!(
+            "Failed to create Tokio runtime: {}",
+            e
+        ))) as Box<dyn Error>
     })?;
 
     eprintln!("Daemon running. Press Ctrl+C or send SIGTERM to stop.");
 
-    // Run the main event loop with socket server
+    // Run the main event loop
     runtime.block_on(async {
-        // Create and start socket server
-        let mut server = SocketServer::new(config.socket_path.to_string_lossy().to_string());
-
-        if let Err(e) = server.start().await {
-            eprintln!("Failed to start socket server: {}", e);
-            return;
-        }
-
-        // Set up shutdown handling
-        let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
-
-        // Spawn task to wait for shutdown signal
-        tokio::spawn(async move {
-            wait_for_shutdown().await;
-            let _ = shutdown_tx.send(());
-        });
-
-        // Run server until shutdown
-        if let Err(e) = server.run_with_shutdown(shutdown_rx).await {
-            eprintln!("Server error: {}", e);
-        }
+        // Wait for shutdown signal
+        wait_for_shutdown().await;
     });
 
     eprintln!("Daemon stopped.");
