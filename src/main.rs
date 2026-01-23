@@ -164,4 +164,85 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_flag_order_independence() {
+        // Verify flags can be specified in any order (--socket before --daemonize)
+        let cli = Cli::try_parse_from([
+            "agent-console",
+            "daemon",
+            "--socket",
+            "/custom/path.sock",
+            "--daemonize",
+        ])
+        .unwrap();
+        match cli.command {
+            Commands::Daemon { daemonize, socket } => {
+                assert!(daemonize);
+                assert_eq!(socket, PathBuf::from("/custom/path.sock"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_unknown_subcommand_fails() {
+        // Verify unknown subcommand fails to parse
+        let result = Cli::try_parse_from(["agent-console", "unknown"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_missing_subcommand_fails() {
+        // Verify missing subcommand fails to parse
+        let result = Cli::try_parse_from(["agent-console"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_socket_requires_value() {
+        // Verify --socket flag requires a value
+        let result = Cli::try_parse_from(["agent-console", "daemon", "--socket"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_socket_path_with_spaces() {
+        // Verify socket path with spaces works correctly
+        let cli = Cli::try_parse_from([
+            "agent-console",
+            "daemon",
+            "--socket",
+            "/path/with spaces/socket.sock",
+        ])
+        .unwrap();
+        match cli.command {
+            Commands::Daemon { socket, .. } => {
+                assert_eq!(socket, PathBuf::from("/path/with spaces/socket.sock"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_socket_relative_path() {
+        // Verify relative socket path is accepted
+        let cli = Cli::try_parse_from([
+            "agent-console",
+            "daemon",
+            "--socket",
+            "./local.sock",
+        ])
+        .unwrap();
+        match cli.command {
+            Commands::Daemon { socket, .. } => {
+                assert_eq!(socket, PathBuf::from("./local.sock"));
+            }
+        }
+    }
+
+    #[test]
+    fn test_unknown_flag_fails() {
+        // Verify unknown flag fails to parse
+        let result = Cli::try_parse_from(["agent-console", "daemon", "--unknown-flag"]);
+        assert!(result.is_err());
+    }
 }
