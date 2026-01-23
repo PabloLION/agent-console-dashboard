@@ -1,0 +1,175 @@
+# Story: Handle Session Lifecycle Events
+
+**Story ID:** S008
+**Epic:** [E002 - Session Management](../epic/E002-session-management.md)
+**Status:** Draft
+**Priority:** P1
+**Estimated Points:** 5
+
+## Description
+
+As a developer,
+I want to handle session lifecycle events (create, update, close),
+So that sessions are properly managed from inception to termination and subscribers are notified of changes.
+
+## Context
+
+Session lifecycle management is the orchestration layer that ties together session creation, status updates, and session closure. It ensures that:
+- New sessions are properly initialized and added to the store
+- Status updates are validated and broadcast to subscribers
+- Closed sessions retain metadata for potential resurrection
+- Subscribers (dashboards) receive real-time updates
+
+This story integrates the data model (S005), status transitions (S006), and state history (S007) into a cohesive lifecycle management system.
+
+Key behaviors:
+- Sessions are created when the first status update arrives for an unknown session ID
+- Sessions can be explicitly closed or implicitly closed via hooks
+- Closed sessions are not removed immediately - they're marked as closed for resurrection
+- All state changes trigger notifications to subscribed clients
+
+## Implementation Details
+
+### Technical Approach
+
+1. Implement `Store::create_session()` for explicit session creation
+2. Implement `Store::get_or_create_session()` for lazy session creation
+3. Implement `Store::update_session()` for status updates with subscriber notification
+4. Implement `Store::close_session()` for session closure
+5. Implement `Store::remove_session()` for permanent removal
+6. Add subscriber notification on all state changes
+7. Ensure thread-safe access to store (async-safe with Tokio)
+8. Handle session metadata preservation for resurrection feature
+
+### Files to Modify
+
+- `src/daemon/store.rs` - Add lifecycle management methods
+- `src/daemon/server.rs` - Wire lifecycle methods to IPC commands
+- `src/daemon/session.rs` - Add lifecycle-related methods to Session
+
+### Dependencies
+
+- [S005 - Session Data Model](./S005-session-data-model.md) - Session struct must be defined
+- [S006 - Session Status Transitions](./S006-session-status-transitions.md) - Transition logic must be implemented
+- [S007 - Session State History](./S007-session-state-history.md) - History recording must work
+- [S003 - In-Memory Session Store](./S003-in-memory-session-store.md) - Store infrastructure must exist
+
+## Acceptance Criteria
+
+- [ ] Given a SET command for a new session ID, when processed, then a new session is created with the provided status
+- [ ] Given a SET command for an existing session ID, when processed, then the session status is updated
+- [ ] Given a session status update, when successful, then all subscribed clients receive an UPDATE message
+- [ ] Given a RM command for a session, when processed, then the session is marked as closed (not removed)
+- [ ] Given a closed session, when queried via LIST, then it appears with status "closed"
+- [ ] Given a closed session, when enough time passes or explicit removal requested, then it can be permanently removed
+- [ ] Given session creation, when the working_dir is provided, then it is stored with the session
+- [ ] Given session creation, when the session_id (Claude Code ID) is provided, then it is stored for resurrection
+- [ ] Given concurrent access to the store, when multiple updates occur, then data integrity is maintained
+
+## Testing Requirements
+
+- [ ] Unit test: Session creation with all metadata
+- [ ] Unit test: Session update triggers notification
+- [ ] Unit test: Session closure marks as closed, doesn't remove
+- [ ] Unit test: Closed session still appears in LIST
+- [ ] Unit test: Session removal permanently deletes
+- [ ] Integration test: Subscriber receives UPDATE on status change
+- [ ] Integration test: Multiple subscribers all receive updates
+- [ ] Integration test: Concurrent updates don't corrupt state
+
+## Out of Scope
+
+- IPC protocol parsing (E003)
+- Resurrection execution - launching Claude with --resume (E008)
+- API usage tracking events (E009)
+- Hook script implementation (E006)
+
+## Notes
+
+### Lifecycle State Diagram
+
+```
+                    ┌─────────────────────────────────┐
+                    │                                 │
+                    ▼                                 │
+    ┌──────────┐  SET   ┌──────────┐  SET   ┌──────────┐
+    │  (none)  │───────►│  Active  │◄──────►│  Active  │
+    └──────────┘        │ (Working)│        │(Attention)│
+                        └────┬─────┘        └──────────┘
+                             │                    │
+                             │ RM                 │ RM
+                             ▼                    ▼
+                        ┌──────────┐
+                        │  Closed  │
+                        │(metadata │
+                        │ retained)│
+                        └────┬─────┘
+                             │
+                             │ (timeout or explicit)
+                             ▼
+                        ┌──────────┐
+                        │ Removed  │
+                        └──────────┘
+```
+
+### Subscriber Notification Protocol
+
+When a session state changes, all subscribers receive:
+```
+UPDATE <session_id> <status> <elapsed_seconds>
+```
+
+Example:
+```
+UPDATE abc123 attention 125
+```
+
+This tells subscribers that session `abc123` changed to `attention` status after being in the previous state for 125 seconds.
+
+### Session Creation Metadata
+
+On first SET command, capture:
+
+| Field | Source | Required |
+|-------|--------|----------|
+| id | From command | Yes |
+| status | From command | Yes |
+| working_dir | From metadata JSON | No (defaults to unknown) |
+| session_id | From metadata JSON | No (Claude Code specific) |
+| agent_type | From metadata JSON | No (defaults to ClaudeCode) |
+
+Example SET command with metadata:
+```
+SET abc123 working {"working_dir":"/home/user/project","session_id":"claude-abc"}
+```
+
+### Thread Safety
+
+The store must be wrapped in appropriate synchronization:
+
+```rust
+use tokio::sync::RwLock;
+use std::sync::Arc;
+
+type SharedStore = Arc<RwLock<Store>>;
+
+// Read access for LIST
+let store = shared_store.read().await;
+
+// Write access for SET, RM
+let mut store = shared_store.write().await;
+```
+
+### Cleanup Strategy
+
+Closed sessions should be cleaned up to prevent unbounded memory growth. Options:
+1. **Time-based**: Remove sessions closed for more than N minutes
+2. **Count-based**: Keep only the last N closed sessions
+3. **Explicit**: Only remove when user explicitly requests
+
+**Recommendation:** Start with time-based cleanup (default 30 minutes) with configuration option.
+
+```toml
+[sessions]
+closed_session_retention_minutes = 30
+```

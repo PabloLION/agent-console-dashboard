@@ -1,0 +1,149 @@
+# Story: Track Session State History
+
+**Story ID:** S007
+**Epic:** [E002 - Session Management](../epic/E002-session-management.md)
+**Status:** Draft
+**Priority:** P2
+**Estimated Points:** 3
+
+## Description
+
+As a user,
+I want to see the history of state transitions for each session,
+So that I can understand session activity patterns and identify how long sessions have been in various states.
+
+## Context
+
+Session state history provides valuable insights into session behavior over time. This is NOT chat history - it only tracks status transitions (Working -> Attention -> Question, etc.). The history helps users understand patterns like:
+- How long was the agent working before stopping?
+- How many times has the session switched between states?
+- Has a session been waiting for attention for too long?
+
+From the features document:
+> Track state transitions over time (NOT chat history).
+> Display: Show last N state transitions per session. Expandable to see full history.
+
+State history is ephemeral - it does not persist across daemon restarts. This is intentional since the primary use case is monitoring current sessions.
+
+## Implementation Details
+
+### Technical Approach
+
+1. Add `record_transition()` method to Session
+2. Create `StateTransition` instances with timestamp, from/to status, and duration
+3. Append to `history` vector on each transition
+4. Implement configurable history depth limit (e.g., max 100 entries)
+5. Provide method to query recent history
+6. Provide method to query full history
+7. Ensure history is included in JSON serialization for display
+
+### Files to Modify
+
+- `src/daemon/session.rs` - Add history recording methods
+- `src/config.rs` - Add history depth configuration option
+
+### Dependencies
+
+- [S005 - Session Data Model](./S005-session-data-model.md) - StateTransition struct must be defined
+- [S006 - Session Status Transitions](./S006-session-status-transitions.md) - Transitions must trigger recording
+
+## Acceptance Criteria
+
+- [ ] Given a status transition, when recorded, then a StateTransition is added to the session's history
+- [ ] Given a StateTransition, then it contains: timestamp, from status, to status, duration in previous state
+- [ ] Given a session with history, when querying recent history, then the last N transitions are returned (default N=10)
+- [ ] Given a session with history, when querying full history, then all transitions are returned
+- [ ] Given history depth limit configured, when history exceeds limit, then oldest entries are dropped
+- [ ] Given a session's history, when serialized to JSON, then all fields are properly formatted
+- [ ] Given the timestamp field, then it is serialized as ISO 8601 or Unix timestamp for display
+
+## Testing Requirements
+
+- [ ] Unit test: Transition is recorded correctly with all fields
+- [ ] Unit test: Multiple transitions accumulate in history
+- [ ] Unit test: History depth limit enforced (oldest dropped)
+- [ ] Unit test: Recent history returns correct subset
+- [ ] Unit test: Full history returns all entries
+- [ ] Unit test: Duration calculation is accurate
+- [ ] Unit test: History serializes to valid JSON
+
+## Out of Scope
+
+- History persistence across restarts (explicitly not a goal)
+- Chat history or conversation content
+- TUI display of history (E004, E005)
+- History analysis or aggregation features
+
+## Notes
+
+### State Transition Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| timestamp | Instant | When the transition occurred |
+| from | Status | Previous status |
+| to | Status | New status |
+| duration | Duration | Time spent in previous state |
+
+### History Display Format
+
+For TUI display (implemented in E005), history should be shown as:
+
+```
+Session: abc123
+History (last 5 transitions):
+  10:45:32  Working -> Attention   (worked 2m 34s)
+  10:43:58  Attention -> Working   (waited 1m 12s)
+  10:42:46  Working -> Attention   (worked 5m 01s)
+  10:37:45  Attention -> Working   (waited 0m 22s)
+  10:37:23  (session started)      Working
+```
+
+### Configuration
+
+```toml
+[sessions]
+history_depth = 100  # Maximum transitions to keep per session
+```
+
+### Implementation Sketch
+
+```rust
+impl Session {
+    /// Record a state transition in history
+    fn record_transition(&mut self, from: Status, to: Status, duration: Duration) {
+        let transition = StateTransition {
+            timestamp: Instant::now(),
+            from,
+            to,
+            duration,
+        };
+
+        self.history.push(transition);
+
+        // Enforce depth limit
+        if self.history.len() > self.history_depth_limit {
+            self.history.remove(0);
+        }
+    }
+
+    /// Get recent history (last N entries)
+    fn recent_history(&self, count: usize) -> &[StateTransition] {
+        let start = self.history.len().saturating_sub(count);
+        &self.history[start..]
+    }
+
+    /// Get full history
+    fn full_history(&self) -> &[StateTransition] {
+        &self.history
+    }
+}
+```
+
+### Memory Considerations
+
+With a 100-entry limit and ~64 bytes per StateTransition:
+- Per session: ~6.4 KB max
+- 100 sessions: ~640 KB max
+
+This is well within acceptable memory usage for the daemon.
