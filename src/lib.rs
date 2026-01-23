@@ -93,17 +93,7 @@ impl Session {
 
 impl Default for Session {
     fn default() -> Self {
-        Self {
-            id: String::new(),
-            agent_type: AgentType::ClaudeCode,
-            status: Status::Working,
-            working_dir: PathBuf::new(),
-            since: Instant::now(),
-            history: Vec::new(),
-            api_usage: None,
-            closed: false,
-            session_id: None,
-        }
+        Self::new(String::new(), AgentType::ClaudeCode, PathBuf::new())
     }
 }
 

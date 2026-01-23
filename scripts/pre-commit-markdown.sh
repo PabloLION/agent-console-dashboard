@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# This hook was set by cargo-husky v1.5.0: https://github.com/rhysd/cargo-husky#readme
 # Pre-commit hook for markdown files
 # Only checks STAGED markdown files (not all files in docs/)
 
