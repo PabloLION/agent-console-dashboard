@@ -113,4 +113,45 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_daemon_help_contains_expected_options() {
+        // Verify that the daemon subcommand help contains --daemonize and --socket
+        let cmd = Cli::command();
+        let daemon_cmd = cmd
+            .get_subcommands()
+            .find(|sc| sc.get_name() == "daemon")
+            .expect("daemon subcommand should exist");
+
+        // Check that --daemonize option exists
+        let daemonize_arg = daemon_cmd
+            .get_arguments()
+            .find(|arg| arg.get_id() == "daemonize");
+        assert!(daemonize_arg.is_some(), "--daemonize flag should exist");
+
+        // Check that --socket option exists
+        let socket_arg = daemon_cmd
+            .get_arguments()
+            .find(|arg| arg.get_id() == "socket");
+        assert!(socket_arg.is_some(), "--socket flag should exist");
+    }
+
+    #[test]
+    fn test_combined_flags() {
+        // Verify both flags can be used together
+        let cli = Cli::try_parse_from([
+            "agent-console",
+            "daemon",
+            "--daemonize",
+            "--socket",
+            "/var/run/my-daemon.sock",
+        ])
+        .unwrap();
+        match cli.command {
+            Commands::Daemon { daemonize, socket } => {
+                assert!(daemonize);
+                assert_eq!(socket, PathBuf::from("/var/run/my-daemon.sock"));
+            }
+        }
+    }
 }
