@@ -1,0 +1,245 @@
+# Story: Add Layout Presets
+
+**Story ID:** S022
+**Epic:** [E005 - Widget System](../epic/E005-widget-system.md)
+**Status:** Draft
+**Priority:** P1
+**Estimated Points:** 5
+
+## Description
+
+As a user,
+I want to switch between predefined layout presets,
+So that I can quickly adapt the dashboard to different use cases without manual configuration.
+
+## Context
+
+Layout presets are predefined collections of widgets that serve different use cases. Users can switch between layouts instantly using keyboard shortcuts (1-4) or the `--layout` CLI flag. This provides a balance between customization flexibility and ease of use.
+
+Four built-in layouts cover common scenarios: minimal one-line display for status bars, standard two-line with context, detailed view for full monitoring, and history view for debugging state transitions.
+
+## Implementation Details
+
+### Technical Approach
+
+1. Create `src/layout/mod.rs` as layout module entry point
+2. Create `src/layout/presets.rs` with built-in layout definitions
+3. Create `src/layout/manager.rs` for layout switching logic
+4. Define Layout struct holding ordered widget list
+5. Implement keyboard shortcuts (1-4) for layout switching
+6. Add `--layout` CLI flag for initial layout selection
+7. Support custom layouts from configuration file (TOML)
+
+### Files to Modify
+
+- `src/layout/mod.rs` - Layout module entry point
+- `src/layout/presets.rs` - Built-in layout preset definitions
+- `src/layout/manager.rs` - Layout manager and switching logic
+- `src/tui/app.rs` - Integrate layout manager with TUI
+- `src/tui/event.rs` - Handle layout switching keyboard events
+- `src/main.rs` - Add --layout CLI flag
+
+### Dependencies
+
+- [S018 - Widget Trait/Interface](./S018-widget-trait-interface.md) - Widget trait for layout composition
+- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) - TUI foundation
+- [S016 - Keyboard Navigation](./S016-keyboard-navigation.md) - Keyboard event handling
+
+## Acceptance Criteria
+
+- [ ] Given the TUI is running, when `1` is pressed, then one-line layout activates (session-status only)
+- [ ] Given the TUI is running, when `2` is pressed, then two-line layout activates (working-dir, session-status)
+- [ ] Given the TUI is running, when `3` is pressed, then detailed layout activates (working-dir, session-status, api-usage)
+- [ ] Given the TUI is running, when `4` is pressed, then history layout activates (session-status, state-history)
+- [ ] Given `--layout detailed` is passed, when TUI starts, then detailed layout is active initially
+- [ ] Given a custom layout is defined in config, when that layout name is used, then custom widget set is displayed
+- [ ] Given the layout changes, when rendered, then widgets update immediately without restart
+- [ ] Given an invalid layout name is used, when TUI starts, then default layout is used with warning
+
+## Testing Requirements
+
+- [ ] Unit test: Built-in layouts contain expected widgets
+- [ ] Unit test: Layout switching changes active widget set
+- [ ] Unit test: Custom layout parsing from TOML works correctly
+- [ ] Unit test: Invalid layout name falls back to default
+- [ ] Integration test: Keyboard shortcuts switch layouts correctly
+- [ ] Integration test: CLI --layout flag sets initial layout
+
+## Out of Scope
+
+- Layout editing at runtime (future enhancement)
+- Per-session layouts
+- Layout persistence after closing
+- Animated layout transitions
+- Widget reordering via keyboard
+
+## Notes
+
+### Built-in Layouts
+
+| Layout | Widgets | Use Case | Shortcut |
+|--------|---------|----------|----------|
+| `one-line` | `session-status` | Minimal status bar, v1 compatible | `1` |
+| `two-line` | `working-dir`, `session-status` | Standard context | `2` |
+| `detailed` | `working-dir`, `session-status`, `api-usage` | Full monitoring | `3` |
+| `history` | `session-status`, `state-history` | Debug/analysis | `4` |
+
+### Layout Mockups
+
+**One-Line Layout (1):**
+```text
+proj-a: - | proj-b: 2m34s | proj-c: ?
+```
+
+**Two-Line Layout (2):**
+```text
+~/projects/proj-b
+proj-a: - | proj-b: 2m34s | proj-c: ?
+```
+
+**Detailed Layout (3):**
+```text
+~/projects/proj-b
+proj-a: - | proj-b: 2m34s | proj-c: ?
+Tokens: 12.3k in / 8.1k out | $0.42 est
+```
+
+**History Layout (4):**
+```text
+proj-a: - | proj-b: 2m34s | proj-c: ?
+14:32 Working→Attention | 14:30 Attention→Working
+```
+
+### Implementation
+
+```rust
+use crate::widgets::Widget;
+use std::collections::HashMap;
+
+pub struct Layout {
+    name: String,
+    widgets: Vec<Box<dyn Widget>>,
+}
+
+impl Layout {
+    pub fn widgets(&self) -> &[Box<dyn Widget>] {
+        &self.widgets
+    }
+}
+
+pub struct LayoutManager {
+    layouts: HashMap<String, Layout>,
+    active: String,
+}
+
+impl LayoutManager {
+    pub fn new() -> Self {
+        let mut manager = Self {
+            layouts: HashMap::new(),
+            active: "one-line".to_string(),
+        };
+
+        // Register built-in layouts
+        manager.register_preset("one-line", vec!["session-status"]);
+        manager.register_preset("two-line", vec!["working-dir", "session-status"]);
+        manager.register_preset("detailed", vec![
+            "working-dir", "session-status", "api-usage"
+        ]);
+        manager.register_preset("history", vec!["session-status", "state-history"]);
+
+        manager
+    }
+
+    pub fn switch_to(&mut self, name: &str) -> bool {
+        if self.layouts.contains_key(name) {
+            self.active = name.to_string();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn switch_by_index(&mut self, index: usize) -> bool {
+        match index {
+            1 => self.switch_to("one-line"),
+            2 => self.switch_to("two-line"),
+            3 => self.switch_to("detailed"),
+            4 => self.switch_to("history"),
+            _ => false,
+        }
+    }
+
+    pub fn active_layout(&self) -> Option<&Layout> {
+        self.layouts.get(&self.active)
+    }
+
+    fn register_preset(&mut self, name: &str, widget_ids: Vec<&str>) {
+        let registry = WidgetRegistry::new();
+        let widgets: Vec<_> = widget_ids
+            .iter()
+            .filter_map(|id| registry.create(id))
+            .collect();
+
+        self.layouts.insert(name.to_string(), Layout {
+            name: name.to_string(),
+            widgets,
+        });
+    }
+}
+```
+
+### Configuration (TOML)
+
+```toml
+# Built-in presets can be overridden
+[ui.layouts.one-line]
+widgets = ["session-status"]
+
+[ui.layouts.two-line]
+widgets = ["working-dir", "session-status"]
+
+[ui.layouts.detailed]
+widgets = ["working-dir", "session-status", "api-usage", "state-history"]
+
+# Custom layouts
+[ui.layouts.my-layout]
+widgets = ["clock", "session-status", "spacer", "api-usage"]
+
+# Default layout on startup
+[ui]
+default_layout = "two-line"
+```
+
+### CLI Flag
+
+```bash
+# Start with specific layout
+agent-console tui --layout detailed
+
+# List available layouts
+agent-console tui --list-layouts
+```
+
+### Keyboard Event Handling
+
+```rust
+fn handle_layout_key(app: &mut App, key: KeyEvent) -> bool {
+    match key.code {
+        KeyCode::Char('1') => app.layout_manager.switch_by_index(1),
+        KeyCode::Char('2') => app.layout_manager.switch_by_index(2),
+        KeyCode::Char('3') => app.layout_manager.switch_by_index(3),
+        KeyCode::Char('4') => app.layout_manager.switch_by_index(4),
+        _ => false,
+    }
+}
+```
+
+### Project Structure
+
+```text
+src/
+├── layout/
+│   ├── mod.rs           # Layout module entry
+│   ├── presets.rs       # Built-in layout definitions
+│   └── manager.rs       # Layout switching logic
+```
