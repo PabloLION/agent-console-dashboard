@@ -64,7 +64,7 @@ pub struct Session {
     pub working_dir: PathBuf,
     /// Timestamp when status last changed.
     pub since: Instant,
-    /// History of state transitions (max 10 entries).
+    /// History of state transitions (display limited by dashboard, not enforced here).
     pub history: Vec<StateTransition>,
     /// Optional API usage tracking.
     pub api_usage: Option<ApiUsage>,
