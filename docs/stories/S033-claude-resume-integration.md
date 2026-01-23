@@ -1,22 +1,26 @@
 # Story: Integrate with Claude --resume
 
-**Story ID:** S033
-**Epic:** [E008 - Session Resurrection](../epic/E008-session-resurrection.md)
-**Status:** Draft
-**Priority:** P2
-**Estimated Points:** 5
+**Story ID:** S033 **Epic:**
+[E008 - Session Resurrection](../epic/E008-session-resurrection.md) **Status:**
+Draft **Priority:** P2 **Estimated Points:** 5
 
 ## Description
 
-As a user,
-I want the resurrection process to properly invoke `claude --resume` in the correct context,
-So that my Claude Code session continues seamlessly with full conversation history.
+As a user, I want the resurrection process to properly invoke `claude --resume`
+in the correct context, So that my Claude Code session continues seamlessly with
+full conversation history.
 
 ## Context
 
-The RESURRECT command (S032) prepares the resurrection and validates prerequisites. This story handles the actual integration with Claude Code's `--resume` flag, ensuring the session is resumed in the correct working directory with proper terminal context. This is the most technically challenging part of session resurrection as it involves spawning processes and potentially coordinating with terminal multiplexers.
+The RESURRECT command (S032) prepares the resurrection and validates
+prerequisites. This story handles the actual integration with Claude Code's
+`--resume` flag, ensuring the session is resumed in the correct working
+directory with proper terminal context. This is the most technically challenging
+part of session resurrection as it involves spawning processes and potentially
+coordinating with terminal multiplexers.
 
-Different execution environments require different approaches: direct terminal, Zellij pane, tmux window, or displaying the command for manual execution.
+Different execution environments require different approaches: direct terminal,
+Zellij pane, tmux window, or displaying the command for manual execution.
 
 ## Implementation Details
 
@@ -39,19 +43,28 @@ Different execution environments require different approaches: direct terminal, 
 
 ### Dependencies
 
-- [S032 - RESURRECT Command](./S032-resurrect-command.md) - Provides command infrastructure
-- [S024 - User Prompt Submit Hook](./S024-user-prompt-submit-hook.md) - Detects session activity
+- [S032 - RESURRECT Command](./S032-resurrect-command.md) - Provides command
+  infrastructure
+- [S024 - User Prompt Submit Hook](./S024-user-prompt-submit-hook.md) - Detects
+  session activity
 - E010 - Zellij Integration (optional) - Enables Zellij pane creation
 
 ## Acceptance Criteria
 
-- [ ] Given Zellij environment with integration enabled, when RESURRECT executes, then new pane opens with resumed session
-- [ ] Given plain terminal environment, when RESURRECT executes with --execute, then claude --resume runs in current terminal
-- [ ] Given any environment, when RESURRECT executes without --execute, then correct command is printed to stdout
-- [ ] Given a session that has exceeded context limit, when resume is attempted, then appropriate error is returned
-- [ ] Given successful resume, when session becomes active, then it appears in active sessions list
-- [ ] Given the working directory, when resume executes, then claude starts in that directory
-- [ ] Given tmux environment, when RESURRECT executes, then new tmux window/pane opens with resumed session
+- [ ] Given Zellij environment with integration enabled, when RESURRECT
+      executes, then new pane opens with resumed session
+- [ ] Given plain terminal environment, when RESURRECT executes with --execute,
+      then claude --resume runs in current terminal
+- [ ] Given any environment, when RESURRECT executes without --execute, then
+      correct command is printed to stdout
+- [ ] Given a session that has exceeded context limit, when resume is attempted,
+      then appropriate error is returned
+- [ ] Given successful resume, when session becomes active, then it appears in
+      active sessions list
+- [ ] Given the working directory, when resume executes, then claude starts in
+      that directory
+- [ ] Given tmux environment, when RESURRECT executes, then new tmux window/pane
+      opens with resumed session
 
 ## Testing Requirements
 
@@ -244,7 +257,8 @@ pub struct ExecuteOptions {
 
 ### Detecting Non-Resumable Sessions
 
-Claude Code returns an error when attempting to resume a session that has exceeded its context limit. We need to handle this gracefully:
+Claude Code returns an error when attempting to resume a session that has
+exceeded its context limit. We need to handle this gracefully:
 
 ```rust
 /// Check if a session is resumable by attempting a dry run
@@ -269,7 +283,9 @@ fn parse_resume_error(stderr: &str) -> Option<String> {
 
 ### Session Re-registration
 
-When a session is successfully resumed, it will trigger the UserPromptSubmit hook which registers it as an active session again. The hook should recognize this as a resumed session:
+When a session is successfully resumed, it will trigger the UserPromptSubmit
+hook which registers it as an active session again. The hook should recognize
+this as a resumed session:
 
 ```rust
 // In UserPromptSubmit hook handler
@@ -303,10 +319,16 @@ default_action = "print"
 
 ### Challenges
 
-1. **Terminal Context**: The daemon process may not have access to the terminal where the user wants to run the resumed session. The safest approach is often to return the command for manual execution.
+1. **Terminal Context**: The daemon process may not have access to the terminal
+   where the user wants to run the resumed session. The safest approach is often
+   to return the command for manual execution.
 
-2. **Clipboard Access**: Copying to clipboard requires additional dependencies and may not work in all environments.
+2. **Clipboard Access**: Copying to clipboard requires additional dependencies
+   and may not work in all environments.
 
-3. **Zellij/tmux Session**: Creating new panes requires the multiplexer to be running and accessible. The daemon may be running outside the multiplexer session.
+3. **Zellij/tmux Session**: Creating new panes requires the multiplexer to be
+   running and accessible. The daemon may be running outside the multiplexer
+   session.
 
-4. **Context Limit Detection**: Claude Code's error messages for non-resumable sessions need to be parsed reliably.
+4. **Context Limit Detection**: Claude Code's error messages for non-resumable
+   sessions need to be parsed reliably.

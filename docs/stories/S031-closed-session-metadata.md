@@ -1,22 +1,26 @@
 # Story: Store Session Metadata for Closed Sessions
 
-**Story ID:** S031
-**Epic:** [E008 - Session Resurrection](../epic/E008-session-resurrection.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 3
+**Story ID:** S031 **Epic:**
+[E008 - Session Resurrection](../epic/E008-session-resurrection.md) **Status:**
+Draft **Priority:** P1 **Estimated Points:** 3
 
 ## Description
 
-As a user,
-I want the dashboard to retain metadata when Claude Code sessions close,
-So that I can later identify and resurrect previous sessions.
+As a user, I want the dashboard to retain metadata when Claude Code sessions
+close, So that I can later identify and resurrect previous sessions.
 
 ## Context
 
-Session resurrection requires knowing which sessions existed, their working directories, and session identifiers even after the sessions have closed. Currently, when a Claude Code session closes (detected via the Stop hook), the session data is discarded. This story implements the retention of session metadata for closed sessions, enabling the resurrection workflow.
+Session resurrection requires knowing which sessions existed, their working
+directories, and session identifiers even after the sessions have closed.
+Currently, when a Claude Code session closes (detected via the Stop hook), the
+session data is discarded. This story implements the retention of session
+metadata for closed sessions, enabling the resurrection workflow.
 
-The retained metadata must include enough information to invoke `claude --resume <session-id>` and to help users identify which session they want to resurrect. Metadata should be stored in memory (not persisted across daemon restarts) consistent with the project's ephemeral state philosophy.
+The retained metadata must include enough information to invoke
+`claude --resume <session-id>` and to help users identify which session they
+want to resurrect. Metadata should be stored in memory (not persisted across
+daemon restarts) consistent with the project's ephemeral state philosophy.
 
 ## Implementation Details
 
@@ -26,32 +30,45 @@ The retained metadata must include enough information to invoke `claude --resume
 2. When Stop hook fires, transition session to "closed" instead of removing it
 3. Add a `closed_at` timestamp field to track when session closed
 4. Add a `resumable` flag to indicate if session can be resumed
-5. Implement cleanup logic to remove very old closed sessions (configurable limit)
+5. Implement cleanup logic to remove very old closed sessions (configurable
+   limit)
 6. Store closed sessions in a separate collection for efficient querying
 
 ### Files to Modify
 
 - `src/daemon/session.rs` - Add closed session state and metadata fields
 - `src/daemon/store.rs` - Add closed sessions storage and retrieval methods
-- `src/hooks/stop.rs` - Modify to transition session to closed state instead of removing
+- `src/hooks/stop.rs` - Modify to transition session to closed state instead of
+  removing
 - `src/ipc/protocol.rs` - Add LIST_CLOSED command support
 
 ### Dependencies
 
-- [S005 - Session Data Model](./S005-session-data-model.md) - Defines base session structure
-- [S006 - Session Status Transitions](./S006-session-status-transitions.md) - Defines state machine
-- [S008 - Session Lifecycle Events](./S008-session-lifecycle-events.md) - Handles session close events
-- [S023 - Stop Hook Script](./S023-stop-hook-script.md) - Detects when session closes
+- [S005 - Session Data Model](./S005-session-data-model.md) - Defines base
+  session structure
+- [S006 - Session Status Transitions](./S006-session-status-transitions.md) -
+  Defines state machine
+- [S008 - Session Lifecycle Events](./S008-session-lifecycle-events.md) -
+  Handles session close events
+- [S023 - Stop Hook Script](./S023-stop-hook-script.md) - Detects when session
+  closes
 
 ## Acceptance Criteria
 
-- [ ] Given an active session, when the Stop hook fires, then session transitions to "closed" state with metadata retained
-- [ ] Given a closed session, when metadata is queried, then working_dir, session_id, and closed_at are available
-- [ ] Given multiple closed sessions, when listed, then they are returned sorted by closed_at (most recent first)
-- [ ] Given a closed session older than the retention limit, when cleanup runs, then it is removed from storage
-- [ ] Given a session with exceeded context limit, when marked as closed, then resumable flag is set to false
-- [ ] Given the daemon restarts, when started, then all closed session metadata is cleared (ephemeral)
-- [ ] Given a session that closes normally, when metadata is stored, then original working directory is preserved
+- [ ] Given an active session, when the Stop hook fires, then session
+      transitions to "closed" state with metadata retained
+- [ ] Given a closed session, when metadata is queried, then working_dir,
+      session_id, and closed_at are available
+- [ ] Given multiple closed sessions, when listed, then they are returned sorted
+      by closed_at (most recent first)
+- [ ] Given a closed session older than the retention limit, when cleanup runs,
+      then it is removed from storage
+- [ ] Given a session with exceeded context limit, when marked as closed, then
+      resumable flag is set to false
+- [ ] Given the daemon restarts, when started, then all closed session metadata
+      is cleared (ephemeral)
+- [ ] Given a session that closes normally, when metadata is stored, then
+      original working directory is preserved
 
 ## Testing Requirements
 
@@ -61,7 +78,8 @@ The retained metadata must include enough information to invoke `claude --resume
 - [ ] Unit test: LIST_CLOSED returns closed sessions sorted by time
 - [ ] Unit test: Old closed sessions are cleaned up after retention period
 - [ ] Integration test: Stop hook triggers closed session storage
-- [ ] Integration test: Closed session metadata survives active session list queries
+- [ ] Integration test: Closed session metadata survives active session list
+      queries
 
 ## Out of Scope
 
@@ -159,6 +177,9 @@ max_closed_sessions = 20
 
 ### Considerations
 
-- **Memory usage**: Each closed session is small (a few hundred bytes), so retaining 20-50 sessions is negligible
-- **Ordering**: Most recent closed sessions are likely most wanted, so sort by closed_at descending
-- **Deduplication**: If a session ID appears multiple times (edge case), keep only the most recent
+- **Memory usage**: Each closed session is small (a few hundred bytes), so
+  retaining 20-50 sessions is negligible
+- **Ordering**: Most recent closed sessions are likely most wanted, so sort by
+  closed_at descending
+- **Deduplication**: If a session ID appears multiple times (edge case), keep
+  only the most recent

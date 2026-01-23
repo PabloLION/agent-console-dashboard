@@ -1,22 +1,27 @@
 # Story: Add XDG Path Support
 
-**Story ID:** S029
-**Epic:** [E007 - Configuration System](../epic/E007-configuration-system.md)
-**Status:** Draft
-**Priority:** P2
-**Estimated Points:** 2
+**Story ID:** S029 **Epic:**
+[E007 - Configuration System](../epic/E007-configuration-system.md) **Status:**
+Draft **Priority:** P2 **Estimated Points:** 2
 
 ## Description
 
-As a user,
-I want the application to follow XDG Base Directory conventions,
-So that configuration and runtime files are stored in standard locations on my Unix system.
+As a user, I want the application to follow XDG Base Directory conventions, So
+that configuration and runtime files are stored in standard locations on my Unix
+system.
 
 ## Context
 
-The XDG Base Directory Specification defines standard locations for configuration, data, cache, and runtime files on Unix-like systems. Following this specification ensures the Agent Console Dashboard integrates well with existing tools and user expectations. Users can override default locations via environment variables (`XDG_CONFIG_HOME`, `XDG_RUNTIME_DIR`, etc.), enabling flexible deployment scenarios.
+The XDG Base Directory Specification defines standard locations for
+configuration, data, cache, and runtime files on Unix-like systems. Following
+this specification ensures the Agent Console Dashboard integrates well with
+existing tools and user expectations. Users can override default locations via
+environment variables (`XDG_CONFIG_HOME`, `XDG_RUNTIME_DIR`, etc.), enabling
+flexible deployment scenarios.
 
-This story implements path resolution for all XDG directories used by the application: configuration files, runtime socket, and potential cache/data directories for future use.
+This story implements path resolution for all XDG directories used by the
+application: configuration files, runtime socket, and potential cache/data
+directories for future use.
 
 ## Implementation Details
 
@@ -40,13 +45,20 @@ This story implements path resolution for all XDG directories used by the applic
 
 ## Acceptance Criteria
 
-- [ ] Given `$XDG_CONFIG_HOME` is set, when resolving config path, then it uses `$XDG_CONFIG_HOME/agent-console/config.toml`
-- [ ] Given `$XDG_CONFIG_HOME` is not set, when resolving config path, then it uses `~/.config/agent-console/config.toml`
-- [ ] Given `$XDG_RUNTIME_DIR` is set, when resolving socket path, then it uses `$XDG_RUNTIME_DIR/agent-console.sock`
-- [ ] Given `$XDG_RUNTIME_DIR` is not set, when resolving socket path, then it uses `/tmp/agent-console.sock`
-- [ ] Given a path starting with `~`, when expanded, then `~` is replaced with the user's home directory
-- [ ] Given the config directory doesn't exist, when ensuring path, then directory is created with mode 0700
-- [ ] Given the runtime directory doesn't exist, when ensuring socket path, then parent directory is created
+- [ ] Given `$XDG_CONFIG_HOME` is set, when resolving config path, then it uses
+      `$XDG_CONFIG_HOME/agent-console/config.toml`
+- [ ] Given `$XDG_CONFIG_HOME` is not set, when resolving config path, then it
+      uses `~/.config/agent-console/config.toml`
+- [ ] Given `$XDG_RUNTIME_DIR` is set, when resolving socket path, then it uses
+      `$XDG_RUNTIME_DIR/agent-console.sock`
+- [ ] Given `$XDG_RUNTIME_DIR` is not set, when resolving socket path, then it
+      uses `/tmp/agent-console.sock`
+- [ ] Given a path starting with `~`, when expanded, then `~` is replaced with
+      the user's home directory
+- [ ] Given the config directory doesn't exist, when ensuring path, then
+      directory is created with mode 0700
+- [ ] Given the runtime directory doesn't exist, when ensuring socket path, then
+      parent directory is created
 
 ## Testing Requirements
 
@@ -68,12 +80,12 @@ This story implements path resolution for all XDG directories used by the applic
 
 ### XDG Directories Used
 
-| Purpose | XDG Variable | Default |
-|---------|--------------|---------|
-| Configuration | `XDG_CONFIG_HOME` | `~/.config` |
-| Runtime (socket) | `XDG_RUNTIME_DIR` | `/tmp` |
-| Data (future) | `XDG_DATA_HOME` | `~/.local/share` |
-| Cache (future) | `XDG_CACHE_HOME` | `~/.cache` |
+| Purpose          | XDG Variable      | Default          |
+| ---------------- | ----------------- | ---------------- |
+| Configuration    | `XDG_CONFIG_HOME` | `~/.config`      |
+| Runtime (socket) | `XDG_RUNTIME_DIR` | `/tmp`           |
+| Data (future)    | `XDG_DATA_HOME`   | `~/.local/share` |
+| Cache (future)   | `XDG_CACHE_HOME`  | `~/.cache`       |
 
 ### Implementation
 
@@ -173,7 +185,9 @@ The `expand_tilde` function handles this common pattern.
 
 ### Directory Permissions
 
-Configuration directories should be created with restricted permissions (0700) to protect potentially sensitive configuration data. Runtime directories inherit permissions from `XDG_RUNTIME_DIR` which is typically already restricted.
+Configuration directories should be created with restricted permissions (0700)
+to protect potentially sensitive configuration data. Runtime directories inherit
+permissions from `XDG_RUNTIME_DIR` which is typically already restricted.
 
 ### Testing with Environment Variables
 

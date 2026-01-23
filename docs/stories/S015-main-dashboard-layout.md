@@ -1,22 +1,25 @@
 # Story: Implement Main Dashboard Layout
 
-**Story ID:** S015
-**Epic:** [E004 - TUI Dashboard](../epic/E004-tui-dashboard.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 5
+**Story ID:** S015 **Epic:**
+[E004 - TUI Dashboard](../epic/E004-tui-dashboard.md) **Status:** Draft
+**Priority:** P1 **Estimated Points:** 5
 
 ## Description
 
-As a user,
-I want to see all my agent sessions displayed in a clear dashboard layout,
-So that I can quickly understand the status of each session at a glance.
+As a user, I want to see all my agent sessions displayed in a clear dashboard
+layout, So that I can quickly understand the status of each session at a glance.
 
 ## Context
 
-The main dashboard layout is the primary view users will see when running the TUI. It needs to display all tracked sessions from the daemon with their status, working directory, and time-since-attention (if applicable). The layout must adapt to different terminal sizes and integrate with the daemon via SUBSCRIBE for real-time updates.
+The main dashboard layout is the primary view users will see when running the
+TUI. It needs to display all tracked sessions from the daemon with their status,
+working directory, and time-since-attention (if applicable). The layout must
+adapt to different terminal sizes and integrate with the daemon via SUBSCRIBE
+for real-time updates.
 
-The design follows the widget-based philosophy where the dashboard orchestrates multiple widgets. This story focuses on the core layout structure; individual widgets are implemented in E005.
+The design follows the widget-based philosophy where the dashboard orchestrates
+multiple widgets. This story focuses on the core layout structure; individual
+widgets are implemented in E005.
 
 ## Implementation Details
 
@@ -40,19 +43,29 @@ The design follows the widget-based philosophy where the dashboard orchestrates 
 
 ### Dependencies
 
-- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) - Requires TUI foundation
-- [S012 - SUBSCRIBE Command](./S012-subscribe-command.md) - Real-time session updates
-- [S005 - Session Data Model](./S005-session-data-model.md) - Session struct definition
+- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) -
+  Requires TUI foundation
+- [S012 - SUBSCRIBE Command](./S012-subscribe-command.md) - Real-time session
+  updates
+- [S005 - Session Data Model](./S005-session-data-model.md) - Session struct
+  definition
 
 ## Acceptance Criteria
 
-- [ ] Given sessions exist in daemon, when TUI starts, then all sessions are displayed in the list
-- [ ] Given a session status changes, when daemon sends update, then display updates within 100ms
-- [ ] Given terminal width < 40 cols, when rendering, then session names are abbreviated
-- [ ] Given terminal width 40-80 cols, when rendering, then standard display is shown
-- [ ] Given terminal width > 80 cols, when rendering, then additional columns (session ID) are shown
-- [ ] Given any session status, when rendering, then correct color is applied (green=working, yellow=attention, blue=question, gray=closed)
-- [ ] Given a session needs attention, when rendering, then elapsed time is displayed (e.g., "2m34s")
+- [ ] Given sessions exist in daemon, when TUI starts, then all sessions are
+      displayed in the list
+- [ ] Given a session status changes, when daemon sends update, then display
+      updates within 100ms
+- [ ] Given terminal width < 40 cols, when rendering, then session names are
+      abbreviated
+- [ ] Given terminal width 40-80 cols, when rendering, then standard display is
+      shown
+- [ ] Given terminal width > 80 cols, when rendering, then additional columns
+      (session ID) are shown
+- [ ] Given any session status, when rendering, then correct color is applied
+      (green=working, yellow=attention, blue=question, gray=closed)
+- [ ] Given a session needs attention, when rendering, then elapsed time is
+      displayed (e.g., "2m34s")
 
 ## Testing Requirements
 
@@ -88,13 +101,13 @@ The design follows the widget-based philosophy where the dashboard orchestrates 
 
 ### Status Symbols and Colors
 
-| Status | Symbol | Color |
-|--------|--------|-------|
-| Working | `●` | Green |
-| Attention | `○` | Yellow |
-| Question | `?` | Blue |
-| Closed | `×` | Gray |
-| Error | `!` | Red |
+| Status    | Symbol | Color  |
+| --------- | ------ | ------ |
+| Working   | `●`    | Green  |
+| Attention | `○`    | Yellow |
+| Question  | `?`    | Blue   |
+| Closed    | `×`    | Gray   |
+| Error     | `!`    | Red    |
 
 ### Project Structure Addition
 
@@ -112,11 +125,11 @@ src/
 
 ### Responsive Design Breakpoints
 
-| Width | Columns Shown |
-|-------|--------------|
-| < 40 | Symbol, Name (truncated) |
-| 40-80 | Symbol, Name, Status, Working Dir |
-| > 80 | Symbol, Name, Status, Working Dir, Time, Session ID |
+| Width | Columns Shown                                       |
+| ----- | --------------------------------------------------- |
+| < 40  | Symbol, Name (truncated)                            |
+| 40-80 | Symbol, Name, Status, Working Dir                   |
+| > 80  | Symbol, Name, Status, Working Dir, Time, Session ID |
 
 ### Ratatui Layout Example
 
@@ -152,7 +165,8 @@ fn render_dashboard(frame: &mut Frame, sessions: &[Session]) {
 
 ### IPC Integration
 
-The dashboard connects to the daemon using SUBSCRIBE to receive real-time updates:
+The dashboard connects to the daemon using SUBSCRIBE to receive real-time
+updates:
 
 ```rust
 // On startup

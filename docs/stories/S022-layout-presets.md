@@ -1,22 +1,24 @@
 # Story: Add Layout Presets
 
-**Story ID:** S022
-**Epic:** [E005 - Widget System](../epic/E005-widget-system.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 5
+**Story ID:** S022 **Epic:**
+[E005 - Widget System](../epic/E005-widget-system.md) **Status:** Draft
+**Priority:** P1 **Estimated Points:** 5
 
 ## Description
 
-As a user,
-I want to switch between predefined layout presets,
-So that I can quickly adapt the dashboard to different use cases without manual configuration.
+As a user, I want to switch between predefined layout presets, So that I can
+quickly adapt the dashboard to different use cases without manual configuration.
 
 ## Context
 
-Layout presets are predefined collections of widgets that serve different use cases. Users can switch between layouts instantly using keyboard shortcuts (1-4) or the `--layout` CLI flag. This provides a balance between customization flexibility and ease of use.
+Layout presets are predefined collections of widgets that serve different use
+cases. Users can switch between layouts instantly using keyboard shortcuts (1-4)
+or the `--layout` CLI flag. This provides a balance between customization
+flexibility and ease of use.
 
-Four built-in layouts cover common scenarios: minimal one-line display for status bars, standard two-line with context, detailed view for full monitoring, and history view for debugging state transitions.
+Four built-in layouts cover common scenarios: minimal one-line display for
+status bars, standard two-line with context, detailed view for full monitoring,
+and history view for debugging state transitions.
 
 ## Implementation Details
 
@@ -41,20 +43,31 @@ Four built-in layouts cover common scenarios: minimal one-line display for statu
 
 ### Dependencies
 
-- [S018 - Widget Trait/Interface](./S018-widget-trait-interface.md) - Widget trait for layout composition
-- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) - TUI foundation
-- [S016 - Keyboard Navigation](./S016-keyboard-navigation.md) - Keyboard event handling
+- [S018 - Widget Trait/Interface](./S018-widget-trait-interface.md) - Widget
+  trait for layout composition
+- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) -
+  TUI foundation
+- [S016 - Keyboard Navigation](./S016-keyboard-navigation.md) - Keyboard event
+  handling
 
 ## Acceptance Criteria
 
-- [ ] Given the TUI is running, when `1` is pressed, then one-line layout activates (session-status only)
-- [ ] Given the TUI is running, when `2` is pressed, then two-line layout activates (working-dir, session-status)
-- [ ] Given the TUI is running, when `3` is pressed, then detailed layout activates (working-dir, session-status, api-usage)
-- [ ] Given the TUI is running, when `4` is pressed, then history layout activates (session-status, state-history)
-- [ ] Given `--layout detailed` is passed, when TUI starts, then detailed layout is active initially
-- [ ] Given a custom layout is defined in config, when that layout name is used, then custom widget set is displayed
-- [ ] Given the layout changes, when rendered, then widgets update immediately without restart
-- [ ] Given an invalid layout name is used, when TUI starts, then default layout is used with warning
+- [ ] Given the TUI is running, when `1` is pressed, then one-line layout
+      activates (session-status only)
+- [ ] Given the TUI is running, when `2` is pressed, then two-line layout
+      activates (working-dir, session-status)
+- [ ] Given the TUI is running, when `3` is pressed, then detailed layout
+      activates (working-dir, session-status, api-usage)
+- [ ] Given the TUI is running, when `4` is pressed, then history layout
+      activates (session-status, state-history)
+- [ ] Given `--layout detailed` is passed, when TUI starts, then detailed layout
+      is active initially
+- [ ] Given a custom layout is defined in config, when that layout name is used,
+      then custom widget set is displayed
+- [ ] Given the layout changes, when rendered, then widgets update immediately
+      without restart
+- [ ] Given an invalid layout name is used, when TUI starts, then default layout
+      is used with warning
 
 ## Testing Requirements
 
@@ -77,27 +90,30 @@ Four built-in layouts cover common scenarios: minimal one-line display for statu
 
 ### Built-in Layouts
 
-| Layout | Widgets | Use Case | Shortcut |
-|--------|---------|----------|----------|
-| `one-line` | `session-status` | Minimal status bar, v1 compatible | `1` |
-| `two-line` | `working-dir`, `session-status` | Standard context | `2` |
-| `detailed` | `working-dir`, `session-status`, `api-usage` | Full monitoring | `3` |
-| `history` | `session-status`, `state-history` | Debug/analysis | `4` |
+| Layout     | Widgets                                      | Use Case                          | Shortcut |
+| ---------- | -------------------------------------------- | --------------------------------- | -------- |
+| `one-line` | `session-status`                             | Minimal status bar, v1 compatible | `1`      |
+| `two-line` | `working-dir`, `session-status`              | Standard context                  | `2`      |
+| `detailed` | `working-dir`, `session-status`, `api-usage` | Full monitoring                   | `3`      |
+| `history`  | `session-status`, `state-history`            | Debug/analysis                    | `4`      |
 
 ### Layout Mockups
 
 **One-Line Layout (1):**
+
 ```text
 proj-a: - | proj-b: 2m34s | proj-c: ?
 ```
 
 **Two-Line Layout (2):**
+
 ```text
 ~/projects/proj-b
 proj-a: - | proj-b: 2m34s | proj-c: ?
 ```
 
 **Detailed Layout (3):**
+
 ```text
 ~/projects/proj-b
 proj-a: - | proj-b: 2m34s | proj-c: ?
@@ -105,6 +121,7 @@ Tokens: 12.3k in / 8.1k out | $0.42 est
 ```
 
 **History Layout (4):**
+
 ```text
 proj-a: - | proj-b: 2m34s | proj-c: ?
 14:32 Working→Attention | 14:30 Attention→Working

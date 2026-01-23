@@ -1,22 +1,24 @@
 # Story: Define IPC Message Protocol
 
-**Story ID:** S009
-**Epic:** [E003 - IPC Protocol & Client](../epic/E003-ipc-protocol-and-client.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 5
+**Story ID:** S009 **Epic:**
+[E003 - IPC Protocol & Client](../epic/E003-ipc-protocol-and-client.md)
+**Status:** Draft **Priority:** P1 **Estimated Points:** 5
 
 ## Description
 
-As a developer,
-I want to define a text-based IPC message protocol,
-So that hooks, clients, and the daemon can communicate reliably over Unix sockets.
+As a developer, I want to define a text-based IPC message protocol, So that
+hooks, clients, and the daemon can communicate reliably over Unix sockets.
 
 ## Context
 
-The IPC protocol is the communication layer between all components of the Agent Console system. Hooks use it to report session status changes, CLI clients use it for queries and commands, and the TUI dashboard uses it for real-time subscriptions. The protocol must be simple enough for easy debugging while being robust enough for reliable communication.
+The IPC protocol is the communication layer between all components of the Agent
+Console system. Hooks use it to report session status changes, CLI clients use
+it for queries and commands, and the TUI dashboard uses it for real-time
+subscriptions. The protocol must be simple enough for easy debugging while being
+robust enough for reliable communication.
 
 A text-based protocol was chosen over binary formats because:
+
 - Human-readable for easy debugging (can use `nc` or `socat` to test)
 - Simple parsing (line-delimited messages)
 - No serialization library required for basic commands
@@ -60,24 +62,32 @@ UPDATE <session> <status> <elapsed_seconds>
 
 ### Dependencies
 
-- [S002 - Unix Socket Server](./S002-unix-socket-server.md) - Protocol messages flow over the socket
-- [S005 - Session Data Model](./S005-session-data-model.md) - Protocol references session status types
+- [S002 - Unix Socket Server](./S002-unix-socket-server.md) - Protocol messages
+  flow over the socket
+- [S005 - Session Data Model](./S005-session-data-model.md) - Protocol
+  references session status types
 
 ## Acceptance Criteria
 
-- [ ] Given a valid SET command string, when parsed, then returns `Command::Set` with correct session, status, and optional metadata
+- [ ] Given a valid SET command string, when parsed, then returns `Command::Set`
+      with correct session, status, and optional metadata
 - [ ] Given a valid LIST command, when parsed, then returns `Command::List`
-- [ ] Given a valid SUBSCRIBE command, when parsed, then returns `Command::Subscribe`
-- [ ] Given a malformed command, when parsed, then returns an appropriate parse error
+- [ ] Given a valid SUBSCRIBE command, when parsed, then returns
+      `Command::Subscribe`
+- [ ] Given a malformed command, when parsed, then returns an appropriate parse
+      error
 - [ ] Given a `Response::Ok`, when serialized, then produces "OK\n"
-- [ ] Given a `Response::Error`, when serialized, then produces "ERR <message>\n"
+- [ ] Given a `Response::Error`, when serialized, then produces
+      `ERR <message>\n`
 - [ ] Given any message, then it is newline-delimited for stream framing
 
 ## Testing Requirements
 
-- [ ] Unit test: Parse SET command with all valid status values (working, attention, question)
+- [ ] Unit test: Parse SET command with all valid status values (working,
+      attention, question)
 - [ ] Unit test: Parse SET command with optional JSON metadata
-- [ ] Unit test: Parse all command types (SET, RM, LIST, SUBSCRIBE, RESURRECT, API_USAGE)
+- [ ] Unit test: Parse all command types (SET, RM, LIST, SUBSCRIBE, RESURRECT,
+      API_USAGE)
 - [ ] Unit test: Parse errors for malformed commands
 - [ ] Unit test: Response serialization round-trip
 - [ ] Unit test: Handle edge cases (empty strings, extra whitespace)
@@ -114,8 +124,8 @@ pub enum Response {
 
 ### Key Dependencies
 
-| Crate | Purpose |
-|-------|---------|
+| Crate      | Purpose                                     |
+| ---------- | ------------------------------------------- |
 | serde_json | JSON parsing for metadata/complex responses |
 
 ### Design Decisions

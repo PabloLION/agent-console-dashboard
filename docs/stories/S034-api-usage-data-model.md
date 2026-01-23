@@ -1,22 +1,26 @@
 # Story: Define API Usage Data Model
 
-**Story ID:** S034
-**Epic:** [E009 - API Usage Tracking](../epic/E009-api-usage-tracking.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 3
+**Story ID:** S034 **Epic:**
+[E009 - API Usage Tracking](../epic/E009-api-usage-tracking.md) **Status:**
+Draft **Priority:** P1 **Estimated Points:** 3
 
 ## Description
 
-As a developer,
-I want a well-defined data model for tracking API usage,
-So that the daemon can store, aggregate, and report consumption metrics consistently.
+As a developer, I want a well-defined data model for tracking API usage, So that
+the daemon can store, aggregate, and report consumption metrics consistently.
 
 ## Context
 
-API usage tracking is essential for users to monitor their Claude Code consumption. This story defines the core data structures that will hold usage metrics including token counts (input/output), estimated costs, and rate limit information. The data model must support both per-session tracking and aggregation across all sessions.
+API usage tracking is essential for users to monitor their Claude Code
+consumption. This story defines the core data structures that will hold usage
+metrics including token counts (input/output), estimated costs, and rate limit
+information. The data model must support both per-session tracking and
+aggregation across all sessions.
 
-This is the foundation story for E009 - all other API usage stories depend on this data model being defined and implemented correctly. The model must be flexible enough to handle cases where some data is unavailable (e.g., rate limits may not always be exposed by Claude Code).
+This is the foundation story for E009 - all other API usage stories depend on
+this data model being defined and implemented correctly. The model must be
+flexible enough to handle cases where some data is unavailable (e.g., rate
+limits may not always be exposed by Claude Code).
 
 ## Implementation Details
 
@@ -38,23 +42,33 @@ This is the foundation story for E009 - all other API usage stories depend on th
 
 ### Dependencies
 
-- [S005 - Session Data Model](./S005-session-data-model.md) - ApiUsage will be embedded in Session
+- [S005 - Session Data Model](./S005-session-data-model.md) - ApiUsage will be
+  embedded in Session
 
 ## Acceptance Criteria
 
-- [ ] Given a new session starts, when ApiUsage is initialized, then all token counts default to zero
-- [ ] Given usage data is received, when stored, then input_tokens and output_tokens are tracked separately
-- [ ] Given multiple usage updates, when aggregated, then total_tokens equals sum of input and output tokens
-- [ ] Given cost information is calculated, when stored, then estimated_cost is a non-negative float
-- [ ] Given rate limit info is available, when stored, then rate_limit_remaining and rate_limit_reset are populated
-- [ ] Given rate limit info is unavailable, when queried, then Option fields return None
-- [ ] Given ApiUsage is transmitted over IPC, when serialized/deserialized, then all fields are preserved
-- [ ] Given a timestamp is recorded, when updated_at is queried, then it reflects the last update time
+- [ ] Given a new session starts, when ApiUsage is initialized, then all token
+      counts default to zero
+- [ ] Given usage data is received, when stored, then input_tokens and
+      output_tokens are tracked separately
+- [ ] Given multiple usage updates, when aggregated, then total_tokens equals
+      sum of input and output tokens
+- [ ] Given cost information is calculated, when stored, then estimated_cost is
+      a non-negative float
+- [ ] Given rate limit info is available, when stored, then rate_limit_remaining
+      and rate_limit_reset are populated
+- [ ] Given rate limit info is unavailable, when queried, then Option fields
+      return None
+- [ ] Given ApiUsage is transmitted over IPC, when serialized/deserialized, then
+      all fields are preserved
+- [ ] Given a timestamp is recorded, when updated_at is queried, then it
+      reflects the last update time
 
 ## Testing Requirements
 
 - [ ] Unit test: Default ApiUsage has zero tokens and None for optional fields
-- [ ] Unit test: Aggregation correctly sums token counts across multiple ApiUsage instances
+- [ ] Unit test: Aggregation correctly sums token counts across multiple
+      ApiUsage instances
 - [ ] Unit test: Serialization round-trip preserves all field values
 - [ ] Unit test: estimated_cost calculation produces accurate results
 - [ ] Unit test: Builder pattern creates valid ApiUsage instances
@@ -207,4 +221,5 @@ pub struct Session {
 - **Optional fields**: Rate limit info may not be available from all sources
 - **Precision**: Token counts are u64 to handle very long sessions
 - **Cost accuracy**: estimated_cost is approximate based on published pricing
-- **Thread safety**: Consider Arc<RwLock<ApiUsage>> if concurrent updates are needed
+- **Thread safety**: Consider `Arc<RwLock<ApiUsage>>` if concurrent updates are
+  needed

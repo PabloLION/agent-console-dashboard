@@ -1,22 +1,24 @@
 # Story: Implement RESURRECT Command
 
-**Story ID:** S032
-**Epic:** [E008 - Session Resurrection](../epic/E008-session-resurrection.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 5
+**Story ID:** S032 **Epic:**
+[E008 - Session Resurrection](../epic/E008-session-resurrection.md) **Status:**
+Draft **Priority:** P1 **Estimated Points:** 5
 
 ## Description
 
-As a user,
-I want a RESURRECT command that I can invoke from the CLI or TUI,
-So that I can resume a previously closed Claude Code session.
+As a user, I want a RESURRECT command that I can invoke from the CLI or TUI, So
+that I can resume a previously closed Claude Code session.
 
 ## Context
 
-Once closed session metadata is retained (S031), users need a way to trigger the resurrection of a specific session. This story implements the RESURRECT command in the IPC protocol and the corresponding CLI command. The command validates that the session is resumable, then invokes the Claude Code resume process.
+Once closed session metadata is retained (S031), users need a way to trigger the
+resurrection of a specific session. This story implements the RESURRECT command
+in the IPC protocol and the corresponding CLI command. The command validates
+that the session is resumable, then invokes the Claude Code resume process.
 
-The RESURRECT command is the user-facing interface for session resurrection. It handles validation, error reporting, and orchestrates the actual resume process (which is implemented in S033).
+The RESURRECT command is the user-facing interface for session resurrection. It
+handles validation, error reporting, and orchestrates the actual resume process
+(which is implemented in S033).
 
 ## Implementation Details
 
@@ -41,21 +43,33 @@ The RESURRECT command is the user-facing interface for session resurrection. It 
 
 ### Dependencies
 
-- [S031 - Closed Session Metadata](./S031-closed-session-metadata.md) - Provides closed session data
-- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Defines protocol structure
-- [S013 - CLI Client Commands](./S013-cli-client-commands.md) - CLI infrastructure
-- [S016 - Keyboard Navigation](./S016-keyboard-navigation.md) - TUI keyboard handling
+- [S031 - Closed Session Metadata](./S031-closed-session-metadata.md) - Provides
+  closed session data
+- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Defines
+  protocol structure
+- [S013 - CLI Client Commands](./S013-cli-client-commands.md) - CLI
+  infrastructure
+- [S016 - Keyboard Navigation](./S016-keyboard-navigation.md) - TUI keyboard
+  handling
 
 ## Acceptance Criteria
 
-- [ ] Given a valid closed session ID, when RESURRECT is invoked, then the command succeeds and returns OK
-- [ ] Given an invalid session ID, when RESURRECT is invoked, then error "session not found" is returned
-- [ ] Given a non-resumable session, when RESURRECT is invoked, then error with reason is returned
-- [ ] Given a session with non-existent working directory, when RESURRECT is invoked, then error "working directory not found" is returned
-- [ ] Given the CLI command `agent-console resurrect <id>`, when executed, then it sends RESURRECT to daemon
-- [ ] Given a closed session selected in TUI, when user presses 'r', then RESURRECT command is triggered
-- [ ] Given RESURRECT succeeds, when the command completes, then session is removed from closed sessions list
-- [ ] Given RESURRECT fails, when the command completes, then session remains in closed sessions list
+- [ ] Given a valid closed session ID, when RESURRECT is invoked, then the
+      command succeeds and returns OK
+- [ ] Given an invalid session ID, when RESURRECT is invoked, then error
+      "session not found" is returned
+- [ ] Given a non-resumable session, when RESURRECT is invoked, then error with
+      reason is returned
+- [ ] Given a session with non-existent working directory, when RESURRECT is
+      invoked, then error "working directory not found" is returned
+- [ ] Given the CLI command `agent-console resurrect <id>`, when executed, then
+      it sends RESURRECT to daemon
+- [ ] Given a closed session selected in TUI, when user presses 'r', then
+      RESURRECT command is triggered
+- [ ] Given RESURRECT succeeds, when the command completes, then session is
+      removed from closed sessions list
+- [ ] Given RESURRECT fails, when the command completes, then session remains in
+      closed sessions list
 
 ## Testing Requirements
 
@@ -238,6 +252,11 @@ KeyCode::Char('r') => {
 
 ### Considerations
 
-- **Execution vs. Display**: The command can either execute `claude --resume` directly or print the command for the user. Direct execution is more convenient but requires appropriate terminal context.
-- **TUI Limitations**: The TUI cannot directly execute commands in a new terminal. It may need to copy the command to clipboard or display it for manual execution.
-- **Session State**: Once RESURRECT succeeds, remove the session from closed sessions since it's now active again.
+- **Execution vs. Display**: The command can either execute `claude --resume`
+  directly or print the command for the user. Direct execution is more
+  convenient but requires appropriate terminal context.
+- **TUI Limitations**: The TUI cannot directly execute commands in a new
+  terminal. It may need to copy the command to clipboard or display it for
+  manual execution.
+- **Session State**: Once RESURRECT succeeds, remove the session from closed
+  sessions since it's now active again.

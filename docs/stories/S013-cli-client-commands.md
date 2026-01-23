@@ -1,26 +1,27 @@
 # Story: Create CLI Client Commands
 
-**Story ID:** S013
-**Epic:** [E003 - IPC Protocol & Client](../epic/E003-ipc-protocol-and-client.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 5
+**Story ID:** S013 **Epic:**
+[E003 - IPC Protocol & Client](../epic/E003-ipc-protocol-and-client.md)
+**Status:** Draft **Priority:** P1 **Estimated Points:** 5
 
 ## Description
 
-As a user or hook script,
-I want CLI commands to interact with the daemon,
-So that I can manage sessions and query state from the terminal.
+As a user or hook script, I want CLI commands to interact with the daemon, So
+that I can manage sessions and query state from the terminal.
 
 ## Context
 
-While the daemon handles the protocol internally, users and hook scripts need a friendly CLI interface. The `agent-console` binary provides subcommands that map to IPC protocol commands. This abstraction layer:
+While the daemon handles the protocol internally, users and hook scripts need a
+friendly CLI interface. The `agent-console` binary provides subcommands that map
+to IPC protocol commands. This abstraction layer:
+
 - Provides a clean user experience with argument parsing
 - Handles connection management (connect, send, receive, close)
 - Formats output for human readability (or JSON for scripts)
 - Auto-starts the daemon if not running (see S004)
 
-These commands are used by hook scripts (set, rm) and by users for debugging/monitoring (list, watch).
+These commands are used by hook scripts (set, rm) and by users for
+debugging/monitoring (list, watch).
 
 ## Implementation Details
 
@@ -66,17 +67,21 @@ agent-console api-usage <session> --input 1000 --output 500
 
 ### Dependencies
 
-- [S001 - Create Daemon Process](./S001-create-daemon-process.md) - CLI structure
+- [S001 - Create Daemon Process](./S001-create-daemon-process.md) - CLI
+  structure
 - [S004 - Daemon Auto-Start](./S004-daemon-auto-start.md) - Auto-start if needed
-- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Protocol to use
+- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Protocol to
+  use
 - [S010 - SET Command](./S010-set-command.md) - Server-side handler
 - [S011 - LIST Command](./S011-list-command.md) - Server-side handler
 - [S012 - SUBSCRIBE Command](./S012-subscribe-command.md) - Server-side handler
 
 ## Acceptance Criteria
 
-- [ ] Given `agent-console set <session> working`, then sends SET command and outputs "OK"
-- [ ] Given `agent-console set` with invalid status, then shows error message and exits with code 1
+- [ ] Given `agent-console set <session> working`, then sends SET command and
+      outputs "OK"
+- [ ] Given `agent-console set` with invalid status, then shows error message
+      and exits with code 1
 - [ ] Given `agent-console rm <session>`, then sends RM command and outputs "OK"
 - [ ] Given `agent-console list`, then outputs human-readable session list
 - [ ] Given `agent-console list --json`, then outputs JSON array for scripting
@@ -91,7 +96,8 @@ agent-console api-usage <session> --input 1000 --output 500
 - [ ] Integration test: `set` command updates session in daemon
 - [ ] Integration test: `list` command returns current sessions
 - [ ] Integration test: `watch` command receives real-time updates
-- [ ] Integration test: Commands exit with appropriate codes (0 success, 1 error)
+- [ ] Integration test: Commands exit with appropriate codes (0 success, 1
+      error)
 
 ## Out of Scope
 
@@ -148,15 +154,17 @@ pub async fn watch() -> Result<()> {
 ### Output Formatting
 
 **Human-readable (default):**
-```
+
+```text
 Sessions:
   session-abc123  working    45s   /home/user/project
   session-def456  attention  2m    /home/user/other
 ```
 
 **JSON (`--json` flag):**
+
 ```json
-[{"id":"session-abc123","status":"working","elapsed":45}]
+[{ "id": "session-abc123", "status": "working", "elapsed": 45 }]
 ```
 
 ### Error Messages
@@ -168,8 +176,8 @@ Sessions:
 
 ### Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | Error (invalid arguments, daemon error, etc.) |
-| 130 | Interrupted (Ctrl+C during watch) |
+| Code | Meaning                                       |
+| ---- | --------------------------------------------- |
+| 0    | Success                                       |
+| 1    | Error (invalid arguments, daemon error, etc.) |
+| 130  | Interrupted (Ctrl+C during watch)             |

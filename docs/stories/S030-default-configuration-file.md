@@ -1,22 +1,26 @@
 # Story: Create Default Configuration File
 
-**Story ID:** S030
-**Epic:** [E007 - Configuration System](../epic/E007-configuration-system.md)
-**Status:** Draft
-**Priority:** P2
-**Estimated Points:** 2
+**Story ID:** S030 **Epic:**
+[E007 - Configuration System](../epic/E007-configuration-system.md) **Status:**
+Draft **Priority:** P2 **Estimated Points:** 2
 
 ## Description
 
-As a user,
-I want a default configuration file to be created on first run,
-So that I have a documented starting point for customizing my dashboard settings.
+As a user, I want a default configuration file to be created on first run, So
+that I have a documented starting point for customizing my dashboard settings.
 
 ## Context
 
-When users first install the Agent Console Dashboard, there is no configuration file. While the application works with built-in defaults, having an actual configuration file provides several benefits: users can see all available options, understand the configuration format, and easily customize settings. This story implements the creation of a well-documented default configuration file on first run.
+When users first install the Agent Console Dashboard, there is no configuration
+file. While the application works with built-in defaults, having an actual
+configuration file provides several benefits: users can see all available
+options, understand the configuration format, and easily customize settings.
+This story implements the creation of a well-documented default configuration
+file on first run.
 
-The default configuration file should be heavily commented, explaining each option, its valid values, and the default behavior. It serves as both configuration and documentation.
+The default configuration file should be heavily commented, explaining each
+option, its valid values, and the default behavior. It serves as both
+configuration and documentation.
 
 ## Implementation Details
 
@@ -37,19 +41,29 @@ The default configuration file should be heavily commented, explaining each opti
 
 ### Dependencies
 
-- [S027 - TOML Configuration Schema](./S027-toml-configuration-schema.md) - Schema defines what goes in the config
-- [S028 - Configuration Loading](./S028-configuration-loading.md) - Loader determines when to create default
-- [S029 - XDG Path Support](./S029-xdg-path-support.md) - Determines where to create the file
+- [S027 - TOML Configuration Schema](./S027-toml-configuration-schema.md) -
+  Schema defines what goes in the config
+- [S028 - Configuration Loading](./S028-configuration-loading.md) - Loader
+  determines when to create default
+- [S029 - XDG Path Support](./S029-xdg-path-support.md) - Determines where to
+  create the file
 
 ## Acceptance Criteria
 
-- [ ] Given no config file exists, when daemon starts for first time, then default config file is created
-- [ ] Given the created default config, when read by user, then all options are documented with comments
-- [ ] Given the created default config, when parsed, then it equals the built-in defaults
-- [ ] Given the config file already exists, when daemon starts, then file is not overwritten
-- [ ] Given user runs `agent-console config init`, when config doesn't exist, then default file is created
-- [ ] Given user runs `agent-console config init --force`, when config exists, then file is overwritten with backup
-- [ ] Given the default config file, when permissions are checked, then it is readable only by owner (0600)
+- [ ] Given no config file exists, when daemon starts for first time, then
+      default config file is created
+- [ ] Given the created default config, when read by user, then all options are
+      documented with comments
+- [ ] Given the created default config, when parsed, then it equals the built-in
+      defaults
+- [ ] Given the config file already exists, when daemon starts, then file is not
+      overwritten
+- [ ] Given user runs `agent-console config init`, when config doesn't exist,
+      then default file is created
+- [ ] Given user runs `agent-console config init --force`, when config exists,
+      then file is overwritten with backup
+- [ ] Given the default config file, when permissions are checked, then it is
+      readable only by owner (0600)
 
 ## Testing Requirements
 
@@ -258,7 +272,7 @@ impl ConfigCommand {
 
 ### Behavior on First Run
 
-```
+```text
 $ agent-console
 Created configuration file at /home/user/.config/agent-console/config.toml
 Starting daemon...
@@ -269,6 +283,7 @@ The message is printed to stderr so it doesn't interfere with normal output.
 ### Documentation Sync
 
 The default configuration comments should be kept in sync with:
+
 - Schema changes (S027)
 - Feature documentation
 - README.md configuration section

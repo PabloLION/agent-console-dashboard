@@ -1,22 +1,26 @@
 # Story: Define TOML Configuration Schema
 
-**Story ID:** S027
-**Epic:** [E007 - Configuration System](../epic/E007-configuration-system.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 3
+**Story ID:** S027 **Epic:**
+[E007 - Configuration System](../epic/E007-configuration-system.md) **Status:**
+Draft **Priority:** P1 **Estimated Points:** 3
 
 ## Description
 
-As a developer,
-I want a well-defined TOML configuration schema with Rust types,
-So that configuration can be parsed, validated, and used throughout the application.
+As a developer, I want a well-defined TOML configuration schema with Rust types,
+So that configuration can be parsed, validated, and used throughout the
+application.
 
 ## Context
 
-The Agent Console Dashboard needs a centralized configuration system to manage UI preferences, agent integrations, and daemon settings. TOML is chosen for its readability and strong Rust ecosystem support (via `toml` and `serde` crates). This story defines the schema structure and corresponding Rust types that will be used by all other configuration-related functionality.
+The Agent Console Dashboard needs a centralized configuration system to manage
+UI preferences, agent integrations, and daemon settings. TOML is chosen for its
+readability and strong Rust ecosystem support (via `toml` and `serde` crates).
+This story defines the schema structure and corresponding Rust types that will
+be used by all other configuration-related functionality.
 
-The schema must balance flexibility (supporting future extensions) with simplicity (users shouldn't need to configure everything). All fields should have sensible defaults, making configuration optional for most users.
+The schema must balance flexibility (supporting future extensions) with
+simplicity (users shouldn't need to configure everything). All fields should
+have sensible defaults, making configuration optional for most users.
 
 ## Implementation Details
 
@@ -41,18 +45,26 @@ The schema must balance flexibility (supporting future extensions) with simplici
 
 ## Acceptance Criteria
 
-- [ ] Given a valid TOML configuration string, when parsed, then it deserializes into Config struct without errors
-- [ ] Given a configuration with missing optional fields, when parsed, then default values are used
-- [ ] Given a configuration with invalid enum values, when parsed, then a descriptive error is returned
-- [ ] Given the schema types, when examined, then all fields have doc comments explaining their purpose
-- [ ] Given a Config struct, when serialized, then it produces valid TOML matching the schema
-- [ ] Given the schema, when reviewed, then it supports all sections: `[ui]`, `[agents.*]`, `[integrations.*]`, `[daemon]`
+- [ ] Given a valid TOML configuration string, when parsed, then it deserializes
+      into Config struct without errors
+- [ ] Given a configuration with missing optional fields, when parsed, then
+      default values are used
+- [ ] Given a configuration with invalid enum values, when parsed, then a
+      descriptive error is returned
+- [ ] Given the schema types, when examined, then all fields have doc comments
+      explaining their purpose
+- [ ] Given a Config struct, when serialized, then it produces valid TOML
+      matching the schema
+- [ ] Given the schema, when reviewed, then it supports all sections: `[ui]`,
+      `[agents.*]`, `[integrations.*]`, `[daemon]`
 
 ## Testing Requirements
 
 - [ ] Unit test: Parse valid configuration with all fields specified
-- [ ] Unit test: Parse configuration with only required fields (defaults for rest)
-- [ ] Unit test: Parse configuration with unknown fields (should be ignored or error based on design)
+- [ ] Unit test: Parse configuration with only required fields (defaults for
+      rest)
+- [ ] Unit test: Parse configuration with unknown fields (should be ignored or
+      error based on design)
 - [ ] Unit test: Validation rejects invalid layout values
 - [ ] Unit test: Validation rejects invalid widget names
 - [ ] Unit test: Default configuration values are sensible
@@ -192,14 +204,18 @@ pub enum LogLevel {
 
 ### Design Decisions
 
-1. **Flat agent/integration structure**: Using `[agents.claude-code]` instead of arrays allows easy access and clear identification
-2. **String widget list**: Widgets are specified by name (string) rather than complex structures for simplicity
-3. **All fields optional**: Users can start with an empty config file and get sensible defaults
+1. **Flat agent/integration structure**: Using `[agents.claude-code]` instead of
+   arrays allows easy access and clear identification
+2. **String widget list**: Widgets are specified by name (string) rather than
+   complex structures for simplicity
+3. **All fields optional**: Users can start with an empty config file and get
+   sensible defaults
 4. **Kebab-case enums**: More readable in TOML (`"two-line"` vs `"TwoLine"`)
 
 ### Future Extensions
 
 The schema should be designed to accommodate:
+
 - Additional agents beyond Claude Code
 - Custom widget configurations
 - Theme customization beyond color scheme

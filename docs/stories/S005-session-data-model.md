@@ -1,24 +1,28 @@
 # Story: Define Session Data Model
 
-**Story ID:** S005
-**Epic:** [E002 - Session Management](../epic/E002-session-management.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 3
+**Story ID:** S005 **Epic:**
+[E002 - Session Management](../epic/E002-session-management.md) **Status:**
+Draft **Priority:** P1 **Estimated Points:** 3
 
 ## Description
 
-As a developer,
-I want to define a comprehensive session data model,
-So that I can represent all necessary session information for tracking and displaying agent sessions.
+As a developer, I want to define a comprehensive session data model, So that I
+can represent all necessary session information for tracking and displaying
+agent sessions.
 
 ## Context
 
-The session data model is the foundation of the Agent Console Dashboard's session management capabilities. It needs to capture all information required to track, display, and resurrect agent sessions. The model must support multiple agent types (starting with Claude Code) and maintain enough state for real-time monitoring.
+The session data model is the foundation of the Agent Console Dashboard's
+session management capabilities. It needs to capture all information required to
+track, display, and resurrect agent sessions. The model must support multiple
+agent types (starting with Claude Code) and maintain enough state for real-time
+monitoring.
 
-This story follows S003 (in-memory session store) and provides the domain types that the store will manage.
+This story follows S003 (in-memory session store) and provides the domain types
+that the store will manage.
 
 Key design decisions from architecture:
+
 - State is ephemeral (not persisted across reboots)
 - Model supports future agent types via AgentType enum
 - Session ID for Claude Code is stored separately for resurrection feature
@@ -44,24 +48,33 @@ Key design decisions from architecture:
 
 ### Dependencies
 
-- [S003 - In-Memory Session Store](./S003-in-memory-session-store.md) - Store must exist before defining what it stores
+- [S003 - In-Memory Session Store](./S003-in-memory-session-store.md) - Store
+  must exist before defining what it stores
 
 ## Acceptance Criteria
 
-- [ ] Given the Session struct, then it contains: id, agent_type, status, working_dir, since, history, api_usage, closed, session_id
-- [ ] Given the Status enum, then it contains: Working, Attention, Question, Closed variants
-- [ ] Given the AgentType enum, then it contains: ClaudeCode variant with extensibility comment for future agents
-- [ ] Given the StateTransition struct, then it contains: timestamp, from, to, duration fields
-- [ ] Given the ApiUsage struct, then it contains: input_tokens, output_tokens fields
-- [ ] Given a Session instance, then it can be serialized to JSON for IPC responses
-- [ ] Given a new session, then default values are sensible (empty history, None api_usage, false closed)
+- [ ] Given the Session struct, then it contains: id, agent_type, status,
+      working_dir, since, history, api_usage, closed, session_id
+- [ ] Given the Status enum, then it contains: Working, Attention, Question,
+      Closed variants
+- [ ] Given the AgentType enum, then it contains: ClaudeCode variant with
+      extensibility comment for future agents
+- [ ] Given the StateTransition struct, then it contains: timestamp, from, to,
+      duration fields
+- [ ] Given the ApiUsage struct, then it contains: input_tokens, output_tokens
+      fields
+- [ ] Given a Session instance, then it can be serialized to JSON for IPC
+      responses
+- [ ] Given a new session, then default values are sensible (empty history, None
+      api_usage, false closed)
 
 ## Testing Requirements
 
 - [ ] Unit test: Session can be created with all required fields
 - [ ] Unit test: Session serializes to valid JSON
 - [ ] Unit test: Session deserializes from valid JSON
-- [ ] Unit test: Status enum serializes as expected strings ("working", "attention", etc.)
+- [ ] Unit test: Status enum serializes as expected strings ("working",
+      "attention", etc.)
 - [ ] Unit test: Default implementations produce expected values
 
 ## Out of Scope
@@ -117,13 +130,14 @@ struct ApiUsage {
 
 ### Serialization Considerations
 
-- `Instant` and `Duration` need custom serialization (convert to Unix timestamps/milliseconds)
+- `Instant` and `Duration` need custom serialization (convert to Unix
+  timestamps/milliseconds)
 - `PathBuf` serializes as string path
 - Status enum should serialize as lowercase strings for IPC protocol consistency
 
 ### Key Dependencies
 
-| Crate | Purpose |
-|-------|---------|
-| serde | Serialization derive macros |
-| serde_json | JSON serialization |
+| Crate      | Purpose                     |
+| ---------- | --------------------------- |
+| serde      | Serialization derive macros |
+| serde_json | JSON serialization          |

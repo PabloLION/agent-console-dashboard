@@ -1,20 +1,20 @@
 # Story: Implement LIST Command
 
-**Story ID:** S011
-**Epic:** [E003 - IPC Protocol & Client](../epic/E003-ipc-protocol-and-client.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 2
+**Story ID:** S011 **Epic:**
+[E003 - IPC Protocol & Client](../epic/E003-ipc-protocol-and-client.md)
+**Status:** Draft **Priority:** P1 **Estimated Points:** 2
 
 ## Description
 
-As a user or script,
-I want to query all current session states,
-So that I can see a snapshot of all agent sessions without subscribing to updates.
+As a user or script, I want to query all current session states, So that I can
+see a snapshot of all agent sessions without subscribing to updates.
 
 ## Context
 
-The LIST command provides a one-shot query of all session states. Unlike SUBSCRIBE which streams continuous updates, LIST returns the current state and closes the connection. This is useful for:
+The LIST command provides a one-shot query of all session states. Unlike
+SUBSCRIBE which streams continuous updates, LIST returns the current state and
+closes the connection. This is useful for:
+
 - Scripts that need to check session states
 - One-time queries from the command line
 - Initial state load before subscribing
@@ -52,25 +52,35 @@ STATE [{"id":"session-abc123","status":"working","elapsed":45,"working_dir":"/ho
 
 ### Dependencies
 
-- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Protocol definition
-- [S003 - In-Memory Session Store](./S003-in-memory-session-store.md) - Store to query
-- [S005 - Session Data Model](./S005-session-data-model.md) - Session serialization
+- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Protocol
+  definition
+- [S003 - In-Memory Session Store](./S003-in-memory-session-store.md) - Store to
+  query
+- [S005 - Session Data Model](./S005-session-data-model.md) - Session
+  serialization
 
 ## Acceptance Criteria
 
-- [ ] Given sessions exist, when LIST is called, then all sessions are returned as JSON array
-- [ ] Given no sessions exist, when LIST is called, then empty JSON array `[]` is returned
-- [ ] Given sessions with various statuses, when LIST is called, then each session includes id, status, and elapsed time
-- [ ] Given a LIST command, when processed, then response is prefixed with "STATE "
-- [ ] Given a LIST command, when complete, then connection can be closed (one-shot)
-- [ ] Given many sessions (100+), when LIST is called, then response completes in under 10ms
+- [ ] Given sessions exist, when LIST is called, then all sessions are returned
+      as JSON array
+- [ ] Given no sessions exist, when LIST is called, then empty JSON array `[]`
+      is returned
+- [ ] Given sessions with various statuses, when LIST is called, then each
+      session includes id, status, and elapsed time
+- [ ] Given a LIST command, when processed, then response is prefixed with
+      "STATE "
+- [ ] Given a LIST command, when complete, then connection can be closed
+      (one-shot)
+- [ ] Given many sessions (100+), when LIST is called, then response completes
+      in under 10ms
 
 ## Testing Requirements
 
 - [ ] Unit test: LIST returns empty array when no sessions
 - [ ] Unit test: LIST returns all sessions with correct fields
 - [ ] Unit test: Session JSON includes required fields (id, status, elapsed)
-- [ ] Unit test: Session JSON includes optional fields when present (working_dir, api_usage)
+- [ ] Unit test: Session JSON includes optional fields when present
+      (working_dir, api_usage)
 - [ ] Integration test: LIST over socket returns valid JSON
 - [ ] Integration test: LIST response is parseable by jq
 
@@ -107,14 +117,14 @@ STATE [{"id":"session-abc123","status":"working","elapsed":45,"working_dir":"/ho
 
 ### Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| id | string | yes | Session identifier |
-| status | string | yes | Current status (working/attention/question/closed) |
-| elapsed | number | yes | Seconds in current status |
-| working_dir | string | no | Working directory path |
-| api_usage | object | no | Token usage if tracked |
-| session_id | string | no | Claude Code session ID for resume |
+| Field       | Type   | Required | Description                                        |
+| ----------- | ------ | -------- | -------------------------------------------------- |
+| id          | string | yes      | Session identifier                                 |
+| status      | string | yes      | Current status (working/attention/question/closed) |
+| elapsed     | number | yes      | Seconds in current status                          |
+| working_dir | string | no       | Working directory path                             |
+| api_usage   | object | no       | Token usage if tracked                             |
+| session_id  | string | no       | Claude Code session ID for resume                  |
 
 ### CLI Usage
 

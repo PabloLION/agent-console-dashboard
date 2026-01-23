@@ -1,22 +1,25 @@
 # Story: Implement Session Selection and Detail View
 
-**Story ID:** S017
-**Epic:** [E004 - TUI Dashboard](../epic/E004-tui-dashboard.md)
-**Status:** Draft
-**Priority:** P2
-**Estimated Points:** 5
+**Story ID:** S017 **Epic:**
+[E004 - TUI Dashboard](../epic/E004-tui-dashboard.md) **Status:** Draft
+**Priority:** P2 **Estimated Points:** 5
 
 ## Description
 
-As a user,
-I want to expand a selected session to see detailed information,
-So that I can view session history, API usage, and perform session-specific actions.
+As a user, I want to expand a selected session to see detailed information, So
+that I can view session history, API usage, and perform session-specific
+actions.
 
 ## Context
 
-The session detail view provides an expanded look at a single session when the user presses Enter on a selected session. This view displays comprehensive information including session status, working directory, session ID, API usage, and state transition history. It also provides contextual actions like Resurrect and Close.
+The session detail view provides an expanded look at a single session when the
+user presses Enter on a selected session. This view displays comprehensive
+information including session status, working directory, session ID, API usage,
+and state transition history. It also provides contextual actions like Resurrect
+and Close.
 
-This is a modal view that overlays the main dashboard and can be dismissed with Escape.
+This is a modal view that overlays the main dashboard and can be dismissed with
+Escape.
 
 ## Implementation Details
 
@@ -41,23 +44,37 @@ This is a modal view that overlays the main dashboard and can be dismissed with 
 
 ### Dependencies
 
-- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) - TUI foundation
-- [S015 - Main Dashboard Layout](./S015-main-dashboard-layout.md) - Main view to overlay
-- [S016 - Keyboard Navigation](./S016-keyboard-navigation.md) - Enter key triggers detail
-- [S007 - Session State History](./S007-session-state-history.md) - History data model
+- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) -
+  TUI foundation
+- [S015 - Main Dashboard Layout](./S015-main-dashboard-layout.md) - Main view to
+  overlay
+- [S016 - Keyboard Navigation](./S016-keyboard-navigation.md) - Enter key
+  triggers detail
+- [S007 - Session State History](./S007-session-state-history.md) - History data
+  model
 
 ## Acceptance Criteria
 
-- [ ] Given a session is selected, when Enter is pressed, then detail view opens as modal overlay
-- [ ] Given detail view is open, when rendered, then session status with color indicator is shown
-- [ ] Given detail view is open, when rendered, then working directory path is displayed
-- [ ] Given detail view is open, when rendered, then session ID (truncated with ellipsis) is shown
-- [ ] Given detail view is open, when rendered, then API usage summary is displayed (if available)
-- [ ] Given detail view is open, when rendered, then state history timeline shows recent transitions
-- [ ] Given detail view is open, when Escape is pressed, then view closes and returns to dashboard
-- [ ] Given detail view for closed session, when `r` is pressed, then resurrect action is triggered
-- [ ] Given detail view, when `c` is pressed, then close/remove session action is triggered
-- [ ] Given history exceeds view height, when scrolling keys used, then history scrolls
+- [ ] Given a session is selected, when Enter is pressed, then detail view opens
+      as modal overlay
+- [ ] Given detail view is open, when rendered, then session status with color
+      indicator is shown
+- [ ] Given detail view is open, when rendered, then working directory path is
+      displayed
+- [ ] Given detail view is open, when rendered, then session ID (truncated with
+      ellipsis) is shown
+- [ ] Given detail view is open, when rendered, then API usage summary is
+      displayed (if available)
+- [ ] Given detail view is open, when rendered, then state history timeline
+      shows recent transitions
+- [ ] Given detail view is open, when Escape is pressed, then view closes and
+      returns to dashboard
+- [ ] Given detail view for closed session, when `r` is pressed, then resurrect
+      action is triggered
+- [ ] Given detail view, when `c` is pressed, then close/remove session action
+      is triggered
+- [ ] Given history exceeds view height, when scrolling keys used, then history
+      scrolls
 
 ## Testing Requirements
 
@@ -185,6 +202,7 @@ fn render_detail_view(frame: &mut Frame, session: &Session, area: Rect) {
 ### History Timeline Format
 
 Each history entry shows:
+
 - Timestamp (HH:MM:SS format)
 - Transition (Previous State → New State)
 
@@ -195,11 +213,13 @@ History:
   14:28:12  Idle → Working
 ```
 
-Timestamps are displayed in local time. If many entries exist, show most recent N entries with scroll indicator.
+Timestamps are displayed in local time. If many entries exist, show most recent
+N entries with scroll indicator.
 
 ### Action Feedback
 
 When an action is triggered from detail view:
+
 1. Show brief "Action sent..." feedback
 2. Wait for daemon confirmation
 3. Update session state if successful

@@ -1,33 +1,38 @@
 # Epic: Daemon Core Infrastructure
 
-**Epic ID:** E001
-**Status:** Draft
-**Priority:** High
-**Estimated Effort:** L
+**Epic ID:** E001 **Status:** Draft **Priority:** High **Estimated Effort:** L
 
 ## Summary
 
-Build the foundational daemon process that serves as the central hub for the Agent Console Dashboard system. The daemon manages session state in memory, provides a Unix socket server for IPC, and auto-starts when clients connect. This is the backbone infrastructure that all other features depend on.
+Build the foundational daemon process that serves as the central hub for the
+Agent Console Dashboard system. The daemon manages session state in memory,
+provides a Unix socket server for IPC, and auto-starts when clients connect.
+This is the backbone infrastructure that all other features depend on.
 
 ## Goals
 
-- Create a lightweight, long-running daemon process with minimal resource footprint
+- Create a lightweight, long-running daemon process with minimal resource
+  footprint
 - Implement Unix socket server for reliable local IPC communication
 - Build an efficient in-memory session store using HashMap
 - Enable auto-start behavior so the daemon launches automatically when needed
 
 ## User Value
 
-Users get a reliable, always-available backend service that coordinates all agent session information. The daemon's push-model architecture ensures real-time updates without polling, keeping the dashboard instantly responsive to session state changes. The minimal footprint (<5MB RAM) means it can run continuously without impacting system performance.
+Users get a reliable, always-available backend service that coordinates all
+agent session information. The daemon's push-model architecture ensures
+real-time updates without polling, keeping the dashboard instantly responsive to
+session state changes. The minimal footprint (<5MB RAM) means it can run
+continuously without impacting system performance.
 
 ## Stories
 
-| Story ID | Title | Priority | Status |
-|----------|-------|----------|--------|
-| [S001](../stories/S001-create-daemon-process.md) | Create daemon process with CLI interface | P1 | Draft |
-| [S002](../stories/S002-unix-socket-server.md) | Implement Unix socket server | P1 | Draft |
-| [S003](../stories/S003-in-memory-session-store.md) | Implement in-memory session store | P1 | Draft |
-| [S004](../stories/S004-daemon-auto-start.md) | Add daemon auto-start capability | P2 | Draft |
+| Story ID                                           | Title                                    | Priority | Status |
+| -------------------------------------------------- | ---------------------------------------- | -------- | ------ |
+| [S001](../stories/S001-create-daemon-process.md)   | Create daemon process with CLI interface | P1       | Draft  |
+| [S002](../stories/S002-unix-socket-server.md)      | Implement Unix socket server             | P1       | Draft  |
+| [S003](../stories/S003-in-memory-session-store.md) | Implement in-memory session store        | P1       | Draft  |
+| [S004](../stories/S004-daemon-auto-start.md)       | Add daemon auto-start capability         | P2       | Draft  |
 
 ## Dependencies
 
@@ -48,10 +53,10 @@ Users get a reliable, always-available backend service that coordinates all agen
 
 The daemon approach was chosen over shared memory and SQLite alternatives:
 
-| Approach | Rejected Reason |
-|----------|-----------------|
+| Approach      | Rejected Reason                                                    |
+| ------------- | ------------------------------------------------------------------ |
 | Shared Memory | Requires `unsafe` Rust, platform-specific, complex synchronization |
-| SQLite | Adds 1-2MB to binary, requires polling, persistence not needed |
+| SQLite        | Adds 1-2MB to binary, requires polling, persistence not needed     |
 
 ### Project Structure
 
@@ -67,10 +72,10 @@ src/
 
 ### Key Dependencies
 
-| Crate | Purpose |
-|-------|---------|
+| Crate | Purpose                         |
+| ----- | ------------------------------- |
 | tokio | Async runtime for socket server |
-| clap | CLI argument parsing |
+| clap  | CLI argument parsing            |
 
 ### CLI Commands
 
@@ -87,9 +92,9 @@ agent-console daemon --socket /tmp/agent-console.sock
 
 ### Success Metrics
 
-| Metric | Target |
-|--------|--------|
-| RAM usage | <5MB |
-| Update latency | <1ms |
-| Binary size | <10MB |
-| Startup time | <100ms |
+| Metric         | Target |
+| -------------- | ------ |
+| RAM usage      | <5MB   |
+| Update latency | <1ms   |
+| Binary size    | <10MB  |
+| Startup time   | <100ms |

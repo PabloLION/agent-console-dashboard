@@ -1,39 +1,48 @@
 # Epic: TUI Dashboard
 
-**Epic ID:** E004
-**Status:** Draft
-**Priority:** High
-**Estimated Effort:** L
+**Epic ID:** E004 **Status:** Draft **Priority:** High **Estimated Effort:** L
 
 ## Summary
 
-Build the terminal user interface (TUI) dashboard application using Ratatui that provides a real-time visual display of all agent sessions. The dashboard connects to the daemon via IPC, renders session status, supports keyboard navigation, and allows users to interact with sessions through an intuitive terminal interface.
+Build the terminal user interface (TUI) dashboard application using Ratatui that
+provides a real-time visual display of all agent sessions. The dashboard
+connects to the daemon via IPC, renders session status, supports keyboard
+navigation, and allows users to interact with sessions through an intuitive
+terminal interface.
 
 ## Goals
 
-- Create a responsive Ratatui application scaffold with proper terminal initialization
+- Create a responsive Ratatui application scaffold with proper terminal
+  initialization
 - Implement the main dashboard layout with session list and status display
 - Add keyboard navigation for session selection and quick actions
 - Build session detail view for expanded information and actions
 
 ## User Value
 
-Users get a powerful, always-visible terminal dashboard to monitor all their Claude Code agent sessions at a glance. The keyboard-driven interface allows quick navigation without leaving the terminal, and the real-time updates ensure users never miss when an agent needs attention. The minimal TUI design fits perfectly in a Zellij/tmux pane without consuming excessive screen space.
+Users get a powerful, always-visible terminal dashboard to monitor all their
+Claude Code agent sessions at a glance. The keyboard-driven interface allows
+quick navigation without leaving the terminal, and the real-time updates ensure
+users never miss when an agent needs attention. The minimal TUI design fits
+perfectly in a Zellij/tmux pane without consuming excessive screen space.
 
 ## Stories
 
-| Story ID | Title | Priority | Status |
-|----------|-------|----------|--------|
-| [S014](../stories/S014-ratatui-application-scaffold.md) | Create Ratatui application scaffold | P1 | Draft |
-| [S015](../stories/S015-main-dashboard-layout.md) | Implement main dashboard layout | P1 | Draft |
-| [S016](../stories/S016-keyboard-navigation.md) | Add keyboard navigation | P1 | Draft |
-| [S017](../stories/S017-session-selection-detail-view.md) | Implement session selection and detail view | P2 | Draft |
+| Story ID                                                 | Title                                       | Priority | Status |
+| -------------------------------------------------------- | ------------------------------------------- | -------- | ------ |
+| [S014](../stories/S014-ratatui-application-scaffold.md)  | Create Ratatui application scaffold         | P1       | Draft  |
+| [S015](../stories/S015-main-dashboard-layout.md)         | Implement main dashboard layout             | P1       | Draft  |
+| [S016](../stories/S016-keyboard-navigation.md)           | Add keyboard navigation                     | P1       | Draft  |
+| [S017](../stories/S017-session-selection-detail-view.md) | Implement session selection and detail view | P2       | Draft  |
 
 ## Dependencies
 
-- [E001 - Daemon Core Infrastructure](./E001-daemon-core-infrastructure.md) - Requires running daemon
-- [E003 - IPC Protocol & Client](./E003-ipc-protocol-and-client.md) - Requires SUBSCRIBE command for real-time updates
-- [E005 - Widget System](./E005-widget-system.md) - Widget components used by dashboard
+- [E001 - Daemon Core Infrastructure](./E001-daemon-core-infrastructure.md) -
+  Requires running daemon
+- [E003 - IPC Protocol & Client](./E003-ipc-protocol-and-client.md) - Requires
+  SUBSCRIBE command for real-time updates
+- [E005 - Widget System](./E005-widget-system.md) - Widget components used by
+  dashboard
 
 ## Acceptance Criteria
 
@@ -50,12 +59,12 @@ Users get a powerful, always-visible terminal dashboard to monitor all their Cla
 
 ### Technology Stack
 
-| Component | Technology |
-|-----------|------------|
-| TUI Framework | Ratatui |
-| Terminal Backend | Crossterm |
-| Async Runtime | Tokio |
-| IPC Client | Unix domain socket |
+| Component        | Technology         |
+| ---------------- | ------------------ |
+| TUI Framework    | Ratatui            |
+| Terminal Backend | Crossterm          |
+| Async Runtime    | Tokio              |
+| IPC Client       | Unix domain socket |
 
 ### Application Architecture
 
@@ -74,35 +83,35 @@ src/
 
 ### Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `j/k` | Navigate sessions up/down |
-| `Enter` | Expand session detail |
-| `r` | Resurrect closed session |
-| `d` | Remove session from list |
-| `1-4` | Switch layout preset |
-| `q` | Quit application |
-| `?` | Show help |
+| Key     | Action                    |
+| ------- | ------------------------- |
+| `j/k`   | Navigate sessions up/down |
+| `Enter` | Expand session detail     |
+| `r`     | Resurrect closed session  |
+| `d`     | Remove session from list  |
+| `1-4`   | Switch layout preset      |
+| `q`     | Quit application          |
+| `?`     | Show help                 |
 
 ### Color Scheme
 
-| Status | Color |
-|--------|-------|
-| Working | Green |
+| Status    | Color  |
+| --------- | ------ |
+| Working   | Green  |
 | Attention | Yellow |
-| Question | Blue |
-| Closed | Gray |
-| Error | Red |
+| Question  | Blue   |
+| Closed    | Gray   |
+| Error     | Red    |
 
 ### Responsive Design
 
 The TUI adapts to terminal width:
 
-| Width | Behavior |
-|-------|----------|
-| <40 cols | Abbreviate session names, hide details |
-| 40-80 | Standard display |
-| >80 | Show additional columns (session ID, etc.) |
+| Width    | Behavior                                   |
+| -------- | ------------------------------------------ |
+| <40 cols | Abbreviate session names, hide details     |
+| 40-80    | Standard display                           |
+| >80      | Show additional columns (session ID, etc.) |
 
 ### Mock-up: Full TUI
 
@@ -123,4 +132,5 @@ The TUI adapts to terminal width:
 
 ### Integration with Zellij
 
-The TUI is designed to run in a dedicated Zellij pane, receiving resize events automatically via crossterm's terminal event detection.
+The TUI is designed to run in a dedicated Zellij pane, receiving resize events
+automatically via crossterm's terminal event detection.

@@ -1,22 +1,24 @@
 # Story: Add Daemon Auto-Start Capability
 
-**Story ID:** S004
-**Epic:** [E001 - Daemon Core Infrastructure](../epic/E001-daemon-core-infrastructure.md)
-**Status:** Draft
-**Priority:** P2
-**Estimated Points:** 3
+**Story ID:** S004 **Epic:**
+[E001 - Daemon Core Infrastructure](../epic/E001-daemon-core-infrastructure.md)
+**Status:** Draft **Priority:** P2 **Estimated Points:** 3
 
 ## Description
 
-As a client (hook or dashboard),
-I want the daemon to start automatically if it's not running,
-So that I don't have to manually start the daemon before using the system.
+As a client (hook or dashboard), I want the daemon to start automatically if
+it's not running, So that I don't have to manually start the daemon before using
+the system.
 
 ## Context
 
-For a seamless user experience, clients should not need to manually start the daemon. When a hook fires or a dashboard launches, if the daemon isn't running, it should be started automatically. This is the "first client starts the daemon" pattern.
+For a seamless user experience, clients should not need to manually start the
+daemon. When a hook fires or a dashboard launches, if the daemon isn't running,
+it should be started automatically. This is the "first client starts the daemon"
+pattern.
 
 The auto-start behavior ensures:
+
 - Zero manual setup for users
 - Hooks work immediately after installation
 - Dashboard can be launched at any time
@@ -46,12 +48,18 @@ The auto-start behavior ensures:
 
 ## Acceptance Criteria
 
-- [ ] Given no daemon running, when a client attempts to connect, then the daemon is started automatically
-- [ ] Given daemon just started, when client connects, then connection succeeds after daemon is ready
-- [ ] Given daemon already running, when a client connects, then no new daemon is spawned
-- [ ] Given auto-start is triggered, when daemon spawns, then it runs in background (daemonized)
-- [ ] Given daemon fails to start, when timeout is reached, then client gets clear error message
-- [ ] Given multiple clients try to connect simultaneously, when no daemon running, then only one daemon is started
+- [ ] Given no daemon running, when a client attempts to connect, then the
+      daemon is started automatically
+- [ ] Given daemon just started, when client connects, then connection succeeds
+      after daemon is ready
+- [ ] Given daemon already running, when a client connects, then no new daemon
+      is spawned
+- [ ] Given auto-start is triggered, when daemon spawns, then it runs in
+      background (daemonized)
+- [ ] Given daemon fails to start, when timeout is reached, then client gets
+      clear error message
+- [ ] Given multiple clients try to connect simultaneously, when no daemon
+      running, then only one daemon is started
 
 ## Testing Requirements
 
@@ -140,9 +148,9 @@ fn spawn_daemon(socket_path: &Path) -> Result<()> {
 
 ### Timeout and Retry Configuration
 
-| Parameter | Value |
-|-----------|-------|
-| Initial retry delay | 10ms |
-| Max retry delay | 500ms |
-| Max retries | 10 |
-| Total max wait | ~5 seconds |
+| Parameter           | Value      |
+| ------------------- | ---------- |
+| Initial retry delay | 10ms       |
+| Max retry delay     | 500ms      |
+| Max retries         | 10         |
+| Total max wait      | ~5 seconds |

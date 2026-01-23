@@ -1,9 +1,8 @@
 # Agent Console Dashboard
 
-**Project Status:** Planning Complete ✓
-**Repository:** [agent-console-dashboard](https://github.com/pablolion/agent-console-dashboard)
-**Renamed from:** CC-Hub
-**Created:** 2026-01-16
+**Project Status:** Planning Complete ✓ **Repository:**
+[agent-console-dashboard](https://github.com/pablolion/agent-console-dashboard)
+**Renamed from:** CC-Hub **Created:** 2026-01-16
 
 ---
 
@@ -32,7 +31,8 @@
 
 ## Project Identity
 
-**Agent Console Dashboard** is a terminal-based dashboard for managing multiple AI coding agent sessions.
+**Agent Console Dashboard** is a terminal-based dashboard for managing multiple
+AI coding agent sessions.
 
 ### Core Purpose
 
@@ -44,7 +44,8 @@
 
 ### Why Rename from CC-Hub?
 
-1. **Broader scope** - Not limited to Claude Code, will support other agents with hooks
+1. **Broader scope** - Not limited to Claude Code, will support other agents
+   with hooks
 2. **More features** - API monitoring, session history, resurrection
 3. **Professional identity** - "Agent Console" describes the product better
 

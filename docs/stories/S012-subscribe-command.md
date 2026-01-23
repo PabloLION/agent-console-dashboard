@@ -1,25 +1,27 @@
 # Story: Implement SUBSCRIBE Command
 
-**Story ID:** S012
-**Epic:** [E003 - IPC Protocol & Client](../epic/E003-ipc-protocol-and-client.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 5
+**Story ID:** S012 **Epic:**
+[E003 - IPC Protocol & Client](../epic/E003-ipc-protocol-and-client.md)
+**Status:** Draft **Priority:** P1 **Estimated Points:** 5
 
 ## Description
 
-As a TUI dashboard,
-I want to subscribe to real-time session updates,
-So that I can display live status changes without polling.
+As a TUI dashboard, I want to subscribe to real-time session updates, So that I
+can display live status changes without polling.
 
 ## Context
 
-The SUBSCRIBE command is the foundation of the real-time dashboard experience. Instead of polling the daemon repeatedly, clients subscribe once and receive a stream of updates as sessions change state. This push model enables:
+The SUBSCRIBE command is the foundation of the real-time dashboard experience.
+Instead of polling the daemon repeatedly, clients subscribe once and receive a
+stream of updates as sessions change state. This push model enables:
+
 - Instant UI updates when sessions change
 - Low daemon CPU usage (no polling overhead)
 - Efficient network usage (only changed data is sent)
 
-The subscription is long-lived - the connection stays open and the daemon pushes UPDATE messages whenever session state changes. The client receives the current state immediately upon subscribing, then continuous updates thereafter.
+The subscription is long-lived - the connection stays open and the daemon pushes
+UPDATE messages whenever session state changes. The client receives the current
+state immediately upon subscribing, then continuous updates thereafter.
 
 ## Implementation Details
 
@@ -59,18 +61,25 @@ UPDATE <session> closed 120
 
 ### Dependencies
 
-- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Protocol definition
-- [S003 - In-Memory Session Store](./S003-in-memory-session-store.md) - Store to observe
+- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Protocol
+  definition
+- [S003 - In-Memory Session Store](./S003-in-memory-session-store.md) - Store to
+  observe
 - [S010 - SET Command](./S010-set-command.md) - Triggers update broadcasts
 
 ## Acceptance Criteria
 
-- [ ] Given a new subscriber, when SUBSCRIBE is called, then initial STATE with all sessions is sent
-- [ ] Given an active subscription, when any session changes, then UPDATE message is pushed
-- [ ] Given multiple subscribers, when a session changes, then all subscribers receive UPDATE
-- [ ] Given a subscriber disconnects, when detected, then subscriber is removed from list
-- [ ] Given the connection is open, then it remains open indefinitely (no timeout)
-- [ ] Given an UPDATE, then format is "UPDATE <session> <status> <elapsed>\n"
+- [ ] Given a new subscriber, when SUBSCRIBE is called, then initial STATE with
+      all sessions is sent
+- [ ] Given an active subscription, when any session changes, then UPDATE
+      message is pushed
+- [ ] Given multiple subscribers, when a session changes, then all subscribers
+      receive UPDATE
+- [ ] Given a subscriber disconnects, when detected, then subscriber is removed
+      from list
+- [ ] Given the connection is open, then it remains open indefinitely (no
+      timeout)
+- [ ] Given an UPDATE, then format is `UPDATE <session> <status> <elapsed>\n`
 - [ ] Given 10+ concurrent subscribers, then system handles all correctly
 
 ## Testing Requirements

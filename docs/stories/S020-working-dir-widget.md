@@ -1,22 +1,23 @@
 # Story: Implement Working Directory Widget
 
-**Story ID:** S020
-**Epic:** [E005 - Widget System](../epic/E005-widget-system.md)
-**Status:** Draft
-**Priority:** P2
-**Estimated Points:** 2
+**Story ID:** S020 **Epic:**
+[E005 - Widget System](../epic/E005-widget-system.md) **Status:** Draft
+**Priority:** P2 **Estimated Points:** 2
 
 ## Description
 
-As a user,
-I want to see the current working directory of the selected session,
+As a user, I want to see the current working directory of the selected session,
 So that I can quickly identify which project I'm viewing.
 
 ## Context
 
-The working-dir widget displays the working directory of the currently selected session. It provides context about where the selected agent session is running, which is especially useful when managing multiple projects simultaneously.
+The working-dir widget displays the working directory of the currently selected
+session. It provides context about where the selected agent session is running,
+which is especially useful when managing multiple projects simultaneously.
 
-The widget handles path display intelligently, collapsing the home directory to `~` and truncating long paths from the left to fit within terminal width constraints.
+The widget handles path display intelligently, collapsing the home directory to
+`~` and truncating long paths from the left to fit within terminal width
+constraints.
 
 ## Implementation Details
 
@@ -36,17 +37,25 @@ The widget handles path display intelligently, collapsing the home directory to 
 
 ### Dependencies
 
-- [S018 - Widget Trait/Interface](./S018-widget-trait-interface.md) - Widget trait to implement
-- [S005 - Session Data Model](./S005-session-data-model.md) - Session struct with working_dir field
+- [S018 - Widget Trait/Interface](./S018-widget-trait-interface.md) - Widget
+  trait to implement
+- [S005 - Session Data Model](./S005-session-data-model.md) - Session struct
+  with working_dir field
 
 ## Acceptance Criteria
 
-- [ ] Given a session is selected, when widget renders, then the session's working directory is displayed
-- [ ] Given the path starts with home directory, when displayed, then home is replaced with `~`
-- [ ] Given the path exceeds available width, when displayed, then path is truncated from left with `…/`
-- [ ] Given no session is selected, when widget renders, then a placeholder message is shown
-- [ ] Given terminal width is very narrow, when displayed, then only the final directory name is shown
-- [ ] Given the working directory exists, when widget renders, then path is normalized (no trailing slash)
+- [ ] Given a session is selected, when widget renders, then the session's
+      working directory is displayed
+- [ ] Given the path starts with home directory, when displayed, then home is
+      replaced with `~`
+- [ ] Given the path exceeds available width, when displayed, then path is
+      truncated from left with `…/`
+- [ ] Given no session is selected, when widget renders, then a placeholder
+      message is shown
+- [ ] Given terminal width is very narrow, when displayed, then only the final
+      directory name is shown
+- [ ] Given the working directory exists, when widget renders, then path is
+      normalized (no trailing slash)
 
 ## Testing Requirements
 
@@ -68,21 +77,25 @@ The widget handles path display intelligently, collapsing the home directory to 
 ### Display Examples
 
 **Full path that fits:**
+
 ```text
 ~/projects/my-app
 ```
 
 **Truncated long path:**
+
 ```text
 …/deeply/nested/project
 ```
 
 **Very narrow terminal (only final dir):**
+
 ```text
 project
 ```
 
 **No session selected:**
+
 ```text
 (no session selected)
 ```
@@ -184,17 +197,18 @@ impl Widget for WorkingDirWidget {
 
 ### Path Handling Edge Cases
 
-| Input Path | Width | Output |
-|------------|-------|--------|
-| `/home/user/projects/app` | 40 | `~/projects/app` |
-| `/home/user/very/long/path/to/project` | 25 | `…/path/to/project` |
-| `/home/user/deep/nested/project` | 15 | `…/project` |
-| `/home/user/x` | 5 | `~/x` |
-| `/` | 10 | `/` |
+| Input Path                             | Width | Output              |
+| -------------------------------------- | ----- | ------------------- |
+| `/home/user/projects/app`              | 40    | `~/projects/app`    |
+| `/home/user/very/long/path/to/project` | 25    | `…/path/to/project` |
+| `/home/user/deep/nested/project`       | 15    | `…/project`         |
+| `/home/user/x`                         | 5     | `~/x`               |
+| `/`                                    | 10    | `/`                 |
 
 ### Color Configuration
 
 The working directory can optionally be styled based on context:
+
 - Cyan (default): Normal display
 - Dimmed: When session is closed
 - Yellow: When session needs attention

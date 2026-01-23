@@ -1,22 +1,26 @@
 # Story: Implement API_USAGE Command
 
-**Story ID:** S035
-**Epic:** [E009 - API Usage Tracking](../epic/E009-api-usage-tracking.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 5
+**Story ID:** S035 **Epic:**
+[E009 - API Usage Tracking](../epic/E009-api-usage-tracking.md) **Status:**
+Draft **Priority:** P1 **Estimated Points:** 5
 
 ## Description
 
-As a user or client application,
-I want IPC commands to query and update API usage data,
-So that I can monitor consumption and hooks can report usage metrics.
+As a user or client application, I want IPC commands to query and update API
+usage data, So that I can monitor consumption and hooks can report usage
+metrics.
 
 ## Context
 
-The API usage tracking system requires IPC commands to function. Hooks from Claude Code need a way to report usage data to the daemon, and the TUI client needs to query this data for display. This story implements the IPC protocol extensions for API usage: API_USAGE (query single session), API_USAGE_ALL (query aggregate), and SET_USAGE (update metrics).
+The API usage tracking system requires IPC commands to function. Hooks from
+Claude Code need a way to report usage data to the daemon, and the TUI client
+needs to query this data for display. This story implements the IPC protocol
+extensions for API usage: API_USAGE (query single session), API_USAGE_ALL (query
+aggregate), and SET_USAGE (update metrics).
 
-These commands follow the same patterns established in E003 for other IPC commands like SET, LIST, and SUBSCRIBE. The commands must handle edge cases like querying non-existent sessions and malformed usage data.
+These commands follow the same patterns established in E003 for other IPC
+commands like SET, LIST, and SUBSCRIBE. The commands must handle edge cases like
+querying non-existent sessions and malformed usage data.
 
 ## Implementation Details
 
@@ -34,27 +38,39 @@ These commands follow the same patterns established in E003 for other IPC comman
 
 ### Files to Modify
 
-- `src/ipc/protocol.rs` - Add API_USAGE, API_USAGE_ALL, SET_USAGE command definitions
+- `src/ipc/protocol.rs` - Add API_USAGE, API_USAGE_ALL, SET_USAGE command
+  definitions
 - `src/ipc/commands.rs` - Implement command handlers
 - `src/daemon/store.rs` - Add usage storage and retrieval methods
 - `src/daemon/session.rs` - Integrate ApiUsage with session
 
 ### Dependencies
 
-- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Base protocol definition
-- [S010 - SET Command](./S010-set-command.md) - Pattern for command implementation
-- [S034 - API Usage Data Model](./S034-api-usage-data-model.md) - ApiUsage struct definition
+- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Base protocol
+  definition
+- [S010 - SET Command](./S010-set-command.md) - Pattern for command
+  implementation
+- [S034 - API Usage Data Model](./S034-api-usage-data-model.md) - ApiUsage
+  struct definition
 
 ## Acceptance Criteria
 
-- [ ] Given a valid session_id, when API_USAGE is called, then usage data is returned as JSON
-- [ ] Given an invalid session_id, when API_USAGE is called, then ERROR response with "session not found" is returned
-- [ ] Given multiple sessions with usage data, when API_USAGE_ALL is called, then aggregated totals are returned
-- [ ] Given no sessions exist, when API_USAGE_ALL is called, then zero-value usage is returned
-- [ ] Given valid usage JSON, when SET_USAGE is called, then session usage is updated and OK is returned
-- [ ] Given malformed usage JSON, when SET_USAGE is called, then ERROR response with parse error is returned
-- [ ] Given non-existent session, when SET_USAGE is called, then ERROR response with "session not found" is returned
-- [ ] Given cumulative SET_USAGE calls, when usage is queried, then totals reflect all updates
+- [ ] Given a valid session_id, when API_USAGE is called, then usage data is
+      returned as JSON
+- [ ] Given an invalid session_id, when API_USAGE is called, then ERROR response
+      with "session not found" is returned
+- [ ] Given multiple sessions with usage data, when API_USAGE_ALL is called,
+      then aggregated totals are returned
+- [ ] Given no sessions exist, when API_USAGE_ALL is called, then zero-value
+      usage is returned
+- [ ] Given valid usage JSON, when SET_USAGE is called, then session usage is
+      updated and OK is returned
+- [ ] Given malformed usage JSON, when SET_USAGE is called, then ERROR response
+      with parse error is returned
+- [ ] Given non-existent session, when SET_USAGE is called, then ERROR response
+      with "session not found" is returned
+- [ ] Given cumulative SET_USAGE calls, when usage is queried, then totals
+      reflect all updates
 
 ## Testing Requirements
 
@@ -64,7 +80,8 @@ These commands follow the same patterns established in E003 for other IPC comman
 - [ ] Unit test: API_USAGE_ALL returns zero-usage when no sessions exist
 - [ ] Unit test: SET_USAGE parses valid JSON and updates session
 - [ ] Unit test: SET_USAGE rejects malformed JSON with descriptive error
-- [ ] Integration test: Full round-trip SET_USAGE then API_USAGE returns updated values
+- [ ] Integration test: Full round-trip SET_USAGE then API_USAGE returns updated
+      values
 - [ ] Integration test: Hook script can call SET_USAGE successfully
 
 ## Out of Scope
@@ -294,6 +311,8 @@ echo "SET_USAGE $SESSION_ID $USAGE_JSON" | nc -U /tmp/agent-console.sock
 ### Considerations
 
 - **Idempotency**: SET_USAGE adds to existing totals rather than replacing
-- **Partial updates**: SET_USAGE accepts partial usage data (only input_tokens, etc.)
-- **Performance**: API_USAGE_ALL may be slow with many sessions; consider caching
+- **Partial updates**: SET_USAGE accepts partial usage data (only input_tokens,
+  etc.)
+- **Performance**: API_USAGE_ALL may be slow with many sessions; consider
+  caching
 - **Concurrency**: Use appropriate locking when updating usage data

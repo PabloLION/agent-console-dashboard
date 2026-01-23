@@ -1,22 +1,26 @@
 # Story: Create Ratatui Application Scaffold
 
-**Story ID:** S014
-**Epic:** [E004 - TUI Dashboard](../epic/E004-tui-dashboard.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 5
+**Story ID:** S014 **Epic:**
+[E004 - TUI Dashboard](../epic/E004-tui-dashboard.md) **Status:** Draft
+**Priority:** P1 **Estimated Points:** 5
 
 ## Description
 
-As a developer,
-I want to create a Ratatui application scaffold with proper terminal initialization,
-So that I have a foundation for building the interactive TUI dashboard.
+As a developer, I want to create a Ratatui application scaffold with proper
+terminal initialization, So that I have a foundation for building the
+interactive TUI dashboard.
 
 ## Context
 
-The TUI dashboard is the primary user interface for the Agent Console Dashboard. It needs to be built on Ratatui (a Rust library for building terminal user interfaces) with Crossterm as the terminal backend. This scaffold establishes the basic application structure including terminal setup/teardown, the main event loop, and proper panic handling to ensure terminal state is always restored.
+The TUI dashboard is the primary user interface for the Agent Console Dashboard.
+It needs to be built on Ratatui (a Rust library for building terminal user
+interfaces) with Crossterm as the terminal backend. This scaffold establishes
+the basic application structure including terminal setup/teardown, the main
+event loop, and proper panic handling to ensure terminal state is always
+restored.
 
 The scaffold follows the standard Ratatui application pattern with:
+
 - Raw mode terminal configuration
 - Alternate screen buffer
 - Event-driven architecture with Tokio async runtime
@@ -44,24 +48,32 @@ The scaffold follows the standard Ratatui application pattern with:
 
 ### Dependencies
 
-- [S001 - Create Daemon Process](./S001-create-daemon-process.md) - Shares CLI entry point
-- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Will need IPC client for daemon connection
+- [S001 - Create Daemon Process](./S001-create-daemon-process.md) - Shares CLI
+  entry point
+- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Will need IPC
+  client for daemon connection
 
 ## Acceptance Criteria
 
-- [ ] Given the TUI is started, when terminal is accessed, then raw mode is enabled and alternate screen is active
-- [ ] Given the TUI is running, when `q` is pressed, then the application exits cleanly and terminal is restored
-- [ ] Given the TUI is running, when a panic occurs, then the panic hook restores terminal state before crashing
-- [ ] Given the TUI is running, when terminal resize event occurs, then the application receives the resize event
+- [ ] Given the TUI is started, when terminal is accessed, then raw mode is
+      enabled and alternate screen is active
+- [ ] Given the TUI is running, when `q` is pressed, then the application exits
+      cleanly and terminal is restored
+- [ ] Given the TUI is running, when a panic occurs, then the panic hook
+      restores terminal state before crashing
+- [ ] Given the TUI is running, when terminal resize event occurs, then the
+      application receives the resize event
 - [ ] Given the TUI is started, then startup time is under 100ms
-- [ ] Given the TUI exits, then no terminal corruption occurs (cursor visible, echo enabled)
+- [ ] Given the TUI exits, then no terminal corruption occurs (cursor visible,
+      echo enabled)
 
 ## Testing Requirements
 
 - [ ] Unit test: Application state initializes correctly
 - [ ] Unit test: Event channel creation succeeds
 - [ ] Integration test: TUI starts and exits cleanly in CI environment
-- [ ] Integration test: Panic hook restores terminal (spawn subprocess, force panic)
+- [ ] Integration test: Panic hook restores terminal (spawn subprocess, force
+      panic)
 
 ## Out of Scope
 
@@ -86,11 +98,11 @@ src/
 
 ### Key Dependencies
 
-| Crate | Version | Purpose |
-|-------|---------|---------|
-| ratatui | 0.26+ | TUI framework |
-| crossterm | 0.27+ | Terminal backend |
-| tokio | 1.x | Async runtime |
+| Crate     | Version | Purpose          |
+| --------- | ------- | ---------------- |
+| ratatui   | 0.26+   | TUI framework    |
+| crossterm | 0.27+   | Terminal backend |
+| tokio     | 1.x     | Async runtime    |
 
 ### CLI Interface
 
@@ -133,6 +145,7 @@ pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Re
 ### Event Loop Architecture
 
 The event loop should:
+
 1. Poll for terminal events (keyboard, resize) via crossterm
 2. Handle IPC updates from daemon (via SUBSCRIBE channel)
 3. Trigger periodic UI refreshes if needed

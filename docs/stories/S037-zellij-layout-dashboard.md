@@ -1,22 +1,26 @@
 # Story: Create Zellij Layout with Dashboard Pane
 
-**Story ID:** S037
-**Epic:** [E010 - Zellij Integration](../epic/E010-zellij-integration.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 3
+**Story ID:** S037 **Epic:**
+[E010 - Zellij Integration](../epic/E010-zellij-integration.md) **Status:**
+Draft **Priority:** P1 **Estimated Points:** 3
 
 ## Description
 
-As a user,
-I want a Zellij layout script that includes a dedicated dashboard pane,
-So that I can have the Agent Console Dashboard always visible while working on multiple Claude Code sessions.
+As a user, I want a Zellij layout script that includes a dedicated dashboard
+pane, So that I can have the Agent Console Dashboard always visible while
+working on multiple Claude Code sessions.
 
 ## Context
 
-Zellij is a terminal multiplexer that supports declarative layouts. The Agent Console Dashboard should integrate seamlessly with Zellij workflows, allowing users to have a persistent, always-visible dashboard pane that shows Claude Code session status at a glance. This story creates the layout scripts and documentation needed to embed the dashboard in Zellij layouts.
+Zellij is a terminal multiplexer that supports declarative layouts. The Agent
+Console Dashboard should integrate seamlessly with Zellij workflows, allowing
+users to have a persistent, always-visible dashboard pane that shows Claude Code
+session status at a glance. This story creates the layout scripts and
+documentation needed to embed the dashboard in Zellij layouts.
 
-This is the primary integration point for Zellij users and enables the multi-agent workflow experience where users can monitor several concurrent Claude Code sessions.
+This is the primary integration point for Zellij users and enables the
+multi-agent workflow experience where users can monitor several concurrent
+Claude Code sessions.
 
 ## Implementation Details
 
@@ -41,18 +45,27 @@ This is the primary integration point for Zellij users and enables the multi-age
 
 ### Dependencies
 
-- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) - TUI must exist to display
-- [S022 - Layout Presets](./S022-layout-presets.md) - Dashboard layout options (one-line, two-line)
+- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) -
+  TUI must exist to display
+- [S022 - Layout Presets](./S022-layout-presets.md) - Dashboard layout options
+  (one-line, two-line)
 
 ## Acceptance Criteria
 
-- [ ] Given a user runs `zellij-claude-layout`, then a Zellij session starts with dashboard pane visible
-- [ ] Given the layout is loaded, then the dashboard pane appears at the top or bottom (configurable)
-- [ ] Given a 1-line layout is requested, then dashboard pane height is minimized to show single line
-- [ ] Given a 2-line or 3-line layout is requested, then dashboard pane height adjusts accordingly
-- [ ] Given the daemon is not running, then the dashboard shows appropriate placeholder message
-- [ ] Given the user closes the dashboard pane, then other panes continue functioning normally
-- [ ] Given Zellij is not installed, then the script provides a helpful error message
+- [ ] Given a user runs `zellij-claude-layout`, then a Zellij session starts
+      with dashboard pane visible
+- [ ] Given the layout is loaded, then the dashboard pane appears at the top or
+      bottom (configurable)
+- [ ] Given a 1-line layout is requested, then dashboard pane height is
+      minimized to show single line
+- [ ] Given a 2-line or 3-line layout is requested, then dashboard pane height
+      adjusts accordingly
+- [ ] Given the daemon is not running, then the dashboard shows appropriate
+      placeholder message
+- [ ] Given the user closes the dashboard pane, then other panes continue
+      functioning normally
+- [ ] Given Zellij is not installed, then the script provides a helpful error
+      message
 
 ## Testing Requirements
 
@@ -181,12 +194,12 @@ zellij --layout "$LAYOUT_FILE"
 
 ### Pane Size Recommendations
 
-| Dashboard Layout | Recommended Pane Size | Content |
-|------------------|----------------------|---------|
-| one-line | 1-2 rows | Session names and status only |
-| two-line | 2-3 rows | Status + working directory |
-| detailed | 4-6 rows | Full status, directory, timestamps |
-| history | 6-8 rows | Status + state history timeline |
+| Dashboard Layout | Recommended Pane Size | Content                            |
+| ---------------- | --------------------- | ---------------------------------- |
+| one-line         | 1-2 rows              | Session names and status only      |
+| two-line         | 2-3 rows              | Status + working directory         |
+| detailed         | 4-6 rows              | Full status, directory, timestamps |
+| history          | 6-8 rows              | Status + state history timeline    |
 
 ### Installation Instructions
 

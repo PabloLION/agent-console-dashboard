@@ -1,13 +1,13 @@
 # Epic: Configuration System
 
-**Epic ID:** E007
-**Status:** Draft
-**Priority:** Medium
-**Estimated Effort:** M
+**Epic ID:** E007 **Status:** Draft **Priority:** Medium **Estimated Effort:** M
 
 ## Summary
 
-Implement a centralized configuration system using TOML format that manages all application settings. This includes UI layout preferences, widget configurations, agent integrations, and daemon options. The system follows XDG Base Directory conventions for consistent file placement across Unix systems.
+Implement a centralized configuration system using TOML format that manages all
+application settings. This includes UI layout preferences, widget
+configurations, agent integrations, and daemon options. The system follows XDG
+Base Directory conventions for consistent file placement across Unix systems.
 
 ## Goals
 
@@ -19,25 +19,33 @@ Implement a centralized configuration system using TOML format that manages all 
 
 ## User Value
 
-Users can customize their dashboard experience through a single, well-documented configuration file. Instead of scattered settings or command-line flags, all preferences are managed in one place at `~/.config/agent-console/config.toml`. This enables easy backup, sharing of configurations, and consistent behavior across sessions. The sensible defaults mean users can start immediately without mandatory configuration.
+Users can customize their dashboard experience through a single, well-documented
+configuration file. Instead of scattered settings or command-line flags, all
+preferences are managed in one place at `~/.config/agent-console/config.toml`.
+This enables easy backup, sharing of configurations, and consistent behavior
+across sessions. The sensible defaults mean users can start immediately without
+mandatory configuration.
 
 ## Stories
 
-| Story ID | Title | Priority | Status |
-|----------|-------|----------|--------|
-| [S027](../stories/S027-toml-configuration-schema.md) | Define TOML configuration schema | P1 | Draft |
-| [S028](../stories/S028-configuration-loading.md) | Implement configuration loading | P1 | Draft |
-| [S029](../stories/S029-xdg-path-support.md) | Add XDG path support | P2 | Draft |
-| [S030](../stories/S030-default-configuration-file.md) | Create default configuration file | P2 | Draft |
+| Story ID                                              | Title                             | Priority | Status |
+| ----------------------------------------------------- | --------------------------------- | -------- | ------ |
+| [S027](../stories/S027-toml-configuration-schema.md)  | Define TOML configuration schema  | P1       | Draft  |
+| [S028](../stories/S028-configuration-loading.md)      | Implement configuration loading   | P1       | Draft  |
+| [S029](../stories/S029-xdg-path-support.md)           | Add XDG path support              | P2       | Draft  |
+| [S030](../stories/S030-default-configuration-file.md) | Create default configuration file | P2       | Draft  |
 
 ## Dependencies
 
-- [E001 - Daemon Core Infrastructure](./E001-daemon-core-infrastructure.md) - Daemon must load configuration on startup
-- [E005 - Widget System](./E005-widget-system.md) - Widget configuration options depend on available widgets
+- [E001 - Daemon Core Infrastructure](./E001-daemon-core-infrastructure.md) -
+  Daemon must load configuration on startup
+- [E005 - Widget System](./E005-widget-system.md) - Widget configuration options
+  depend on available widgets
 
 ## Acceptance Criteria
 
-- [ ] Configuration file uses TOML format at `~/.config/agent-console/config.toml`
+- [ ] Configuration file uses TOML format at
+      `~/.config/agent-console/config.toml`
 - [ ] Application loads and parses configuration on startup without errors
 - [ ] XDG_CONFIG_HOME environment variable is respected for config location
 - [ ] Missing configuration file creates sensible defaults automatically
@@ -72,12 +80,12 @@ enabled = true
 
 ### Configuration Sections
 
-| Section | Purpose |
-|---------|---------|
-| `[ui]` | Dashboard layout and widget preferences |
-| `[agents.*]` | Per-agent settings (Claude Code, future agents) |
-| `[integrations.*]` | External tool integrations (Zellij, etc.) |
-| `[daemon]` | Daemon-specific settings (socket path, etc.) |
+| Section            | Purpose                                         |
+| ------------------ | ----------------------------------------------- |
+| `[ui]`             | Dashboard layout and widget preferences         |
+| `[agents.*]`       | Per-agent settings (Claude Code, future agents) |
+| `[integrations.*]` | External tool integrations (Zellij, etc.)       |
+| `[daemon]`         | Daemon-specific settings (socket path, etc.)    |
 
 ### Implementation Approach
 

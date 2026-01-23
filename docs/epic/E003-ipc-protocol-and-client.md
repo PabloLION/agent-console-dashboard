@@ -1,13 +1,14 @@
 # Epic: IPC Protocol & Client
 
-**Epic ID:** E003
-**Status:** Draft
-**Priority:** High
-**Estimated Effort:** M
+**Epic ID:** E003 **Status:** Draft **Priority:** High **Estimated Effort:** M
 
 ## Summary
 
-Define and implement the Inter-Process Communication (IPC) protocol for communication between hooks, CLI clients, and the daemon over Unix sockets. This epic establishes the text-based message protocol and provides CLI commands for interacting with the daemon, enabling both session status updates from hooks and queries from users.
+Define and implement the Inter-Process Communication (IPC) protocol for
+communication between hooks, CLI clients, and the daemon over Unix sockets. This
+epic establishes the text-based message protocol and provides CLI commands for
+interacting with the daemon, enabling both session status updates from hooks and
+queries from users.
 
 ## Goals
 
@@ -18,22 +19,28 @@ Define and implement the Inter-Process Communication (IPC) protocol for communic
 
 ## User Value
 
-Users can interact with the Agent Console system through intuitive CLI commands. Hooks can reliably report session status changes using simple commands. Dashboards receive real-time updates via subscription, ensuring instant visibility into session state changes. The text-based protocol makes debugging and manual testing straightforward.
+Users can interact with the Agent Console system through intuitive CLI commands.
+Hooks can reliably report session status changes using simple commands.
+Dashboards receive real-time updates via subscription, ensuring instant
+visibility into session state changes. The text-based protocol makes debugging
+and manual testing straightforward.
 
 ## Stories
 
-| Story ID | Title | Priority | Status |
-|----------|-------|----------|--------|
-| [S009](../stories/S009-ipc-message-protocol.md) | Define IPC message protocol | P1 | Draft |
-| [S010](../stories/S010-set-command.md) | Implement SET command | P1 | Draft |
-| [S011](../stories/S011-list-command.md) | Implement LIST command | P1 | Draft |
-| [S012](../stories/S012-subscribe-command.md) | Implement SUBSCRIBE command | P1 | Draft |
-| [S013](../stories/S013-cli-client-commands.md) | Create CLI client commands | P1 | Draft |
+| Story ID                                        | Title                       | Priority | Status |
+| ----------------------------------------------- | --------------------------- | -------- | ------ |
+| [S009](../stories/S009-ipc-message-protocol.md) | Define IPC message protocol | P1       | Draft  |
+| [S010](../stories/S010-set-command.md)          | Implement SET command       | P1       | Draft  |
+| [S011](../stories/S011-list-command.md)         | Implement LIST command      | P1       | Draft  |
+| [S012](../stories/S012-subscribe-command.md)    | Implement SUBSCRIBE command | P1       | Draft  |
+| [S013](../stories/S013-cli-client-commands.md)  | Create CLI client commands  | P1       | Draft  |
 
 ## Dependencies
 
-- [E001 - Daemon Core Infrastructure](./E001-daemon-core-infrastructure.md) - Requires Unix socket server
-- [E002 - Session Management](./E002-session-management.md) - Requires session data model and store
+- [E001 - Daemon Core Infrastructure](./E001-daemon-core-infrastructure.md) -
+  Requires Unix socket server
+- [E002 - Session Management](./E002-session-management.md) - Requires session
+  data model and store
 
 ## Acceptance Criteria
 
@@ -104,15 +111,16 @@ src/
 
 ### Key Dependencies
 
-| Crate | Purpose |
-|-------|---------|
-| clap | CLI argument parsing |
+| Crate      | Purpose                         |
+| ---------- | ------------------------------- |
+| clap       | CLI argument parsing            |
 | serde_json | JSON serialization for messages |
-| tokio | Async socket communication |
+| tokio      | Async socket communication      |
 
 ### Design Decisions
 
 - **Text-based protocol** - Human-readable for easy debugging
-- **JSON for complex data** - Status updates use simple text, complex data uses JSON
+- **JSON for complex data** - Status updates use simple text, complex data uses
+  JSON
 - **Push model for subscriptions** - Server pushes updates, clients don't poll
 - **Newline-delimited messages** - Simple framing for streaming

@@ -1,22 +1,23 @@
 # Story: Add Keyboard Navigation
 
-**Story ID:** S016
-**Epic:** [E004 - TUI Dashboard](../epic/E004-tui-dashboard.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 3
+**Story ID:** S016 **Epic:**
+[E004 - TUI Dashboard](../epic/E004-tui-dashboard.md) **Status:** Draft
+**Priority:** P1 **Estimated Points:** 3
 
 ## Description
 
-As a user,
-I want to navigate between sessions using keyboard shortcuts,
-So that I can quickly select and interact with sessions without using a mouse.
+As a user, I want to navigate between sessions using keyboard shortcuts, So that
+I can quickly select and interact with sessions without using a mouse.
 
 ## Context
 
-Keyboard-driven navigation is essential for a terminal application. Users expect vim-style navigation (j/k for up/down) and standard shortcuts (Enter to select, q to quit). This story implements the core navigation and quick action shortcuts that work from the main dashboard view.
+Keyboard-driven navigation is essential for a terminal application. Users expect
+vim-style navigation (j/k for up/down) and standard shortcuts (Enter to select,
+q to quit). This story implements the core navigation and quick action shortcuts
+that work from the main dashboard view.
 
-The keyboard shortcuts follow terminal application conventions and are documented in the footer of the TUI for discoverability.
+The keyboard shortcuts follow terminal application conventions and are
+documented in the footer of the TUI for discoverability.
 
 ## Implementation Details
 
@@ -40,20 +41,31 @@ The keyboard shortcuts follow terminal application conventions and are documente
 
 ### Dependencies
 
-- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) - Event loop infrastructure
-- [S015 - Main Dashboard Layout](./S015-main-dashboard-layout.md) - Session list rendering
-- [S032 - RESURRECT Command](./S032-resurrect-command.md) - For resurrect action (optional, can stub)
+- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) -
+  Event loop infrastructure
+- [S015 - Main Dashboard Layout](./S015-main-dashboard-layout.md) - Session list
+  rendering
+- [S032 - RESURRECT Command](./S032-resurrect-command.md) - For resurrect action
+  (optional, can stub)
 
 ## Acceptance Criteria
 
-- [ ] Given multiple sessions exist, when `j` is pressed, then selection moves down
-- [ ] Given multiple sessions exist, when `k` is pressed, then selection moves up
-- [ ] Given selection at first session, when `k` is pressed, then selection stays at first (no wrap)
-- [ ] Given selection at last session, when `j` is pressed, then selection stays at last (no wrap)
-- [ ] Given a session is selected, when `Enter` is pressed, then detail view opens (S017)
-- [ ] Given a closed session is selected, when `r` is pressed, then resurrect action is triggered
-- [ ] Given a session is selected, when `d` is pressed, then remove confirmation is shown
-- [ ] Given TUI is running, when `1-4` is pressed, then corresponding layout preset activates
+- [ ] Given multiple sessions exist, when `j` is pressed, then selection moves
+      down
+- [ ] Given multiple sessions exist, when `k` is pressed, then selection moves
+      up
+- [ ] Given selection at first session, when `k` is pressed, then selection
+      stays at first (no wrap)
+- [ ] Given selection at last session, when `j` is pressed, then selection stays
+      at last (no wrap)
+- [ ] Given a session is selected, when `Enter` is pressed, then detail view
+      opens (S017)
+- [ ] Given a closed session is selected, when `r` is pressed, then resurrect
+      action is triggered
+- [ ] Given a session is selected, when `d` is pressed, then remove confirmation
+      is shown
+- [ ] Given TUI is running, when `1-4` is pressed, then corresponding layout
+      preset activates
 - [ ] Given TUI is running, when `?` is pressed, then help overlay appears
 - [ ] Given TUI is running, when `q` is pressed, then application exits cleanly
 - [ ] Given arrow keys (↑/↓), when pressed, then they function same as k/j
@@ -77,20 +89,20 @@ The keyboard shortcuts follow terminal application conventions and are documente
 
 ### Keyboard Shortcuts Reference
 
-| Key | Action | Context |
-|-----|--------|---------|
-| `j` / `↓` | Move selection down | Main view |
-| `k` / `↑` | Move selection up | Main view |
-| `Enter` | Open detail view | Session selected |
-| `r` | Resurrect session | Closed session selected |
-| `d` | Remove session | Any session selected |
-| `1` | Switch to one-line layout | Any |
-| `2` | Switch to two-line layout | Any |
-| `3` | Switch to detailed layout | Any |
-| `4` | Switch to history layout | Any |
-| `?` | Show help | Any |
-| `q` | Quit | Any |
-| `Esc` | Close overlay/go back | Detail view, help |
+| Key       | Action                    | Context                 |
+| --------- | ------------------------- | ----------------------- |
+| `j` / `↓` | Move selection down       | Main view               |
+| `k` / `↑` | Move selection up         | Main view               |
+| `Enter`   | Open detail view          | Session selected        |
+| `r`       | Resurrect session         | Closed session selected |
+| `d`       | Remove session            | Any session selected    |
+| `1`       | Switch to one-line layout | Any                     |
+| `2`       | Switch to two-line layout | Any                     |
+| `3`       | Switch to detailed layout | Any                     |
+| `4`       | Switch to history layout  | Any                     |
+| `?`       | Show help                 | Any                     |
+| `q`       | Quit                      | Any                     |
+| `Esc`     | Close overlay/go back     | Detail view, help       |
 
 ### Selection State
 
@@ -161,6 +173,7 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
 ### Visual Selection Indicator
 
 The selected session should be visually distinct:
+
 - Background highlight (inverse colors)
 - Or prefix with `>` marker
 - Selection should be visible even in minimal layouts

@@ -1,22 +1,24 @@
 # Story: Implement API Usage Widget
 
-**Story ID:** S021
-**Epic:** [E005 - Widget System](../epic/E005-widget-system.md)
-**Status:** Draft
-**Priority:** P2
-**Estimated Points:** 3
+**Story ID:** S021 **Epic:**
+[E005 - Widget System](../epic/E005-widget-system.md) **Status:** Draft
+**Priority:** P2 **Estimated Points:** 3
 
 ## Description
 
-As a user,
-I want to see my API usage (tokens and estimated cost) in the dashboard,
-So that I can monitor my resource consumption across agent sessions.
+As a user, I want to see my API usage (tokens and estimated cost) in the
+dashboard, So that I can monitor my resource consumption across agent sessions.
 
 ## Context
 
-The api-usage widget displays aggregated API usage metrics including token counts (input/output) and estimated cost. This helps users track their resource consumption, especially important for users with usage-based billing or budget constraints.
+The api-usage widget displays aggregated API usage metrics including token
+counts (input/output) and estimated cost. This helps users track their resource
+consumption, especially important for users with usage-based billing or budget
+constraints.
 
-The widget can show either session-specific usage (for the selected session) or aggregated usage across all sessions, depending on configuration and available data.
+The widget can show either session-specific usage (for the selected session) or
+aggregated usage across all sessions, depending on configuration and available
+data.
 
 ## Implementation Details
 
@@ -37,21 +39,30 @@ The widget can show either session-specific usage (for the selected session) or 
 
 ### Dependencies
 
-- [S018 - Widget Trait/Interface](./S018-widget-trait-interface.md) - Widget trait to implement
-- [S034 - API Usage Data Model](./S034-api-usage-data-model.md) - ApiUsage struct definition (E009)
+- [S018 - Widget Trait/Interface](./S018-widget-trait-interface.md) - Widget
+  trait to implement
+- [S034 - API Usage Data Model](./S034-api-usage-data-model.md) - ApiUsage
+  struct definition (E009)
 
 ## Acceptance Criteria
 
-- [ ] Given API usage data is available, when widget renders, then token counts are displayed
-- [ ] Given token counts are large, when displayed, then human-readable suffixes are used (12.3k, 1.2M)
-- [ ] Given API usage data is available, when widget renders, then estimated cost is displayed with currency symbol
-- [ ] Given no API usage data is available, when widget renders, then a placeholder message is shown
-- [ ] Given terminal width is limited, when widget renders, then display is abbreviated
-- [ ] Given high usage, when widget renders, then warning color (yellow/red) is applied
+- [ ] Given API usage data is available, when widget renders, then token counts
+      are displayed
+- [ ] Given token counts are large, when displayed, then human-readable suffixes
+      are used (12.3k, 1.2M)
+- [ ] Given API usage data is available, when widget renders, then estimated
+      cost is displayed with currency symbol
+- [ ] Given no API usage data is available, when widget renders, then a
+      placeholder message is shown
+- [ ] Given terminal width is limited, when widget renders, then display is
+      abbreviated
+- [ ] Given high usage, when widget renders, then warning color (yellow/red) is
+      applied
 
 ## Testing Requirements
 
-- [ ] Unit test: Token count formatting with various magnitudes (100, 1000, 100000, 1000000)
+- [ ] Unit test: Token count formatting with various magnitudes (100, 1000,
+      100000, 1000000)
 - [ ] Unit test: Cost estimation calculation is accurate
 - [ ] Unit test: Placeholder displays when no API data available
 - [ ] Unit test: Width constraint handling with abbreviation
@@ -70,16 +81,19 @@ The widget can show either session-specific usage (for the selected session) or 
 ### Display Format
 
 **Full format:**
+
 ```text
 Tokens: 12.3k in / 8.1k out | $0.42 est
 ```
 
 **Compact format (narrow terminal):**
+
 ```text
 12.3k/8.1k | $0.42
 ```
 
 **No data available:**
+
 ```text
 API usage: --
 ```
@@ -101,6 +115,7 @@ fn format_tokens(count: u64) -> String {
 ### Cost Estimation
 
 Cost is estimated based on typical Claude API pricing:
+
 - Input tokens: $0.008 per 1k tokens (example rate)
 - Output tokens: $0.024 per 1k tokens (example rate)
 
@@ -203,19 +218,21 @@ impl Widget for ApiUsageWidget {
 
 ### Usage Thresholds and Colors
 
-| Cost Range | Color | Meaning |
-|------------|-------|---------|
-| $0 - $5 | Green | Normal usage |
-| $5 - $10 | Yellow | Elevated usage |
-| $10+ | Red | High usage |
+| Cost Range | Color  | Meaning        |
+| ---------- | ------ | -------------- |
+| $0 - $5    | Green  | Normal usage   |
+| $5 - $10   | Yellow | Elevated usage |
+| $10+       | Red    | High usage     |
 
 These thresholds are configurable in the future.
 
 ### API Usage Data Source
 
 API usage data can come from:
+
 1. Claude Code hooks reporting token counts
 2. Session metadata if available
 3. Aggregated from daemon's in-memory store
 
-The widget gracefully handles missing data - it's optional information that enhances the dashboard but isn't required for core functionality.
+The widget gracefully handles missing data - it's optional information that
+enhances the dashboard but isn't required for core functionality.

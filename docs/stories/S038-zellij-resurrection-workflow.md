@@ -1,22 +1,26 @@
 # Story: Document Zellij Resurrection Workflow
 
-**Story ID:** S038
-**Epic:** [E010 - Zellij Integration](../epic/E010-zellij-integration.md)
-**Status:** Draft
-**Priority:** P2
-**Estimated Points:** 5
+**Story ID:** S038 **Epic:**
+[E010 - Zellij Integration](../epic/E010-zellij-integration.md) **Status:**
+Draft **Priority:** P2 **Estimated Points:** 5
 
 ## Description
 
-As a user,
-I want to resurrect closed Claude Code sessions within Zellij panes,
-So that I can seamlessly continue previous work without manually navigating terminals.
+As a user, I want to resurrect closed Claude Code sessions within Zellij panes,
+So that I can seamlessly continue previous work without manually navigating
+terminals.
 
 ## Context
 
-Session resurrection (E008) allows users to bring back closed Claude Code sessions using `claude --resume <session-id>`. When working within Zellij, this workflow should integrate with Zellij's pane management - either creating new panes for resurrected sessions or sending the resume command to an existing pane.
+Session resurrection (E008) allows users to bring back closed Claude Code
+sessions using `claude --resume <session-id>`. When working within Zellij, this
+workflow should integrate with Zellij's pane management - either creating new
+panes for resurrected sessions or sending the resume command to an existing
+pane.
 
-This story documents and implements the resurrection workflow within the Zellij context, building on the Zellij layout integration (S037) and the core resurrection command (S032).
+This story documents and implements the resurrection workflow within the Zellij
+context, building on the Zellij layout integration (S037) and the core
+resurrection command (S032).
 
 ## Implementation Details
 
@@ -25,7 +29,8 @@ This story documents and implements the resurrection workflow within the Zellij 
 1. Detect Zellij environment before resurrection
 2. Implement pane creation for new session via Zellij CLI
 3. Implement command execution in existing pane via Zellij CLI
-4. Support different resurrection strategies (new pane, focused pane, specified pane)
+4. Support different resurrection strategies (new pane, focused pane, specified
+   pane)
 5. Update dashboard status after resurrection triggers
 6. Handle errors gracefully (Zellij not available, pane creation fails)
 7. Document the workflow for users
@@ -42,20 +47,31 @@ This story documents and implements the resurrection workflow within the Zellij 
 
 ### Dependencies
 
-- [S031 - Store Session Metadata for Closed Sessions](./S031-closed-session-metadata.md) - Closed session data
-- [S032 - Implement RESURRECT Command](./S032-resurrect-command.md) - Core resurrection IPC command
-- [S033 - Integrate with claude --resume](./S033-claude-resume-integration.md) - Claude Code resume command
-- [S037 - Zellij Layout with Dashboard Pane](./S037-zellij-layout-dashboard.md) - Zellij integration base
+- [S031 - Store Session Metadata for Closed Sessions](./S031-closed-session-metadata.md)
+  \- Closed session data
+- [S032 - Implement RESURRECT Command](./S032-resurrect-command.md) - Core
+  resurrection IPC command
+- [S033 - Integrate with claude --resume](./S033-claude-resume-integration.md) -
+  Claude Code resume command
+- [S037 - Zellij Layout with Dashboard Pane](./S037-zellij-layout-dashboard.md) -
+  Zellij integration base
 
 ## Acceptance Criteria
 
-- [ ] Given user runs `agent-console resurrect <session>` inside Zellij, then a new pane is created with the resumed session
-- [ ] Given user runs resurrection with `--pane current` flag, then the resume command runs in the currently focused pane
-- [ ] Given user runs resurrection with `--pane new` flag, then a new Zellij pane is created
-- [ ] Given user runs resurrection outside Zellij, then resurrection proceeds in current terminal (fallback)
-- [ ] Given Zellij pane creation fails, then a helpful error message is displayed
-- [ ] Given session is resurrected, then dashboard status updates to "Working" within 2 seconds
-- [ ] Given the `ZELLIJ` environment variable is not set, then Zellij features are disabled gracefully
+- [ ] Given user runs `agent-console resurrect <session>` inside Zellij, then a
+      new pane is created with the resumed session
+- [ ] Given user runs resurrection with `--pane current` flag, then the resume
+      command runs in the currently focused pane
+- [ ] Given user runs resurrection with `--pane new` flag, then a new Zellij
+      pane is created
+- [ ] Given user runs resurrection outside Zellij, then resurrection proceeds in
+      current terminal (fallback)
+- [ ] Given Zellij pane creation fails, then a helpful error message is
+      displayed
+- [ ] Given session is resurrected, then dashboard status updates to "Working"
+      within 2 seconds
+- [ ] Given the `ZELLIJ` environment variable is not set, then Zellij features
+      are disabled gracefully
 
 ## Testing Requirements
 
@@ -77,12 +93,12 @@ This story documents and implements the resurrection workflow within the Zellij 
 
 ### Resurrection Strategies
 
-| Strategy | Flag | Behavior |
-|----------|------|----------|
-| New Pane | `--pane new` (default in Zellij) | Creates new pane, runs resume there |
-| Current Pane | `--pane current` | Runs resume in focused pane |
-| Specific Pane | `--pane-id <id>` | Sends command to specific pane |
-| Auto | (outside Zellij) | Runs in current terminal |
+| Strategy      | Flag                             | Behavior                            |
+| ------------- | -------------------------------- | ----------------------------------- |
+| New Pane      | `--pane new` (default in Zellij) | Creates new pane, runs resume there |
+| Current Pane  | `--pane current`                 | Runs resume in focused pane         |
+| Specific Pane | `--pane-id <id>`                 | Sends command to specific pane      |
+| Auto          | (outside Zellij)                 | Runs in current terminal            |
 
 ### Zellij CLI Commands
 
@@ -270,7 +286,7 @@ pub enum ZellijError {
 
 ### Workflow Diagram
 
-```
+```text
 User selects closed session in dashboard
            │
            ▼
@@ -331,12 +347,12 @@ new_pane_position = "right"
 
 ### Error Messages
 
-| Error | Message | Recovery |
-|-------|---------|----------|
-| Zellij not installed | "Zellij not found. Running in current terminal." | Fallback to current terminal |
+| Error                | Message                                            | Recovery                     |
+| -------------------- | -------------------------------------------------- | ---------------------------- |
+| Zellij not installed | "Zellij not found. Running in current terminal."   | Fallback to current terminal |
 | Pane creation failed | "Failed to create Zellij pane. Check Zellij logs." | Suggest manual pane creation |
-| Session not found | "Session 'abc123' not found in closed sessions." | List available sessions |
-| Claude not installed | "Claude CLI not found. Install Claude Code first." | Link to installation docs |
+| Session not found    | "Session 'abc123' not found in closed sessions."   | List available sessions      |
+| Claude not installed | "Claude CLI not found. Install Claude Code first." | Link to installation docs    |
 
 ### Future Enhancements
 

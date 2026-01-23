@@ -1,28 +1,31 @@
 # Story: Implement Session Status Transitions
 
-**Story ID:** S006
-**Epic:** [E002 - Session Management](../epic/E002-session-management.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 3
+**Story ID:** S006 **Epic:**
+[E002 - Session Management](../epic/E002-session-management.md) **Status:**
+Draft **Priority:** P1 **Estimated Points:** 3
 
 ## Description
 
-As a developer,
-I want to implement validated session status transitions,
-So that sessions can only move between valid states and invalid transitions are rejected.
+As a developer, I want to implement validated session status transitions, So
+that sessions can only move between valid states and invalid transitions are
+rejected.
 
 ## Context
 
-Session status transitions represent the core business logic of the session management system. Each status change must be validated to ensure data integrity and prevent invalid states. The transition logic also needs to update the `since` timestamp and trigger history recording.
+Session status transitions represent the core business logic of the session
+management system. Each status change must be validated to ensure data integrity
+and prevent invalid states. The transition logic also needs to update the
+`since` timestamp and trigger history recording.
 
 Status states and their meanings:
+
 - **Working**: Agent is actively processing a task
 - **Attention**: Agent has stopped and is waiting for user input
 - **Question**: Agent has asked a question using AskUserQuestion tool
 - **Closed**: Session has been terminated
 
 These states are triggered by different Claude Code hooks:
+
 - Working <- UserPromptSubmit hook
 - Attention <- Stop hook, Notification hook
 - Question <- AskQuestion hook (needs investigation)
@@ -47,18 +50,27 @@ These states are triggered by different Claude Code hooks:
 
 ### Dependencies
 
-- [S005 - Session Data Model](./S005-session-data-model.md) - Data model must be defined first
+- [S005 - Session Data Model](./S005-session-data-model.md) - Data model must be
+  defined first
 
 ## Acceptance Criteria
 
-- [ ] Given a session in Working status, when transitioning to Attention, then the transition succeeds
-- [ ] Given a session in Working status, when transitioning to Question, then the transition succeeds
-- [ ] Given a session in any status, when transitioning to Closed, then the transition succeeds
-- [ ] Given a session in Closed status, when transitioning to any other status, then the transition is rejected (session must be resurrected instead)
-- [ ] Given any status transition, when it succeeds, then the `since` field is updated to current time
-- [ ] Given any status transition, when it succeeds, then the duration in previous state is calculated
-- [ ] Given any status transition, when it succeeds, then history recording is triggered
-- [ ] Given a transition to the same status (e.g., Working -> Working), then it is treated as a no-op or refresh (configurable)
+- [ ] Given a session in Working status, when transitioning to Attention, then
+      the transition succeeds
+- [ ] Given a session in Working status, when transitioning to Question, then
+      the transition succeeds
+- [ ] Given a session in any status, when transitioning to Closed, then the
+      transition succeeds
+- [ ] Given a session in Closed status, when transitioning to any other status,
+      then the transition is rejected (session must be resurrected instead)
+- [ ] Given any status transition, when it succeeds, then the `since` field is
+      updated to current time
+- [ ] Given any status transition, when it succeeds, then the duration in
+      previous state is calculated
+- [ ] Given any status transition, when it succeeds, then history recording is
+      triggered
+- [ ] Given a transition to the same status (e.g., Working -> Working), then it
+      is treated as a no-op or refresh (configurable)
 
 ## Testing Requirements
 
@@ -81,21 +93,26 @@ These states are triggered by different Claude Code hooks:
 ### Valid Transition Matrix
 
 | From \ To | Working | Attention | Question | Closed |
-|-----------|---------|-----------|----------|--------|
+| --------- | ------- | --------- | -------- | ------ |
 | Working   | refresh | valid     | valid    | valid  |
 | Attention | valid   | refresh   | valid    | valid  |
 | Question  | valid   | valid     | refresh  | valid  |
-| Closed    | invalid | invalid   | invalid  | - |
+| Closed    | invalid | invalid   | invalid  | -      |
 
-Note: "refresh" means the transition is allowed but may be treated as a timestamp update rather than a true state change.
+Note: "refresh" means the transition is allowed but may be treated as a
+timestamp update rather than a true state change.
 
 ### Design Decision: Strict vs Permissive Transitions
 
 Two approaches are possible:
-1. **Strict**: Only allow transitions that make semantic sense (e.g., Working -> Question but not Question -> Working without user input)
-2. **Permissive**: Allow any non-Closed transition, trust the hooks to send valid states
 
-**Recommendation:** Start permissive, as hooks are the source of truth. Add validation later if issues arise.
+1. **Strict**: Only allow transitions that make semantic sense (e.g., Working ->
+   Question but not Question -> Working without user input)
+2. **Permissive**: Allow any non-Closed transition, trust the hooks to send
+   valid states
+
+**Recommendation:** Start permissive, as hooks are the source of truth. Add
+validation later if issues arise.
 
 ### Timestamp Handling
 

@@ -1,22 +1,25 @@
 # Story: Create Stop Hook Script
 
-**Story ID:** S023
-**Epic:** [E006 - Claude Code Integration](../epic/E006-claude-code-integration.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 2
+**Story ID:** S023 **Epic:**
+[E006 - Claude Code Integration](../epic/E006-claude-code-integration.md)
+**Status:** Draft **Priority:** P1 **Estimated Points:** 2
 
 ## Description
 
-As a user,
-I want a hook script that runs when Claude Code stops or completes,
+As a user, I want a hook script that runs when Claude Code stops or completes,
 So that my dashboard automatically shows which sessions need attention.
 
 ## Context
 
-The Stop hook is fired by Claude Code whenever a session stops or completes its work. This is a critical integration point because it signals that Claude has finished processing and may be waiting for user input or has completed the task. The dashboard should immediately reflect this state change by setting the session status to "Attention".
+The Stop hook is fired by Claude Code whenever a session stops or completes its
+work. This is a critical integration point because it signals that Claude has
+finished processing and may be waiting for user input or has completed the task.
+The dashboard should immediately reflect this state change by setting the
+session status to "Attention".
 
-The hook script must be portable, work with minimal dependencies (just bash and the agent-console CLI), and correctly derive the project name from the current working directory where Claude Code is running.
+The hook script must be portable, work with minimal dependencies (just bash and
+the agent-console CLI), and correctly derive the project name from the current
+working directory where Claude Code is running.
 
 ## Implementation Details
 
@@ -35,25 +38,37 @@ The hook script must be portable, work with minimal dependencies (just bash and 
 
 ### Dependencies
 
-- [E001 - Daemon Core Infrastructure](../epic/E001-daemon-core-infrastructure.md) - Daemon must be running
+- [E001 - Daemon Core Infrastructure](../epic/E001-daemon-core-infrastructure.md)
+  \- Daemon must be running
 - [S010 - SET Command](./S010-set-command.md) - CLI SET command must work
-- [S013 - CLI Client Commands](./S013-cli-client-commands.md) - agent-console CLI must be installed
+- [S013 - CLI Client Commands](./S013-cli-client-commands.md) - agent-console
+  CLI must be installed
 
 ## Acceptance Criteria
 
-- [ ] Given the stop.sh script exists, when copied to `~/.claude/hooks/`, then it is ready to use
-- [ ] Given Claude Code invokes the stop hook, when the script runs, then `agent-console set <project> attention` is called
-- [ ] Given Claude Code is running in `/home/user/projects/my-app`, when stop hook fires, then project name is `my-app`
-- [ ] Given the agent-console daemon is not running, when hook is invoked, then script fails gracefully (no crash)
-- [ ] Given the script is examined, when read by a user, then comments explain how to customize and install it
-- [ ] Given the script runs, when completed, then it exits with status 0 on success
+- [ ] Given the stop.sh script exists, when copied to `~/.claude/hooks/`, then
+      it is ready to use
+- [ ] Given Claude Code invokes the stop hook, when the script runs, then
+      `agent-console set <project> attention` is called
+- [ ] Given Claude Code is running in `/home/user/projects/my-app`, when stop
+      hook fires, then project name is `my-app`
+- [ ] Given the agent-console daemon is not running, when hook is invoked, then
+      script fails gracefully (no crash)
+- [ ] Given the script is examined, when read by a user, then comments explain
+      how to customize and install it
+- [ ] Given the script runs, when completed, then it exits with status 0 on
+      success
 
 ## Testing Requirements
 
-- [ ] Manual test: Copy script to `~/.claude/hooks/stop.sh` and verify it executes
-- [ ] Manual test: Run script directly from a project directory and verify dashboard updates
-- [ ] Manual test: Run script when daemon is not running to verify graceful failure
-- [ ] Unit test: Script extracts correct project name from various directory paths
+- [ ] Manual test: Copy script to `~/.claude/hooks/stop.sh` and verify it
+      executes
+- [ ] Manual test: Run script directly from a project directory and verify
+      dashboard updates
+- [ ] Manual test: Run script when daemon is not running to verify graceful
+      failure
+- [ ] Unit test: Script extracts correct project name from various directory
+      paths
 
 ## Out of Scope
 
@@ -89,11 +104,13 @@ agent-console set "$PROJECT" attention
 
 ### Project Name Derivation
 
-The script uses `basename "$PWD"` to derive the project name from the current working directory. This assumes:
+The script uses `basename "$PWD"` to derive the project name from the current
+working directory. This assumes:
 
 - Claude Code is always run from the project root
 - Project directory name is a suitable identifier
-- Multiple projects with the same directory name in different locations will conflict (known limitation)
+- Multiple projects with the same directory name in different locations will
+  conflict (known limitation)
 
 ### Error Handling
 

@@ -16,7 +16,8 @@ Track multiple Claude Code sessions with real-time status updates.
 | Attention | Agent stopped, waiting for user | Stop hook, Notification hook |
 | Question  | Agent asked a question          | AskQuestion hook             |
 
-**Implementation:** Uses Claude Code hooks to receive status changes. Hook-based approach is acceptable and practical.
+**Implementation:** Uses Claude Code hooks to receive status changes. Hook-based
+approach is acceptable and practical.
 
 ### API Usage Display
 
@@ -37,7 +38,8 @@ Track state transitions over time (NOT chat history).
 | To        | New status                   |
 | Duration  | Time spent in previous state |
 
-Display: Show last N state transitions per session. Expandable to see full history.
+Display: Show last N state transitions per session. Expandable to see full
+history.
 
 ### Centralized Configuration
 
@@ -81,7 +83,8 @@ Properly handle Claude Code's AskUserQuestion tool.
 
 **Current Problem:** No hook fires when Claude asks a question.
 
-**Solution:** Investigate Claude Code hooks, may need to use a different hook or request new hook type.
+**Solution:** Investigate Claude Code hooks, may need to use a different hook or
+request new hook type.
 
 ---
 

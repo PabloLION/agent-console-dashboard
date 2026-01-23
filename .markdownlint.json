@@ -11,30 +11,26 @@
     "indent": 2
   },
   "no-trailing-spaces": {
-    "br_spaces": 2,
+    "br_spaces": 0,
     "list_item_empty_lines": false
   },
   "no-hard-tabs": {
     "code_blocks": true,
     "spaces_per_tab": 2
   },
-  "no-multiple-blanks": {
-    "maximum": 2
-  },
   "line-length": {
-    "line_length": 100,
-    "heading_line_length": 100,
+    "line_length": 80,
+    "heading_line_length": 80,
     "code_block_line_length": 120,
     "code_blocks": false,
-    "tables": false
+    "tables": false,
+    "strict": false
   },
   "blanks-around-headings": {
     "lines_above": 1,
     "lines_below": 1
   },
-  "no-duplicate-heading": {
-    "siblings_only": true
-  },
+  "no-duplicate-heading": true,
   "single-title": {
     "front_matter_title": ""
   },

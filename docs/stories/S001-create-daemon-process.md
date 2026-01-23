@@ -1,22 +1,23 @@
 # Story: Create Daemon Process with CLI Interface
 
-**Story ID:** S001
-**Epic:** [E001 - Daemon Core Infrastructure](../epic/E001-daemon-core-infrastructure.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 5
+**Story ID:** S001 **Epic:**
+[E001 - Daemon Core Infrastructure](../epic/E001-daemon-core-infrastructure.md)
+**Status:** Draft **Priority:** P1 **Estimated Points:** 5
 
 ## Description
 
-As a developer,
-I want to create a daemon process with a CLI interface,
-So that I have the foundation for the Agent Console backend service.
+As a developer, I want to create a daemon process with a CLI interface, So that
+I have the foundation for the Agent Console backend service.
 
 ## Context
 
-The daemon is the central hub of the Agent Console Dashboard system. It needs to run as a long-lived process that can be started in foreground mode (for development/debugging) or daemonized for production use. This story establishes the basic process structure and CLI entry point using clap for argument parsing.
+The daemon is the central hub of the Agent Console Dashboard system. It needs to
+run as a long-lived process that can be started in foreground mode (for
+development/debugging) or daemonized for production use. This story establishes
+the basic process structure and CLI entry point using clap for argument parsing.
 
 The daemon was chosen over shared memory and SQLite alternatives because:
+
 - Minimal footprint (one socket file, no database)
 - Real-time updates via push model
 - Safe Rust (no `unsafe` code required)
@@ -46,10 +47,14 @@ The daemon was chosen over shared memory and SQLite alternatives because:
 
 ## Acceptance Criteria
 
-- [ ] Given no daemon running, when `agent-console daemon` is executed, then the process starts in foreground mode
-- [ ] Given the `--daemonize` flag, when the daemon starts, then it detaches from the terminal and runs in background
-- [ ] Given the `--socket` flag, when the daemon starts, then it uses the specified socket path
-- [ ] Given a running daemon, when SIGTERM/SIGINT is received, then the daemon shuts down gracefully
+- [ ] Given no daemon running, when `agent-console daemon` is executed, then the
+      process starts in foreground mode
+- [ ] Given the `--daemonize` flag, when the daemon starts, then it detaches
+      from the terminal and runs in background
+- [ ] Given the `--socket` flag, when the daemon starts, then it uses the
+      specified socket path
+- [ ] Given a running daemon, when SIGTERM/SIGINT is received, then the daemon
+      shuts down gracefully
 - [ ] Given the binary is built, then the resulting executable is under 10MB
 - [ ] Given the daemon starts, then startup time is under 100ms
 
@@ -94,7 +99,7 @@ src/
 
 ### Key Dependencies
 
-| Crate | Purpose |
-|-------|---------|
+| Crate | Purpose                         |
+| ----- | ------------------------------- |
 | tokio | Async runtime for socket server |
-| clap | CLI argument parsing |
+| clap  | CLI argument parsing            |

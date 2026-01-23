@@ -57,7 +57,8 @@ Unresolved decisions requiring discussion or research.
 
 ### Q4: Additional Status Types
 
-**Question:** Should we support more status types beyond working/attention/question?
+**Question:** Should we support more status types beyond
+working/attention/question?
 
 **Current statuses:**
 
@@ -234,7 +235,8 @@ Unresolved decisions requiring discussion or research.
 - `$XDG_RUNTIME_DIR/acd.sock` (XDG standard, user-specific)
 - `~/.config/agent-console-dashboard/acd.sock` (with config)
 
-**Context:** Unix socket is just an address for IPC, not a real file. No content, no disk I/O during communication.
+**Context:** Unix socket is just an address for IPC, not a real file. No
+content, no disk I/O during communication.
 
 **Decision:** Platform-specific locations
 
@@ -243,7 +245,8 @@ Unresolved decisions requiring discussion or research.
 | Linux    | `$XDG_RUNTIME_DIR/acd.sock` |
 | macOS    | `$TMPDIR/acd.sock`          |
 
-**Rationale:** Each platform has its own standard for runtime files. macOS doesn't support XDG.
+**Rationale:** Each platform has its own standard for runtime files. macOS
+doesn't support XDG.
 
 ---
 
@@ -267,7 +270,8 @@ Unresolved decisions requiring discussion or research.
 - Performance difference negligible at our message frequency
 - Same serde structs work with both formats
 
-**Alternative considered:** MessagePack (faster, 43% smaller). If JSON becomes too slow, switch to MessagePack - serde makes this a minimal code change.
+**Alternative considered:** MessagePack (faster, 43% smaller). If JSON becomes
+too slow, switch to MessagePack - serde makes this a minimal code change.
 
 ---
 
@@ -301,7 +305,8 @@ Unresolved decisions requiring discussion or research.
 }
 ```
 
-**Rationale:** Redundancy is acceptable. Simpler than maintaining registration state. Handles edge cases like directory changes automatically.
+**Rationale:** Redundancy is acceptable. Simpler than maintaining registration
+state. Handles edge cases like directory changes automatically.
 
 ---
 
@@ -331,13 +336,16 @@ No separate registration step required.
 
 **For maintainers/programmers:**
 
-The message protocol sends `display_name` and `cwd` with every status update, even though they rarely change. This is **intentional redundancy** for simplicity:
+The message protocol sends `display_name` and `cwd` with every status update,
+even though they rarely change. This is **intentional redundancy** for
+simplicity:
 
 - Avoids separate register/update logic
 - Handles edge cases (directory changes) automatically
 - Daemon is stateless about "what fields were sent before"
 
-Do not "optimize" this by caching display_name - the current design is simpler and more robust.
+Do not "optimize" this by caching display_name - the current design is simpler
+and more robust.
 
 ---
 
@@ -385,7 +393,8 @@ This connects Q4 (statuses), Q5 (TTL), and Q18 (detection):
 - We trust Claude Code's SessionEnd hook to fire on clean exits
 - If Claude Code crashes without firing hook, the session stays visible
 - This is acceptable: user can manually remove orphaned sessions
-- Timeout would add complexity and could incorrectly mark active sessions as closed
+- Timeout would add complexity and could incorrectly mark active sessions as
+  closed
 
 ### Related Decisions
 
@@ -407,7 +416,8 @@ This connects Q4 (statuses), Q5 (TTL), and Q18 (detection):
 **Decision:** Working directory only
 
 - `session_id` passed to function but marked as unused
-- Claude Code has its own session picker when multiple sessions exist per directory
+- Claude Code has its own session picker when multiple sessions exist per
+  directory
 - v2+ may use `session_id` for more elegant solution
 
 ---
@@ -558,7 +568,8 @@ This connects Q4 (statuses), Q5 (TTL), and Q18 (detection):
 
 **v2 enhancements:**
 
-- Desktop notification when last dashboard disconnects (shell out, 0 binary increase)
+- Desktop notification when last dashboard disconnects (shell out, 0 binary
+  increase)
 - Log message: "Dashboard disconnected"
 
 **Constants (not magic values):**
@@ -588,7 +599,8 @@ const AUTO_STOP_IDLE_THRESHOLD_SECS: u64 = 1800;  // 30 minutes
 | SIGINT  | Same as SIGTERM (for foreground/debug mode) |
 | SIGHUP  | Reload config (see Q27)                     |
 
-**SIGHUP = Signal Hang Up:** Originally meant terminal disconnected. Modern convention: tell daemons to reload config.
+**SIGHUP = Signal Hang Up:** Originally meant terminal disconnected. Modern
+convention: tell daemons to reload config.
 
 ---
 
@@ -648,7 +660,9 @@ const AUTO_STOP_IDLE_THRESHOLD_SECS: u64 = 1800;  // 30 minutes
 No active sessions. See README for setup.
 ```
 
-**Rationale:** Project may extend beyond Claude Code to general notification center for Zellij/multiplexers. Point to README instead of specific tool instructions.
+**Rationale:** Project may extend beyond Claude Code to general notification
+center for Zellij/multiplexers. Point to README instead of specific tool
+instructions.
 
 ---
 
@@ -698,11 +712,13 @@ No active sessions. See README for setup.
 
 **Timeout:** 60s default, configurable per hook via `timeout` field (in seconds)
 
-**Blocking:** All hooks are blocking (Claude waits), but multiple hooks run in parallel
+**Blocking:** All hooks are blocking (Claude waits), but multiple hooks run in
+parallel
 
 **Hook input:** JSON via stdin with `session_id`, `cwd`, `hook_event_name`, etc.
 
-**Available hooks:** SessionStart, SessionEnd, PreToolUse, PostToolUse, UserPromptSubmit, Stop, and more (12 total)
+**Available hooks:** SessionStart, SessionEnd, PreToolUse, PostToolUse,
+UserPromptSubmit, Stop, and more (12 total)
 
 **Hook configuration for Claude Code:**
 
@@ -773,11 +789,15 @@ No active sessions. See README for setup.
 - Exit 1: Non-blocking failure (daemon unreachable)
 - Never exit 2 (would block Claude)
 
-**Error handling:** On failure, `acd set` broadcasts error to all connected dashboards (not to Claude - wastes context space). Dashboard shows "Hook error: daemon unreachable" or similar.
+**Error handling:** On failure, `acd set` broadcasts error to all connected
+dashboards (not to Claude - wastes context space). Dashboard shows "Hook error:
+daemon unreachable" or similar.
 
-**Timeout:** 5s recommended (configurable in Claude Code's hook config, not by us).
+**Timeout:** 5s recommended (configurable in Claude Code's hook config, not by
+us).
 
-**Updates Q29:** 5s timeout appropriate. If daemon unreachable, exit 1, broadcast error to dashboards.
+**Updates Q29:** 5s timeout appropriate. If daemon unreachable, exit 1,
+broadcast error to dashboards.
 
 ---
 
@@ -785,11 +805,13 @@ No active sessions. See README for setup.
 
 **Question:** Should we track time spent in each status?
 
-**Current state:** We track time waiting for attention. But not time spent working.
+**Current state:** We track time waiting for attention. But not time spent
+working.
 
 **Decision:** Track duration for all statuses
 
-- Track timestamps for each status: `working_started_at`, `attention_started_at`, etc.
+- Track timestamps for each status: `working_started_at`,
+  `attention_started_at`, etc.
 - Can show: "worked 45min, waited 5min"
 - Data structure changes needed (implementation detail, defer)
 
@@ -799,13 +821,15 @@ No active sessions. See README for setup.
 
 **Question:** What if Claude Code changes directory mid-session?
 
-**Problem:** If we use `cwd` from each hook event, display_name might change when user does `cd /other/path`.
+**Problem:** If we use `cwd` from each hook event, display_name might change
+when user does `cd /other/path`.
 
 **Decision:** Always show session directory
 
 - Display name = session directory (not current cwd)
 - If session directory unknown, use first cwd as session directory
-- Implementation: check if Claude Code provides session_dir, otherwise use first cwd
+- Implementation: check if Claude Code provides session_dir, otherwise use first
+  cwd
 - Display name stays stable throughout session
 
 ---
@@ -856,7 +880,8 @@ const CONNECTION_RETRIES: u32 = 3;
 const CONNECTION_RETRY_DELAY_MS: u64 = 100;
 ```
 
-**Rationale:** Separates daemon startup wait from connection retry. Polling for socket file is more reliable than guessing startup time.
+**Rationale:** Separates daemon startup wait from connection retry. Polling for
+socket file is more reliable than guessing startup time.
 
 ---
 
@@ -1087,7 +1112,8 @@ const HISTORY_MAX_AGE_HOURS: u64 = 24;
 | `session_soft_limit`      | 50                            | Q36                          |
 | `dashboard_soft_limit`    | 50                            | Q37                          |
 
-**Note:** `resurrection_ttl` removed - using dedicated history space instead (Q5 revised)
+**Note:** `resurrection_ttl` removed - using dedicated history space instead (Q5
+revised)
 
 ---
 
@@ -1105,7 +1131,8 @@ See Q28 (Startup State) - same question, already resolved.
 
 **Question:** What if two sessions have same display_name?
 
-**Scenario:** Two Claude Code sessions in same directory, or directories with same basename.
+**Scenario:** Two Claude Code sessions in same directory, or directories with
+same basename.
 
 **Options:**
 
@@ -1150,7 +1177,8 @@ Step 3: Final truncation (if still > max_width)
 - Distinguishing parent: `base` vs `base-old` (keep full)
 - Result: `base/p/w/my-app`, `base-old/p/w/my-app`
 
-**Never abbreviate the distinguishing parent** - that's how users tell them apart.
+**Never abbreviate the distinguishing parent** - that's how users tell them
+apart.
 
 **Configuration:**
 
@@ -1692,7 +1720,8 @@ Trivial to implement with `clap_complete` crate.
 }
 ```
 
-**Uninstall:** Remove only entries where command contains "acd set --claude-hook". Preserve all other hooks.
+**Uninstall:** Remove only entries where command contains "acd set
+--claude-hook". Preserve all other hooks.
 
 ---
 
@@ -1858,7 +1887,8 @@ Feature requests submitted to other projects:
 }
 ```
 
-**Environment variable override:** `CLAUDE_CODE_OAUTH_TOKEN` takes precedence if set.
+**Environment variable override:** `CLAUDE_CODE_OAUTH_TOKEN` takes precedence if
+set.
 
 **Implementation:**
 
@@ -1879,17 +1909,22 @@ fn get_oauth_token() -> Result<String> {
 }
 ```
 
-**Note:** Linux storage is less secure than macOS Keychain (plain file on disk). Credentials module should still follow Q34 security requirements (read → use → discard immediately).
+**Note:** Linux storage is less secure than macOS Keychain (plain file on disk).
+Credentials module should still follow Q34 security requirements (read → use →
+discard immediately).
 
 ---
 
 ### Q73: Hook Stdin Data
 
-**Question:** Should `acd set` parse stdin JSON from Claude Code, or just use command-line flags?
+**Question:** Should `acd set` parse stdin JSON from Claude Code, or just use
+command-line flags?
 
 **Decision:** Parse stdin JSON + use `--source` flag for agent type
 
-**Rationale:** Stdin JSON contains `hook_event_name`, so we don't need a separate event flag. But we need `--source` to know which parser to use (for future multi-agent support).
+**Rationale:** Stdin JSON contains `hook_event_name`, so we don't need a
+separate event flag. But we need `--source` to know which parser to use (for
+future multi-agent support).
 
 **Data flow:**
 
@@ -1909,7 +1944,8 @@ Parse stdin JSON (using claude-code parser), extract:
 Send to daemon: { session_id, cwd, status }
 ```
 
-**Process lifetime:** `acd set` is short-lived (~1ms). Parses stdin, sends to daemon, exits. No RAM accumulation.
+**Process lifetime:** `acd set` is short-lived (~1ms). Parses stdin, sends to
+daemon, exits. No RAM accumulation.
 
 **Multi-agent support (future):**
 
@@ -1919,7 +1955,8 @@ Send to daemon: { session_id, cwd, status }
 | Gemini CLI  | `acd set --source gemini`      |
 | Codex CLI   | `acd set --source codex`       |
 
-Each source has its own parser extracting same output fields from different input formats.
+Each source has its own parser extracting same output fields from different
+input formats.
 
 **Hook configuration (simplified):**
 
@@ -1944,7 +1981,8 @@ Each source has its own parser extracting same output fields from different inpu
 
 ### Q74: Question Status Detection
 
-**Question:** How do we detect when Claude asks user a question (AskUserQuestion tool)?
+**Question:** How do we detect when Claude asks user a question (AskUserQuestion
+tool)?
 
 **Decision:** Check `tool_name` field in PreToolUse stdin JSON
 
@@ -1983,7 +2021,8 @@ if stdin.tool_name == "AskUserQuestion" {
 | SessionEnd   | -               | closed    |
 | SessionStart | -               | working   |
 
-**Alternative considered:** Dedicated hook with matcher (rejected - simpler to check tool_name in code)
+**Alternative considered:** Dedicated hook with matcher (rejected - simpler to
+check tool_name in code)
 
 ---
 
@@ -2025,7 +2064,8 @@ Pagination: "← N+ | " and " | M+ →" when items hidden
 
 **Algorithm:**
 
-1. Sort sessions: active first (by idle time, larger to smaller), then idle (>100m threshold)
+1. Sort sessions: active first (by idle time, larger to smaller), then idle
+   (>100m threshold)
 2. Fit as many sessions as possible in available width
 3. Show hidden count on each side: `← 3+ |` and `| 5+ →`
 4. Hide arrow when no items in that direction
@@ -2040,7 +2080,8 @@ Pagination: "← N+ | " and " | M+ →" when items hidden
 
 **Navigation:** h/l or ←/→ shifts by 1 item at a time (not whole page)
 
-**Name truncation:** Dynamic based on session count and available width (see Q42)
+**Name truncation:** Dynamic based on session count and available width (see
+Q42)
 
 **v1+ feature:** Custom session ordering (user-defined priority)
 
@@ -2103,7 +2144,8 @@ Pagination: "← N+ | " and " | M+ →" when items hidden
 
 ### Q79: TUI Keyboard Shortcuts
 
-**Question:** What are all keyboard shortcuts? Vim-style, Emacs-style, or custom?
+**Question:** What are all keyboard shortcuts? Vim-style, Emacs-style, or
+custom?
 
 **Decision:** Vim-style + arrow keys + mouse support
 
@@ -2149,7 +2191,8 @@ my-project 05:23 | [api-server 03:15] | dashboard
                    inverse background (focused)
 ```
 
-**Implementation:** Same status color but with background filled, text color inverted (black or white depending on background brightness)
+**Implementation:** Same status color but with background filled, text color
+inverted (black or white depending on background brightness)
 
 ---
 
@@ -2308,23 +2351,27 @@ Line 2: 5h: 42% / 50%  7d: 77% / 43%
 
 ### Q90: Usage Widget - Over 100%
 
-**Question:** What to display when utilization exceeds 100% (extra usage enabled)?
+**Question:** What to display when utilization exceeds 100% (extra usage
+enabled)?
 
 **Decision:** Show actual percentage + warning color
 
 **Display:** `105%` in red/warning color
 
-**Rationale:** API returns actual value (can be 102%, 105%, etc.). No cap needed. Color draws attention to overage.
+**Rationale:** API returns actual value (can be 102%, 105%, etc.). No cap
+needed. Color draws attention to overage.
 
 ---
 
 ### Q91: Pagination Order Stability
 
-**Question:** When sessions sorted by activity, does order update during pagination?
+**Question:** When sessions sorted by activity, does order update during
+pagination?
 
 **Decision:** Stable order for v0, dynamic reorder in v1+
 
-**v0 behavior:** Order stays fixed during session. No items shifting unexpectedly while paginating.
+**v0 behavior:** Order stays fixed during session. No items shifting
+unexpectedly while paginating.
 
 **v1+ feature:** Option to enable dynamic reorder as sessions become idle.
 
@@ -2332,11 +2379,13 @@ Line 2: 5h: 42% / 50%  7d: 77% / 43%
 
 ### Q92: Time Elapsed - Clock Skew
 
-**Question:** What if system clock is wrong, causing negative or >100% time elapsed?
+**Question:** What if system clock is wrong, causing negative or >100% time
+elapsed?
 
 **Decision:** Show actual calculated value (expose clock issue)
 
-**Rationale:** Weird percentages (-5% or 150%) signal to user their clock is wrong. More transparent than silent clamping.
+**Rationale:** Weird percentages (-5% or 150%) signal to user their clock is
+wrong. More transparent than silent clamping.
 
 ---
 
@@ -2418,7 +2467,8 @@ Line 3: 5h: 42% / 50%  7d: 77% / 43%                          (usage widget)
 
 ### Q96: History in 2-Line Layout
 
-**Question:** Where does history show in 2-line layout (no dedicated history line)?
+**Question:** Where does history show in 2-line layout (no dedicated history
+line)?
 
 **Decision:** History replaces usage widget when session selected
 
@@ -2434,9 +2484,11 @@ Session selected:
   Line 2: ← 2+ | working 10m | attention 2m | question 30s →  (history replaces usage)
 ```
 
-**Mouse hover:** Hovering over a session focuses it (same as keyboard navigation)
+**Mouse hover:** Hovering over a session focuses it (same as keyboard
+navigation)
 
-**v1+ feature:** 2-line session widget option (dedicated history line without replacing usage)
+**v1+ feature:** 2-line session widget option (dedicated history line without
+replacing usage)
 
 ---
 
@@ -2453,7 +2505,8 @@ Session selected:
 - Position remembered in memory (see Q102)
 - Works in both 2-line and 3-line layouts
 
-**Rationale:** When user switches away, they probably want to glance at usage, not history of a specific session.
+**Rationale:** When user switches away, they probably want to glance at usage,
+not history of a specific session.
 
 ---
 
@@ -2521,7 +2574,8 @@ Line 1: ← [🌐] | my-project 05:23 | api-server 03:15 | 5+ →
 - Can navigate to Line 2 (j/k) when global selected
 - Enter on global feed item → selects that session on Line 1
 
-**Updates Q98:** Global feed shown when global item selected (not "no selection")
+**Updates Q98:** Global feed shown when global item selected (not "no
+selection")
 
 **Navigation flow:**
 
@@ -2547,7 +2601,8 @@ Line 1: ← [🌐] | my-project 05:23 | api-server 03:15 | 5+ →
 - After help closes, next Esc deselects as normal
 - `?` toggles: open when closed, close when open
 
-**Rationale:** Simple mental model - help is modal, dismiss with any key to return to normal operation.
+**Rationale:** Simple mental model - help is modal, dismiss with any key to
+return to normal operation.
 
 ---
 
@@ -2567,7 +2622,8 @@ Line 1: ← [🌐] | my-project 05:23 | api-server 03:15 | 5+ →
 
 **Initial state (app start):** Global item selected
 
-**Rationale:** User expects to continue where they left off. No need to persist focus across app restarts.
+**Rationale:** User expects to continue where they left off. No need to persist
+focus across app restarts.
 
 ---
 
@@ -2585,7 +2641,8 @@ Line 1: ← [🌐] | my-project 05:23 | api-server 03:15 | 5+ →
 | Session                   | History of selected session |
 | Deselected (no highlight) | Usage widget                |
 
-**Consistency:** Global item behavior same across layouts. Usage widget only visible when deselected in 2-line layout.
+**Consistency:** Global item behavior same across layouts. Usage widget only
+visible when deselected in 2-line layout.
 
 ---
 

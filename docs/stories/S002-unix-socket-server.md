@@ -1,27 +1,28 @@
 # Story: Implement Unix Socket Server
 
-**Story ID:** S002
-**Epic:** [E001 - Daemon Core Infrastructure](../epic/E001-daemon-core-infrastructure.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 5
+**Story ID:** S002 **Epic:**
+[E001 - Daemon Core Infrastructure](../epic/E001-daemon-core-infrastructure.md)
+**Status:** Draft **Priority:** P1 **Estimated Points:** 5
 
 ## Description
 
-As a daemon,
-I want to listen on a Unix socket for incoming connections,
-So that hooks and dashboards can communicate with me via IPC.
+As a daemon, I want to listen on a Unix socket for incoming connections, So that
+hooks and dashboards can communicate with me via IPC.
 
 ## Context
 
-The Unix socket server is the communication layer that enables the client-server architecture. All clients (hooks from Claude Code sessions and TUI dashboards) connect to this socket to send commands and receive updates. The socket-based approach provides:
+The Unix socket server is the communication layer that enables the client-server
+architecture. All clients (hooks from Claude Code sessions and TUI dashboards)
+connect to this socket to send commands and receive updates. The socket-based
+approach provides:
 
 - Local-only communication (more secure than TCP)
 - Low latency (<1ms)
 - No network configuration needed
 - Standard filesystem permissions for access control
 
-The socket path defaults to `/tmp/agent-console.sock` but can be customized via CLI flag or configuration.
+The socket path defaults to `/tmp/agent-console.sock` but can be customized via
+CLI flag or configuration.
 
 ## Implementation Details
 
@@ -45,13 +46,20 @@ The socket path defaults to `/tmp/agent-console.sock` but can be customized via 
 
 ## Acceptance Criteria
 
-- [ ] Given the daemon starts, when the socket path doesn't exist, then a Unix socket is created at `/tmp/agent-console.sock`
-- [ ] Given a running daemon, when a client connects, then the connection is accepted
-- [ ] Given multiple clients, when they connect simultaneously, then all connections are handled concurrently
-- [ ] Given a connected client, when the client sends text, then the server can read the message
-- [ ] Given a connected client, when the server has a response, then the server can write back to the client
-- [ ] Given the daemon shuts down, when cleanup runs, then the socket file is removed
-- [ ] Given an existing stale socket file, when daemon starts, then it removes the stale file and creates a new socket
+- [ ] Given the daemon starts, when the socket path doesn't exist, then a Unix
+      socket is created at `/tmp/agent-console.sock`
+- [ ] Given a running daemon, when a client connects, then the connection is
+      accepted
+- [ ] Given multiple clients, when they connect simultaneously, then all
+      connections are handled concurrently
+- [ ] Given a connected client, when the client sends text, then the server can
+      read the message
+- [ ] Given a connected client, when the server has a response, then the server
+      can write back to the client
+- [ ] Given the daemon shuts down, when cleanup runs, then the socket file is
+      removed
+- [ ] Given an existing stale socket file, when daemon starts, then it removes
+      the stale file and creates a new socket
 
 ## Testing Requirements
 
@@ -97,8 +105,8 @@ The socket path defaults to `/tmp/agent-console.sock` but can be customized via 
 
 ### Performance Targets
 
-| Metric | Target |
-|--------|--------|
-| Connection accept time | <1ms |
-| Message read/write | <1ms |
-| Max concurrent clients | 100+ |
+| Metric                 | Target |
+| ---------------------- | ------ |
+| Connection accept time | <1ms   |
+| Message read/write     | <1ms   |
+| Max concurrent clients | 100+   |

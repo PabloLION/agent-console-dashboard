@@ -2,7 +2,9 @@
 
 ## Original Problem
 
-Running multiple Claude Code sessions in Zellij requires visibility into which sessions need user attention. Without a dashboard, users must manually check each pane.
+Running multiple Claude Code sessions in Zellij requires visibility into which
+sessions need user attention. Without a dashboard, users must manually check
+each pane.
 
 ---
 
@@ -52,7 +54,8 @@ proj-a: - | proj-b: 2m34s | proj-c: -
 
 ### Zellij Integration
 
-The `zellij-claude-layout` script starts `cc-hub-dashboard --watch` in the dashboard pane.
+The `zellij-claude-layout` script starts `cc-hub-dashboard --watch` in the
+dashboard pane.
 
 ---
 
@@ -62,15 +65,18 @@ The `zellij-claude-layout` script starts `cc-hub-dashboard --watch` in the dashb
 
 **Status:** Open
 
-**Symptom:** When user sends a message, dashboard continues showing elapsed time instead of resetting to `-`.
+**Symptom:** When user sends a message, dashboard continues showing elapsed time
+instead of resetting to `-`.
 
-**Expected:** Hook should call `cc-hub-update <project> working`, resetting timer.
+**Expected:** Hook should call `cc-hub-update <project> working`, resetting
+timer.
 
 ### AskQuestion hook not working
 
 **Status:** Open
 
-**Symptom:** When Claude Code asks a question (AskUserQuestion tool), no hook fires.
+**Symptom:** When Claude Code asks a question (AskUserQuestion tool), no hook
+fires.
 
 **Impact:** Dashboard doesn't show attention status for questions.
 

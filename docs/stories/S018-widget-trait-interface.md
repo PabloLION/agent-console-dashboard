@@ -1,22 +1,25 @@
 # Story: Create Widget Trait/Interface
 
-**Story ID:** S018
-**Epic:** [E005 - Widget System](../epic/E005-widget-system.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 5
+**Story ID:** S018 **Epic:**
+[E005 - Widget System](../epic/E005-widget-system.md) **Status:** Draft
+**Priority:** P1 **Estimated Points:** 5
 
 ## Description
 
-As a developer,
-I want to create a widget trait that defines the interface for all UI widgets,
-So that all widgets have a consistent contract for rendering and configuration.
+As a developer, I want to create a widget trait that defines the interface for
+all UI widgets, So that all widgets have a consistent contract for rendering and
+configuration.
 
 ## Context
 
-The Agent Console Dashboard uses a widget-based architecture where each line in the display is a widget. This trait defines the fundamental contract that all widgets must implement: rendering output, providing an identifier for configuration, and specifying minimum width requirements.
+The Agent Console Dashboard uses a widget-based architecture where each line in
+the display is a widget. This trait defines the fundamental contract that all
+widgets must implement: rendering output, providing an identifier for
+configuration, and specifying minimum width requirements.
 
-The widget system enables users to compose custom layouts by selecting and ordering widgets. A consistent interface ensures widgets can be dynamically selected, configured, and rendered by the layout system.
+The widget system enables users to compose custom layouts by selecting and
+ordering widgets. A consistent interface ensures widgets can be dynamically
+selected, configured, and rendered by the layout system.
 
 ## Implementation Details
 
@@ -37,17 +40,25 @@ The widget system enables users to compose custom layouts by selecting and order
 
 ### Dependencies
 
-- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) - Provides Ratatui types for styled output
-- [S005 - Session Data Model](./S005-session-data-model.md) - Session data needed by session-status widget
+- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) -
+  Provides Ratatui types for styled output
+- [S005 - Session Data Model](./S005-session-data-model.md) - Session data
+  needed by session-status widget
 
 ## Acceptance Criteria
 
-- [ ] Given a Widget trait is defined, when a struct implements it, then it must provide `render()`, `id()`, and `min_width()` methods
-- [ ] Given the `render()` method is called, when provided width and context, then it returns a styled `Line` for display
-- [ ] Given a widget ID, when looked up in the registry, then the corresponding widget factory is returned
-- [ ] Given the `min_width()` is queried, when terminal is narrower, then layout system can decide to hide widget
-- [ ] Given WidgetContext is passed to render, when widget needs session data, then it can access current sessions
-- [ ] Given WidgetContext is passed to render, when widget needs time, then it can access current timestamp
+- [ ] Given a Widget trait is defined, when a struct implements it, then it must
+      provide `render()`, `id()`, and `min_width()` methods
+- [ ] Given the `render()` method is called, when provided width and context,
+      then it returns a styled `Line` for display
+- [ ] Given a widget ID, when looked up in the registry, then the corresponding
+      widget factory is returned
+- [ ] Given the `min_width()` is queried, when terminal is narrower, then layout
+      system can decide to hide widget
+- [ ] Given WidgetContext is passed to render, when widget needs session data,
+      then it can access current sessions
+- [ ] Given WidgetContext is passed to render, when widget needs time, then it
+      can access current timestamp
 
 ## Testing Requirements
 
@@ -154,6 +165,8 @@ src/
 ### Design Considerations
 
 - Widgets are immutable after creation - all state comes from WidgetContext
-- The `'_` lifetime in `Line<'_>` allows returning styled text without lifetime complications
-- `Send + Sync` bound enables widgets to be stored in shared state across async tasks
+- The `'_` lifetime in `Line<'_>` allows returning styled text without lifetime
+  complications
+- `Send + Sync` bound enables widgets to be stored in shared state across async
+  tasks
 - min_width allows graceful degradation on narrow terminals

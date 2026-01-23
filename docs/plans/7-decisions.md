@@ -8,9 +8,7 @@ Detailed rationale for architectural and design decisions.
 
 ## Q1: Backend Architecture
 
-**Decision:** Single Daemon
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Single Daemon **Date:** 2026-01-17 **Status:** Resolved
 
 ### Context - Backend Architecture
 
@@ -65,8 +63,7 @@ Evaluated three approaches for state management:
 
 ## Q2: Daemon Auto-Start
 
-**Decision:** Auto-start if socket doesn't exist
-**Date:** 2026-01-17
+**Decision:** Auto-start if socket doesn't exist **Date:** 2026-01-17
 **Status:** Resolved
 
 ### Context - Daemon Auto-Start
@@ -109,8 +106,7 @@ fn connect_to_daemon() -> Result<Connection> {
 
 ## Q3: Config File Location
 
-**Decision:** XDG standard (`~/.config/agent-console/`)
-**Date:** 2026-01-17
+**Decision:** XDG standard (`~/.config/agent-console/`) **Date:** 2026-01-17
 **Status:** Resolved
 
 ### Context - Config File Location
@@ -144,9 +140,8 @@ Where should configuration files live?
 
 ## Q4: Session Status Types
 
-**Decision:** Four statuses as C-like enum
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Four statuses as C-like enum **Date:** 2026-01-17 **Status:**
+Resolved
 
 ### Context - Session Status Types
 
@@ -170,7 +165,8 @@ enum Status {
 - Paused (user paused session)
 - Rate Limited (API limit hit)
 
-**Deferred because:** Keep v0 simple. Can extend enum later without breaking changes.
+**Deferred because:** Keep v0 simple. Can extend enum later without breaking
+changes.
 
 ### Rust Terminology - Session Status Types
 
@@ -184,9 +180,8 @@ enum Status {
 
 ## Q5: Session Resurrection Scope
 
-**Decision:** Configurable TTL + manual removal
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Configurable TTL + manual removal **Date:** 2026-01-17 **Status:**
+Resolved
 
 ### Context - Session Resurrection Scope
 
@@ -223,8 +218,7 @@ resurrection_ttl = "24h"
 
 ## Q6: API Usage Source
 
-**Decision:** Anthropic Usage API (v0 core feature)
-**Date:** 2026-01-17
+**Decision:** Anthropic Usage API (v0 core feature) **Date:** 2026-01-17
 **Status:** Resolved
 
 ### Context - API Usage Source
@@ -247,7 +241,8 @@ How do we get token usage data for display?
 - Tracks: input tokens, cached tokens, output tokens
 - Can group by: API key, workspace, model
 
-**This is v0 core feature** - without usage display, we fail to prove the concept.
+**This is v0 core feature** - without usage display, we fail to prove the
+concept.
 
 ### Authentication - API Usage Source
 
@@ -264,9 +259,8 @@ How do we get token usage data for display?
 
 ## Q7: AskUserQuestion Hook Detection
 
-**Decision:** Use PreToolUse hook with AskUserQuestion matcher
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Use PreToolUse hook with AskUserQuestion matcher **Date:**
+2026-01-17 **Status:** Resolved
 
 ### Context - AskUserQuestion Hook Detection
 
@@ -274,7 +268,8 @@ Can we detect when Claude Code asks the user a question?
 
 ### Investigation Summary - AskUserQuestion Hook Detection
 
-Initial research suggested AskUserQuestion was not hookable. Further investigation revealed:
+Initial research suggested AskUserQuestion was not hookable. Further
+investigation revealed:
 
 **AskUserQuestion CAN be detected via PreToolUse** (since v2.0.76)
 
@@ -305,15 +300,18 @@ Initial research suggested AskUserQuestion was not hookable. Further investigati
 
 ### Historical Bug (Fixed) - AskUserQuestion Hook Detection
 
-**Issue [#13439](https://github.com/anthropics/claude-code/issues/13439):** PreToolUse hooks caused AskUserQuestion to return empty responses.
+**Issue [#13439](https://github.com/anthropics/claude-code/issues/13439):**
+PreToolUse hooks caused AskUserQuestion to return empty responses.
 
-**Root cause:** stdin/stdout conflict between hook JSON processing and interactive input.
+**Root cause:** stdin/stdout conflict between hook JSON processing and
+interactive input.
 
 **Fixed in:** Claude Code v2.0.76 (January 4, 2026)
 
 ### Open Bug - AskUserQuestion Hook Detection
 
-**Issue [#15400](https://github.com/anthropics/claude-code/issues/15400):** PermissionRequest hook incorrectly interferes with AskUserQuestion.
+**Issue [#15400](https://github.com/anthropics/claude-code/issues/15400):**
+PermissionRequest hook incorrectly interferes with AskUserQuestion.
 
 ### Related Feature Requests - AskUserQuestion Hook Detection
 
@@ -358,15 +356,14 @@ Hook configuration for Claude Code:
 
 ### Minimum Version Requirement - AskUserQuestion Hook Detection
 
-**Claude Code v2.0.76 or later** required for reliable AskUserQuestion hook detection.
+**Claude Code v2.0.76 or later** required for reliable AskUserQuestion hook
+detection.
 
 ---
 
 ## Q8: Zellij Plugin
 
-**Decision:** Deferred to v2
-**Date:** 2026-01-17
-**Status:** Deferred
+**Decision:** Deferred to v2 **Date:** 2026-01-17 **Status:** Deferred
 
 ### Context - Zellij Plugin
 
@@ -387,9 +384,7 @@ Not for v0 or v1. Evaluate for v2.
 
 ## Q9: Tmux Plugin
 
-**Decision:** On request only
-**Date:** 2026-01-17
-**Status:** Deferred
+**Decision:** On request only **Date:** 2026-01-17 **Status:** Deferred
 
 ### Context - Tmux Plugin
 
@@ -409,9 +404,8 @@ Will not implement unless users request it.
 
 ## Q10: Default Layout
 
-**Decision:** Three widgets, config file only
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Three widgets, config file only **Date:** 2026-01-17 **Status:**
+Resolved
 
 ### Widget Types - Default Layout
 
@@ -445,9 +439,7 @@ widgets = ["expandable-session-status", "api-usage"]
 
 ## Q11: TUI Framework Mode
 
-**Decision:** Immediate mode
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Immediate mode **Date:** 2026-01-17 **Status:** Resolved
 
 ### Context - TUI Framework Mode
 
@@ -467,15 +459,15 @@ Ratatui supports two rendering approaches:
 - No animations needed
 - Retained mode benefits (caching, partial updates) don't apply
 
-Retained mode shines at 60fps animations or complex UIs with hundreds of components - neither applies here.
+Retained mode shines at 60fps animations or complex UIs with hundreds of
+components - neither applies here.
 
 ---
 
 ## Q12: Binary Name
 
-**Decision:** `acd` (short) / `agent-console-dashboard` (full)
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** `acd` (short) / `agent-console-dashboard` (full) **Date:**
+2026-01-17 **Status:** Resolved
 
 ### Names - Binary Name
 
@@ -500,25 +492,24 @@ agent-console-dashboard daemon
 
 ## Q13: Hook Migration
 
-**Decision:** Not applicable
-**Date:** 2026-01-17
-**Status:** N/A
+**Decision:** Not applicable **Date:** 2026-01-17 **Status:** N/A
 
 ### Context - Hook Migration
 
-CC-Hub was a quick test, never released. No users to migrate. Start fresh with `agent-console-dashboard`.
+CC-Hub was a quick test, never released. No users to migrate. Start fresh with
+`agent-console-dashboard`.
 
 ---
 
 ## Q14: Socket Location
 
-**Decision:** Platform-specific locations
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Platform-specific locations **Date:** 2026-01-17 **Status:**
+Resolved
 
 ### Context - Socket Location
 
-Unix sockets need a file path as an address. The socket file itself stores nothing (0 bytes) - it's just an endpoint for IPC communication.
+Unix sockets need a file path as an address. The socket file itself stores
+nothing (0 bytes) - it's just an endpoint for IPC communication.
 
 ### What is a Unix Socket File? - Socket Location
 
@@ -553,21 +544,22 @@ Use platform-appropriate locations:
 
 **XDG = X Desktop Group** (freedesktop.org standard)
 
-macOS does not follow XDG and likely never will. Apple has their own conventions:
+macOS does not follow XDG and likely never will. Apple has their own
+conventions:
 
 | Purpose | Linux (XDG)        | macOS (Apple)            |
 | ------- | ------------------ | ------------------------ |
 | Config  | `~/.config/`       | `~/Library/Preferences/` |
 | Runtime | `$XDG_RUNTIME_DIR` | `$TMPDIR`                |
 
-We use platform-appropriate locations rather than forcing Linux conventions on macOS.
+We use platform-appropriate locations rather than forcing Linux conventions on
+macOS.
 
 ---
 
 ## Q15: IPC Protocol Format
 
-**Decision:** JSON (with MessagePack as fallback)
-**Date:** 2026-01-17
+**Decision:** JSON (with MessagePack as fallback) **Date:** 2026-01-17
 **Status:** Resolved
 
 ### Context - IPC Protocol Format
@@ -585,7 +577,8 @@ How should daemon and clients communicate?
 
 ### Why Not Protobuf or RESP? - IPC Protocol Format
 
-- **Protobuf:** Requires `.proto` schema files and code generation step - overkill for our simple messages
+- **Protobuf:** Requires `.proto` schema files and code generation step -
+  overkill for our simple messages
 - **RESP:** Designed for key-value store operations - wrong fit for our use case
 
 ### Decision Rationale - IPC Protocol Format
@@ -597,7 +590,8 @@ How should daemon and clients communicate?
 - Same serde structs work with both JSON and MessagePack
 - Very mature (24+ years)
 
-**MessagePack as fallback:** If JSON becomes too slow, switch to MessagePack. Serde makes this a minimal code change - just swap the serializer.
+**MessagePack as fallback:** If JSON becomes too slow, switch to MessagePack.
+Serde makes this a minimal code change - just swap the serializer.
 
 ### MessagePack Background - IPC Protocol Format
 
@@ -614,12 +608,12 @@ For future reference if we need to switch:
 ## Q16: Session Identification
 
 **Decision:** Use Claude Code's session_id + derive display_name from cwd
-**Date:** 2026-01-17
-**Status:** Resolved
+**Date:** 2026-01-17 **Status:** Resolved
 
 ### Context - Session Identification
 
-How do we identify sessions uniquely while also showing friendly names in the UI?
+How do we identify sessions uniquely while also showing friendly names in the
+UI?
 
 ### Claude Code Hook Data - Session Identification
 
@@ -658,21 +652,22 @@ Claude Code provides via JSON stdin to hooks:
 
 **For maintainers/programmers:**
 
-The protocol sends `display_name` and `cwd` with every status update, even though they rarely change. This is **intentional redundancy** for simplicity:
+The protocol sends `display_name` and `cwd` with every status update, even
+though they rarely change. This is **intentional redundancy** for simplicity:
 
 - Avoids separate register/update logic
 - Handles edge cases (directory changes) automatically
 - Daemon is stateless about "what fields were sent before"
 
-**Do not "optimize" this by caching display_name** - the current design is simpler and more robust.
+**Do not "optimize" this by caching display_name** - the current design is
+simpler and more robust.
 
 ---
 
 ## Q17: Session Discovery
 
-**Decision:** Auto-create on first message
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Auto-create on first message **Date:** 2026-01-17 **Status:**
+Resolved
 
 ### Context - Session Discovery
 
@@ -686,15 +681,15 @@ No explicit registration needed. Daemon auto-creates sessions:
 2. If `session_id` unknown → create new session entry
 3. If `session_id` known → update existing session
 
-This follows from Q16's "full payload every time" decision - daemon has all info needed to create a session from any message.
+This follows from Q16's "full payload every time" decision - daemon has all info
+needed to create a session from any message.
 
 ---
 
 ## Q18: Session Closed Detection
 
-**Decision:** SessionEnd hook only (no timeout)
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** SessionEnd hook only (no timeout) **Date:** 2026-01-17 **Status:**
+Resolved
 
 ### Context - Session Closed Detection
 
@@ -714,7 +709,8 @@ How do we know a session ended?
 - Timeout adds complexity
 - Timeout could incorrectly mark active (but idle) sessions as closed
 
-**If Claude Code crashes without firing hook:** Session stays visible. User can manually remove orphaned sessions. This is acceptable.
+**If Claude Code crashes without firing hook:** Session stays visible. User can
+manually remove orphaned sessions. This is acceptable.
 
 ### Session Lifecycle Workflow - Session Closed Detection
 
@@ -752,8 +748,7 @@ This connects Q4 (statuses), Q5 (TTL), and Q18 (detection):
 
 ## Q19: Resurrection Mechanism
 
-**Decision:** Working directory only (session_id unused)
-**Date:** 2026-01-17
+**Decision:** Working directory only (session_id unused) **Date:** 2026-01-17
 **Status:** Resolved
 
 ### Context - Resurrection Mechanism
@@ -770,7 +765,8 @@ When user wants to resurrect a closed session, what information do we need?
 
 **Working directory only chosen because:**
 
-- Claude Code has its own session picker when multiple sessions exist per directory
+- Claude Code has its own session picker when multiple sessions exist per
+  directory
 - User can select which session to resume from Claude Code's list
 - Simpler implementation - no session_id tracking complexity
 
@@ -789,15 +785,15 @@ fn resurrect(cwd: &Path, _session_id: &str) {
 
 ### Future Consideration (v2+) - Resurrection Mechanism
 
-May use `session_id` with `claude --resume <session_id>` for more elegant solution that bypasses the session picker.
+May use `session_id` with `claude --resume <session_id>` for more elegant
+solution that bypasses the session picker.
 
 ---
 
 ## Q20: Dashboard Refresh Rate
 
-**Decision:** Hybrid with low-accuracy tick
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Hybrid with low-accuracy tick **Date:** 2026-01-17 **Status:**
+Resolved
 
 ### Context - Dashboard Refresh Rate
 
@@ -837,9 +833,7 @@ Precise 1-second: Wake every second, unnecessary overhead
 
 ## Q21: Click/Selection Detection
 
-**Decision:** Both mouse and keyboard
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Both mouse and keyboard **Date:** 2026-01-17 **Status:** Resolved
 
 ### Context - Click/Selection Detection
 
@@ -873,9 +867,8 @@ How do users interact with the expandable session widget?
 
 ## Q22: Multiple Dashboards
 
-**Decision:** Yes, all receive same updates
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Yes, all receive same updates **Date:** 2026-01-17 **Status:**
+Resolved
 
 ### Context - Multiple Dashboards
 
@@ -908,9 +901,8 @@ Many dashboards expected. Typical setup:
 
 ## Q23: Windows Support
 
-**Decision:** Deferred to v2+ (Named Pipes)
-**Date:** 2026-01-17
-**Status:** Deferred
+**Decision:** Deferred to v2+ (Named Pipes) **Date:** 2026-01-17 **Status:**
+Deferred
 
 ### Context - Windows Support
 
@@ -939,7 +931,8 @@ Do we support Windows in v0/v1?
 - Fast, kernel-level
 - Tokio supports it: `tokio::net::windows::named_pipe`
 
-**No fallback** - if Named Pipes don't work stably, the implementation is rejected. Feature is simple enough that fallbacks indicate deeper problems.
+**No fallback** - if Named Pipes don't work stably, the implementation is
+rejected. Feature is simple enough that fallbacks indicate deeper problems.
 
 ### Platform Socket/Pipe Locations - Windows Support
 
@@ -960,9 +953,8 @@ Do we support Windows in v0/v1?
 
 ## Q24: Daemon Crash Recovery
 
-**Decision:** Basic recovery (options 1+2), auto-restart deferred
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Basic recovery (options 1+2), auto-restart deferred **Date:**
+2026-01-17 **Status:** Resolved
 
 ### Context - Daemon Crash Recovery
 
@@ -1015,9 +1007,8 @@ For v0/v1, natural recovery through hooks is sufficient.
 
 ## Q25: Daemon Shutdown
 
-**Decision:** Multiple mechanisms (stop command, SIGTERM, auto-stop)
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Multiple mechanisms (stop command, SIGTERM, auto-stop) **Date:**
+2026-01-17 **Status:** Resolved
 
 ### Context - Daemon Shutdown
 
@@ -1048,7 +1039,8 @@ Use multiple mechanisms:
 | v0/v1   | Connection count only     | `clients.len()` |
 | v2      | PIDs via peer credentials | `nix` crate     |
 
-**Why defer PID tracking:** v0/v1 only needs count for stop warning. PID tracking adds dependency (`nix` crate) for minimal benefit.
+**Why defer PID tracking:** v0/v1 only needs count for stop warning. PID
+tracking adds dependency (`nix` crate) for minimal benefit.
 
 ### Auto-Stop Implementation - Daemon Shutdown
 
@@ -1064,7 +1056,8 @@ Auto-stop triggers when:
 2. No active sessions, AND
 3. Condition persists for `IDLE_THRESHOLD` duration
 
-**Resource usage:** Near zero. Process sleeps (kernel timer), wakes every 5 minutes to check condition (~1ms of CPU).
+**Resource usage:** Near zero. Process sleeps (kernel timer), wakes every 5
+minutes to check condition (~1ms of CPU).
 
 ### SIGTERM Handling - Daemon Shutdown
 
@@ -1104,9 +1097,8 @@ Socket command ("SHUTDOWN") would require:
 
 ## Q26: Signal Handling
 
-**Decision:** SIGTERM/SIGINT = shutdown, SIGHUP = reload config
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** SIGTERM/SIGINT = shutdown, SIGHUP = reload config **Date:**
+2026-01-17 **Status:** Resolved
 
 ### Context - Signal Handling
 
@@ -1149,9 +1141,7 @@ tokio::select! {
 
 ## Q27: Config Reload
 
-**Decision:** Hot reload in v0
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Hot reload in v0 **Date:** 2026-01-17 **Status:** Resolved
 
 ### Context - Config Reload
 
@@ -1195,9 +1185,8 @@ Can configuration be changed without restarting daemon?
 
 ## Q28: Startup State
 
-**Decision:** Message with README reference
-**Date:** 2026-01-17
-**Status:** Resolved
+**Decision:** Message with README reference **Date:** 2026-01-17 **Status:**
+Resolved
 
 ### Context - Startup State
 

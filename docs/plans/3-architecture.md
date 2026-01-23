@@ -143,9 +143,7 @@ type Store = HashMap<String, Session>;
 
 ## Backend Architecture Decision
 
-**Status:** DECIDED
-**Decision:** Single Daemon
-**Date:** 2026-01-17
+**Status:** DECIDED **Decision:** Single Daemon **Date:** 2026-01-17
 
 ### Decision Rationale
 
@@ -181,7 +179,8 @@ Evaluated three approaches: Single Daemon, Shared Memory, SQLite.
 
 ### Auto-start Behavior
 
-Daemon auto-starts if not running when client connects. First hook or dashboard that runs starts the daemon automatically.
+Daemon auto-starts if not running when client connects. First hook or dashboard
+that runs starts the daemon automatically.
 
 ---
 

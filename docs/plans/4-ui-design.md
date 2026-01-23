@@ -6,9 +6,11 @@ Widget-based terminal UI system.
 
 ## Design Philosophy
 
-The UI is **widget-based**. Each line in the display is a widget. Users configure which widgets to show and in what order.
+The UI is **widget-based**. Each line in the display is a widget. Users
+configure which widgets to show and in what order.
 
-This same concept applies to a separate project: **Claude Code status line** (not part of this project, but shares the widget pattern).
+This same concept applies to a separate project: **Claude Code status line**
+(not part of this project, but shares the widget pattern).
 
 ---
 
@@ -286,7 +288,8 @@ display_mode = "full"     # or "compact"
 
 ## Positioning in Ratatui
 
-Ratatui provides terminal dimensions via `frame.area()`. Widgets can be positioned anywhere:
+Ratatui provides terminal dimensions via `frame.area()`. Widgets can be
+positioned anywhere:
 
 ```rust
 fn render(frame: &mut Frame) {
@@ -303,4 +306,5 @@ fn render(frame: &mut Frame) {
 }
 ```
 
-Zellij/tmux pane resizes trigger terminal resize events. Ratatui's crossterm backend detects this automatically.
+Zellij/tmux pane resizes trigger terminal resize events. Ratatui's crossterm
+backend detects this automatically.

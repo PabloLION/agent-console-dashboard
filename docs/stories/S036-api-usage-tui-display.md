@@ -1,22 +1,24 @@
 # Story: Display API Usage in TUI
 
-**Story ID:** S036
-**Epic:** [E009 - API Usage Tracking](../epic/E009-api-usage-tracking.md)
-**Status:** Draft
-**Priority:** P2
-**Estimated Points:** 3
+**Story ID:** S036 **Epic:**
+[E009 - API Usage Tracking](../epic/E009-api-usage-tracking.md) **Status:**
+Draft **Priority:** P2 **Estimated Points:** 3
 
 ## Description
 
-As a user,
-I want to see API usage metrics displayed in the TUI dashboard,
-So that I can monitor my token consumption and estimated costs at a glance.
+As a user, I want to see API usage metrics displayed in the TUI dashboard, So
+that I can monitor my token consumption and estimated costs at a glance.
 
 ## Context
 
-With the API usage data model (S034) and IPC commands (S035) in place, the TUI dashboard needs to display this information to users. This story focuses on integrating usage data into the dashboard display, complementing the api-usage widget defined in S021 (E005 Widget System).
+With the API usage data model (S034) and IPC commands (S035) in place, the TUI
+dashboard needs to display this information to users. This story focuses on
+integrating usage data into the dashboard display, complementing the api-usage
+widget defined in S021 (E005 Widget System).
 
-The display should show both session-specific usage (when a session is selected) and aggregate usage across all sessions. The information should be updated in real-time as new usage data arrives via the SUBSCRIBE mechanism.
+The display should show both session-specific usage (when a session is selected)
+and aggregate usage across all sessions. The information should be updated in
+real-time as new usage data arrives via the SUBSCRIBE mechanism.
 
 ## Implementation Details
 
@@ -40,21 +42,33 @@ The display should show both session-specific usage (when a session is selected)
 
 ### Dependencies
 
-- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) - TUI application base
-- [S017 - Session Selection and Detail View](./S017-session-selection-detail-view.md) - Session detail view
-- [S021 - API Usage Widget](./S021-api-usage-widget.md) - Widget implementation for rendering usage
-- [S034 - API Usage Data Model](./S034-api-usage-data-model.md) - ApiUsage struct
-- [S035 - API_USAGE Command](./S035-api-usage-command.md) - IPC commands for querying usage
+- [S014 - Ratatui Application Scaffold](./S014-ratatui-application-scaffold.md) -
+  TUI application base
+- [S017 - Session Selection and Detail View](./S017-session-selection-detail-view.md)
+  \- Session detail view
+- [S021 - API Usage Widget](./S021-api-usage-widget.md) - Widget implementation
+  for rendering usage
+- [S034 - API Usage Data Model](./S034-api-usage-data-model.md) - ApiUsage
+  struct
+- [S035 - API_USAGE Command](./S035-api-usage-command.md) - IPC commands for
+  querying usage
 
 ## Acceptance Criteria
 
-- [ ] Given a session is selected, when usage data exists, then session-specific tokens and cost are displayed
-- [ ] Given a session is selected, when no usage data exists, then "Usage: --" placeholder is shown
-- [ ] Given the dashboard is visible, when aggregate usage is available, then total tokens across all sessions are shown
-- [ ] Given usage data is updated, when the daemon reports new values, then display updates within 1 second
-- [ ] Given high token usage, when displayed, then warning colors (yellow/red) indicate elevated consumption
-- [ ] Given rate limit info is available, when displayed, then remaining calls and reset time are shown
-- [ ] Given terminal width is narrow, when rendering, then compact format is used
+- [ ] Given a session is selected, when usage data exists, then session-specific
+      tokens and cost are displayed
+- [ ] Given a session is selected, when no usage data exists, then "Usage: --"
+      placeholder is shown
+- [ ] Given the dashboard is visible, when aggregate usage is available, then
+      total tokens across all sessions are shown
+- [ ] Given usage data is updated, when the daemon reports new values, then
+      display updates within 1 second
+- [ ] Given high token usage, when displayed, then warning colors (yellow/red)
+      indicate elevated consumption
+- [ ] Given rate limit info is available, when displayed, then remaining calls
+      and reset time are shown
+- [ ] Given terminal width is narrow, when rendering, then compact format is
+      used
 
 ## Testing Requirements
 
@@ -64,7 +78,8 @@ The display should show both session-specific usage (when a session is selected)
 - [ ] Unit test: Number formatting produces human-readable output (1.2k, 5.3M)
 - [ ] Unit test: Color thresholds apply correctly for usage levels
 - [ ] Integration test: Usage updates from daemon appear in TUI
-- [ ] Integration test: Selecting different sessions shows correct per-session usage
+- [ ] Integration test: Selecting different sessions shows correct per-session
+      usage
 
 ## Out of Scope
 
@@ -80,7 +95,7 @@ The display should show both session-specific usage (when a session is selected)
 
 **Session Detail View (selected session):**
 
-```
+```text
 ┌─ Session: abc123 ─────────────────────────────────┐
 │ Status: Working                                    │
 │ Directory: ~/projects/myapp                        │
@@ -95,7 +110,7 @@ The display should show both session-specific usage (when a session is selected)
 
 **Dashboard Footer (aggregate):**
 
-```
+```text
 ───────────────────────────────────────────────────────
 Sessions: 3 active │ Total: 38.4k tokens │ Cost: ~$1.24
 ───────────────────────────────────────────────────────
@@ -203,18 +218,19 @@ fn format_rate_limit(remaining: Option<u32>, reset: Option<DateTime<Utc>>) -> St
 
 ### Color Thresholds
 
-| Metric | Green | Yellow | Red |
-|--------|-------|--------|-----|
-| Session tokens | < 50k | 50k - 100k | > 100k |
-| Session cost | < $1 | $1 - $5 | > $5 |
-| Aggregate cost | < $5 | $5 - $20 | > $20 |
-| Rate limit remaining | > 50% | 10-50% | < 10% |
+| Metric               | Green | Yellow     | Red    |
+| -------------------- | ----- | ---------- | ------ |
+| Session tokens       | < 50k | 50k - 100k | > 100k |
+| Session cost         | < $1  | $1 - $5    | > $5   |
+| Aggregate cost       | < $5  | $5 - $20   | > $20  |
+| Rate limit remaining | > 50% | 10-50%     | < 10%  |
 
 These thresholds can be made configurable in a future story.
 
 ### Graceful Degradation
 
 When usage data is unavailable:
+
 - Display "Usage: --" placeholder
 - Don't show usage section at all if configured to hide when empty
 - Log a debug message but don't show errors to user

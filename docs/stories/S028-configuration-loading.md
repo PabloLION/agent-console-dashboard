@@ -1,22 +1,25 @@
 # Story: Implement Configuration Loading
 
-**Story ID:** S028
-**Epic:** [E007 - Configuration System](../epic/E007-configuration-system.md)
-**Status:** Draft
-**Priority:** P1
-**Estimated Points:** 3
+**Story ID:** S028 **Epic:**
+[E007 - Configuration System](../epic/E007-configuration-system.md) **Status:**
+Draft **Priority:** P1 **Estimated Points:** 3
 
 ## Description
 
-As a developer,
-I want configuration to be loaded from the TOML file at startup,
+As a developer, I want configuration to be loaded from the TOML file at startup,
 So that user preferences are applied when the daemon or dashboard starts.
 
 ## Context
 
-With the configuration schema defined (S027), this story implements the actual loading mechanism. The configuration loader must handle various scenarios: file exists with valid config, file exists with invalid config, file doesn't exist (use defaults), and permission errors. Error messages must be user-friendly, pointing to the exact line and column of any parsing errors.
+With the configuration schema defined (S027), this story implements the actual
+loading mechanism. The configuration loader must handle various scenarios: file
+exists with valid config, file exists with invalid config, file doesn't exist
+(use defaults), and permission errors. Error messages must be user-friendly,
+pointing to the exact line and column of any parsing errors.
 
-The loader integrates with the XDG path resolution (S029) to find the configuration file, but this story focuses on the loading and parsing logic itself, with path resolution abstracted through a trait or function parameter.
+The loader integrates with the XDG path resolution (S029) to find the
+configuration file, but this story focuses on the loading and parsing logic
+itself, with path resolution abstracted through a trait or function parameter.
 
 ## Implementation Details
 
@@ -25,7 +28,8 @@ The loader integrates with the XDG path resolution (S029) to find the configurat
 1. Create `ConfigLoader` struct with methods for loading configuration
 2. Implement file reading with proper error handling
 3. Use `toml::from_str()` for parsing with position-aware error reporting
-4. Provide `load_from_path()` for explicit path and `load_default()` for standard location
+4. Provide `load_from_path()` for explicit path and `load_default()` for
+   standard location
 5. Return `Result<Config, ConfigError>` with descriptive error types
 
 ### Files to Modify
@@ -38,18 +42,27 @@ The loader integrates with the XDG path resolution (S029) to find the configurat
 
 ### Dependencies
 
-- [S027 - TOML Configuration Schema](./S027-toml-configuration-schema.md) - Schema types must be defined first
-- [S029 - XDG Path Support](./S029-xdg-path-support.md) - For default path resolution (can develop in parallel with path as parameter)
+- [S027 - TOML Configuration Schema](./S027-toml-configuration-schema.md) -
+  Schema types must be defined first
+- [S029 - XDG Path Support](./S029-xdg-path-support.md) - For default path
+  resolution (can develop in parallel with path as parameter)
 
 ## Acceptance Criteria
 
-- [ ] Given a valid config file at the specified path, when `load_from_path()` is called, then Config is returned
-- [ ] Given an invalid TOML file, when loading, then error includes file path, line number, and column
-- [ ] Given a non-existent config file, when `load_default()` is called, then default Config is returned
-- [ ] Given a file with permission errors, when loading, then a descriptive error is returned
-- [ ] Given daemon startup, when config loading fails with invalid TOML, then daemon exits with helpful error message
-- [ ] Given TUI startup, when config loading fails, then error is displayed before exit
-- [ ] Given partial configuration, when loading, then missing fields use schema defaults
+- [ ] Given a valid config file at the specified path, when `load_from_path()`
+      is called, then Config is returned
+- [ ] Given an invalid TOML file, when loading, then error includes file path,
+      line number, and column
+- [ ] Given a non-existent config file, when `load_default()` is called, then
+      default Config is returned
+- [ ] Given a file with permission errors, when loading, then a descriptive
+      error is returned
+- [ ] Given daemon startup, when config loading fails with invalid TOML, then
+      daemon exits with helpful error message
+- [ ] Given TUI startup, when config loading fails, then error is displayed
+      before exit
+- [ ] Given partial configuration, when loading, then missing fields use schema
+      defaults
 
 ## Testing Requirements
 
