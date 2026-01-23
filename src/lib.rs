@@ -5,6 +5,9 @@
 
 use std::path::PathBuf;
 
+/// Daemon module providing process lifecycle management and daemonization.
+pub mod daemon;
+
 /// Configuration for the daemon process.
 #[derive(Debug, Clone)]
 pub struct DaemonConfig {
