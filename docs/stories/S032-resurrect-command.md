@@ -1,0 +1,243 @@
+# Story: Implement RESURRECT Command
+
+**Story ID:** S032
+**Epic:** [E008 - Session Resurrection](../epic/E008-session-resurrection.md)
+**Status:** Draft
+**Priority:** P1
+**Estimated Points:** 5
+
+## Description
+
+As a user,
+I want a RESURRECT command that I can invoke from the CLI or TUI,
+So that I can resume a previously closed Claude Code session.
+
+## Context
+
+Once closed session metadata is retained (S031), users need a way to trigger the resurrection of a specific session. This story implements the RESURRECT command in the IPC protocol and the corresponding CLI command. The command validates that the session is resumable, then invokes the Claude Code resume process.
+
+The RESURRECT command is the user-facing interface for session resurrection. It handles validation, error reporting, and orchestrates the actual resume process (which is implemented in S033).
+
+## Implementation Details
+
+### Technical Approach
+
+1. Add RESURRECT command to the IPC protocol
+2. Implement command handler in the daemon
+3. Validate session exists and is resumable
+4. Validate working directory still exists
+5. Invoke claude --resume via subprocess or output command for user
+6. Add CLI command `agent-console resurrect <session-id>`
+7. Add keyboard shortcut in TUI to resurrect selected closed session
+
+### Files to Modify
+
+- `src/ipc/protocol.rs` - Add RESURRECT command definition
+- `src/ipc/commands/mod.rs` - Add resurrect command module
+- `src/ipc/commands/resurrect.rs` - Create RESURRECT command handler
+- `src/daemon/handler.rs` - Route RESURRECT command to handler
+- `src/cli/commands.rs` - Add `resurrect` CLI subcommand
+- `src/tui/handlers.rs` - Add keyboard handler for resurrection
+
+### Dependencies
+
+- [S031 - Closed Session Metadata](./S031-closed-session-metadata.md) - Provides closed session data
+- [S009 - IPC Message Protocol](./S009-ipc-message-protocol.md) - Defines protocol structure
+- [S013 - CLI Client Commands](./S013-cli-client-commands.md) - CLI infrastructure
+- [S016 - Keyboard Navigation](./S016-keyboard-navigation.md) - TUI keyboard handling
+
+## Acceptance Criteria
+
+- [ ] Given a valid closed session ID, when RESURRECT is invoked, then the command succeeds and returns OK
+- [ ] Given an invalid session ID, when RESURRECT is invoked, then error "session not found" is returned
+- [ ] Given a non-resumable session, when RESURRECT is invoked, then error with reason is returned
+- [ ] Given a session with non-existent working directory, when RESURRECT is invoked, then error "working directory not found" is returned
+- [ ] Given the CLI command `agent-console resurrect <id>`, when executed, then it sends RESURRECT to daemon
+- [ ] Given a closed session selected in TUI, when user presses 'r', then RESURRECT command is triggered
+- [ ] Given RESURRECT succeeds, when the command completes, then session is removed from closed sessions list
+- [ ] Given RESURRECT fails, when the command completes, then session remains in closed sessions list
+
+## Testing Requirements
+
+- [ ] Unit test: RESURRECT command parses correctly
+- [ ] Unit test: Valid session ID returns success
+- [ ] Unit test: Invalid session ID returns appropriate error
+- [ ] Unit test: Non-resumable session returns error with reason
+- [ ] Unit test: Missing working directory validation
+- [ ] Integration test: CLI command sends correct IPC message
+- [ ] Integration test: Full resurrection flow from CLI
+- [ ] Integration test: TUI keyboard binding triggers command
+
+## Out of Scope
+
+- Actual invocation of `claude --resume` (handled in S033)
+- Zellij pane creation for resurrection
+- Automatic selection of where to open resurrected session
+- Batch resurrection of multiple sessions
+
+## Notes
+
+### IPC Protocol Extension
+
+```text
+Request:
+RESURRECT <session-id>
+
+Response (success):
+OK <json-payload>
+
+Response (error):
+ERROR <error-code> <message>
+
+Error codes:
+- SESSION_NOT_FOUND: No closed session with this ID
+- NOT_RESUMABLE: Session cannot be resumed (context exceeded, etc.)
+- WORKING_DIR_MISSING: Original working directory no longer exists
+- RESUME_FAILED: claude --resume invocation failed
+```
+
+### Command Handler Implementation
+
+```rust
+use crate::daemon::store::SessionStore;
+use crate::ipc::{Response, Error};
+
+pub struct ResurrectCommand {
+    pub session_id: String,
+}
+
+impl ResurrectCommand {
+    pub fn execute(self, store: &mut SessionStore) -> Response {
+        // 1. Find the closed session
+        let closed = match store.get_closed(&self.session_id) {
+            Some(s) => s.clone(),
+            None => return Response::error(
+                ErrorCode::SessionNotFound,
+                format!("No closed session with ID: {}", self.session_id)
+            ),
+        };
+
+        // 2. Check if resumable
+        if !closed.resumable {
+            return Response::error(
+                ErrorCode::NotResumable,
+                closed.not_resumable_reason
+                    .unwrap_or_else(|| "Session cannot be resumed".to_string())
+            );
+        }
+
+        // 3. Validate working directory exists
+        if !closed.working_dir.exists() {
+            return Response::error(
+                ErrorCode::WorkingDirMissing,
+                format!("Working directory no longer exists: {:?}", closed.working_dir)
+            );
+        }
+
+        // 4. Prepare resurrection info (actual invocation in S033)
+        let resurrection_info = ResurrectionInfo {
+            session_id: closed.session_id.clone(),
+            working_dir: closed.working_dir.clone(),
+            command: format!("claude --resume {}", closed.session_id),
+        };
+
+        // 5. Remove from closed sessions (it's being resurrected)
+        store.remove_closed(&self.session_id);
+
+        Response::ok(serde_json::to_value(resurrection_info).unwrap())
+    }
+}
+
+#[derive(Serialize)]
+pub struct ResurrectionInfo {
+    pub session_id: String,
+    pub working_dir: PathBuf,
+    pub command: String,
+}
+```
+
+### CLI Command
+
+```rust
+/// Resurrect a previously closed Claude Code session
+#[derive(Args)]
+pub struct ResurrectArgs {
+    /// Session ID to resurrect
+    session_id: String,
+
+    /// Execute the resume command instead of just printing it
+    #[arg(long)]
+    execute: bool,
+}
+
+impl ResurrectArgs {
+    pub fn run(&self) -> Result<()> {
+        let client = IpcClient::connect()?;
+        let response = client.send(Command::Resurrect {
+            session_id: self.session_id.clone(),
+        })?;
+
+        match response {
+            Response::Ok(info) => {
+                let info: ResurrectionInfo = serde_json::from_value(info)?;
+
+                if self.execute {
+                    // Change to working directory and execute
+                    std::env::set_current_dir(&info.working_dir)?;
+                    let status = std::process::Command::new("claude")
+                        .arg("--resume")
+                        .arg(&info.session_id)
+                        .status()?;
+                    std::process::exit(status.code().unwrap_or(1));
+                } else {
+                    // Print command for user to execute
+                    println!("cd {} && {}", info.working_dir.display(), info.command);
+                }
+            }
+            Response::Error(code, msg) => {
+                eprintln!("Error: {} - {}", code, msg);
+                std::process::exit(1);
+            }
+        }
+
+        Ok(())
+    }
+}
+```
+
+### TUI Integration
+
+```rust
+// In TUI key handler
+KeyCode::Char('r') => {
+    if let Some(selected) = state.selected_closed_session() {
+        let result = ipc_client.send(Command::Resurrect {
+            session_id: selected.session_id.clone(),
+        });
+
+        match result {
+            Ok(Response::Ok(info)) => {
+                // Show resurrection info in status bar
+                // Or trigger terminal command
+                state.show_message(format!(
+                    "Run: cd {} && claude --resume {}",
+                    info.working_dir.display(),
+                    info.session_id
+                ));
+            }
+            Ok(Response::Error(_, msg)) => {
+                state.show_error(msg);
+            }
+            Err(e) => {
+                state.show_error(format!("IPC error: {}", e));
+            }
+        }
+    }
+}
+```
+
+### Considerations
+
+- **Execution vs. Display**: The command can either execute `claude --resume` directly or print the command for the user. Direct execution is more convenient but requires appropriate terminal context.
+- **TUI Limitations**: The TUI cannot directly execute commands in a new terminal. It may need to copy the command to clipboard or display it for manual execution.
+- **Session State**: Once RESURRECT succeeds, remove the session from closed sessions since it's now active again.
