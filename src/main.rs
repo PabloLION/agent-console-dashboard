@@ -3,8 +3,10 @@
 //! This binary provides the command-line interface for the Agent Console daemon.
 //! It supports running in foreground or daemonized mode with configurable socket paths.
 
+use agent_console::{daemon::run_daemon, DaemonConfig};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 /// Agent Console Dashboard daemon
 #[derive(Parser)]
@@ -30,20 +32,28 @@ enum Commands {
     },
 }
 
-fn main() {
+fn main() -> ExitCode {
     // Parse CLI arguments BEFORE any fork/runtime operations
     // This ensures errors are shown to the user in the terminal
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Daemon { daemonize, socket } => {
-            // For now, just print the configuration
-            // Actual daemon logic will be added in subsequent subtasks
-            println!("Starting agent-console daemon...");
-            println!("  Socket path: {}", socket.display());
-            println!("  Daemonize: {}", daemonize);
+            // Create DaemonConfig from CLI args
+            let config = DaemonConfig::new(socket, daemonize);
+
+            // Run the daemon - this will:
+            // 1. Call daemonize_process() if --daemonize flag set
+            // 2. Start Tokio runtime AFTER daemonization
+            // 3. Wait for shutdown signal (SIGINT/SIGTERM)
+            if let Err(e) = run_daemon(config) {
+                eprintln!("Error: {}", e);
+                return ExitCode::FAILURE;
+            }
         }
     }
+
+    ExitCode::SUCCESS
 }
 
 #[cfg(test)]
