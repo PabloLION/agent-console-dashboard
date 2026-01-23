@@ -6,9 +6,34 @@
 use crate::DaemonConfig;
 use fork::{daemon, Fork};
 use std::error::Error;
+use tokio::runtime::Runtime;
+use tokio::signal;
+use tokio::signal::unix::{signal as unix_signal, SignalKind};
 
 /// Result type alias for daemon operations.
 pub type DaemonResult<T> = Result<T, Box<dyn Error>>;
+
+/// Wait for a shutdown signal (SIGINT or SIGTERM).
+///
+/// This async function blocks until either Ctrl+C (SIGINT) or SIGTERM
+/// is received, enabling graceful shutdown of the daemon.
+///
+/// # Panics
+///
+/// Panics if the SIGTERM signal handler cannot be registered.
+async fn wait_for_shutdown() {
+    let mut sigterm = unix_signal(SignalKind::terminate())
+        .expect("Failed to register SIGTERM handler");
+
+    tokio::select! {
+        _ = signal::ctrl_c() => {
+            eprintln!("Received SIGINT (Ctrl+C), shutting down...");
+        },
+        _ = sigterm.recv() => {
+            eprintln!("Received SIGTERM, shutting down...");
+        },
+    }
+}
 
 /// Daemonize the current process.
 ///
@@ -91,10 +116,24 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
     eprintln!("  Socket path: {}", config.socket_path.display());
     eprintln!("  Daemonize: {}", config.daemonize);
 
-    // Placeholder for Tokio runtime and main loop
-    // This will be implemented in subtask-3-2
-    eprintln!("Daemon running (signal handling not yet implemented)");
+    // Create Tokio runtime AFTER daemonization
+    // Using current_thread runtime for simpler daemon workloads
+    let runtime = Runtime::new().map_err(|e| {
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to create Tokio runtime: {}", e),
+        )) as Box<dyn Error>
+    })?;
 
+    eprintln!("Daemon running. Press Ctrl+C or send SIGTERM to stop.");
+
+    // Run the main event loop
+    runtime.block_on(async {
+        // Wait for shutdown signal
+        wait_for_shutdown().await;
+    });
+
+    eprintln!("Daemon stopped.");
     Ok(())
 }
 
