@@ -1,5 +1,5 @@
 {
-  "printWidth": 100,
+  "printWidth": 80,
   "tabWidth": 2,
   "useTabs": false,
   "semi": true,
@@ -12,8 +12,8 @@
     {
       "files": "*.md",
       "options": {
-        "printWidth": 100,
-        "proseWrap": "preserve",
+        "printWidth": 80,
+        "proseWrap": "always",
         "tabWidth": 2
       }
     },
