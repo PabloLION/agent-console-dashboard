@@ -25,9 +25,9 @@ Users need visibility into their API consumption to manage costs effectively and
 
 | Story ID | Title | Priority | Status |
 |----------|-------|----------|--------|
-| [S034](../stories/S034-define-api-usage-data-model.md) | Define API usage data model | P1 | Draft |
-| [S035](../stories/S035-implement-api-usage-command.md) | Implement API_USAGE command | P1 | Draft |
-| [S036](../stories/S036-display-usage-in-tui.md) | Display usage in TUI | P2 | Draft |
+| [S034](../stories/S034-api-usage-data-model.md) | Define API usage data model | P1 | Draft |
+| [S035](../stories/S035-api-usage-command.md) | Implement API_USAGE command | P1 | Draft |
+| [S036](../stories/S036-api-usage-tui-display.md) | Display usage in TUI | P2 | Draft |
 
 ## Dependencies
 

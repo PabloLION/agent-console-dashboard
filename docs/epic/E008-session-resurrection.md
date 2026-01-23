@@ -24,9 +24,9 @@ Users frequently close terminal sessions or panes only to realize they need to c
 
 | Story ID | Title | Priority | Status |
 |----------|-------|----------|--------|
-| [S031](../stories/S031-store-session-metadata-for-closed-sessions.md) | Store session metadata for closed sessions | P1 | Draft |
-| [S032](../stories/S032-implement-resurrect-command.md) | Implement RESURRECT command | P1 | Draft |
-| [S033](../stories/S033-integrate-with-claude-resume.md) | Integrate with claude --resume | P2 | Draft |
+| [S031](../stories/S031-closed-session-metadata.md) | Store session metadata for closed sessions | P1 | Draft |
+| [S032](../stories/S032-resurrect-command.md) | Implement RESURRECT command | P1 | Draft |
+| [S033](../stories/S033-claude-resume-integration.md) | Integrate with claude --resume | P2 | Draft |
 
 ## Dependencies
 

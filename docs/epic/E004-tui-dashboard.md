@@ -27,7 +27,7 @@ Users get a powerful, always-visible terminal dashboard to monitor all their Cla
 | [S014](../stories/S014-ratatui-application-scaffold.md) | Create Ratatui application scaffold | P1 | Draft |
 | [S015](../stories/S015-main-dashboard-layout.md) | Implement main dashboard layout | P1 | Draft |
 | [S016](../stories/S016-keyboard-navigation.md) | Add keyboard navigation | P1 | Draft |
-| [S017](../stories/S017-session-detail-view.md) | Implement session selection and detail view | P2 | Draft |
+| [S017](../stories/S017-session-selection-detail-view.md) | Implement session selection and detail view | P2 | Draft |
 
 ## Dependencies
 

@@ -24,9 +24,8 @@ Users working in Zellij benefit from a persistent, always-visible dashboard pane
 
 | Story ID | Title | Priority | Status |
 |----------|-------|----------|--------|
-| [S034](../stories/S034-dashboard-pane-layout-script.md) | Create dashboard pane layout script | P1 | Draft |
-| [S035](../stories/S035-zellij-pane-creation-for-resurrection.md) | Implement Zellij pane creation for resurrection | P2 | Draft |
-| [S036](../stories/S036-zellij-command-execution.md) | Implement Zellij command execution integration | P2 | Draft |
+| [S037](../stories/S037-zellij-layout-dashboard.md) | Create zellij layout with dashboard pane | P1 | Draft |
+| [S038](../stories/S038-zellij-resurrection-workflow.md) | Document Zellij resurrection workflow | P2 | Draft |
 
 ## Dependencies
 

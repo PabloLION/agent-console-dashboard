@@ -24,10 +24,10 @@ Users get automatic, real-time dashboard updates without manually tracking sessi
 
 | Story ID | Title | Priority | Status |
 |----------|-------|----------|--------|
-| [S023](../stories/S023-create-stop-hook-script.md) | Create stop hook script | P1 | Draft |
-| [S024](../stories/S024-create-user-prompt-submit-hook-script.md) | Create user-prompt-submit hook script | P1 | Draft |
-| [S025](../stories/S025-create-notification-hook-script.md) | Create notification hook script | P1 | Draft |
-| [S026](../stories/S026-document-hook-registration.md) | Document hook registration in settings.json | P2 | Draft |
+| [S023](../stories/S023-stop-hook-script.md) | Create stop hook script | P1 | Draft |
+| [S024](../stories/S024-user-prompt-submit-hook.md) | Create user-prompt-submit hook script | P1 | Draft |
+| [S025](../stories/S025-notification-hook-script.md) | Create notification hook script | P1 | Draft |
+| [S026](../stories/S026-hook-registration-docs.md) | Document hook registration in settings.json | P2 | Draft |
 
 ## Dependencies
 

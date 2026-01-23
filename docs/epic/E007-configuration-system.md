@@ -25,10 +25,10 @@ Users can customize their dashboard experience through a single, well-documented
 
 | Story ID | Title | Priority | Status |
 |----------|-------|----------|--------|
-| [S027](../stories/S027-define-toml-configuration-schema.md) | Define TOML configuration schema | P1 | Draft |
-| [S028](../stories/S028-implement-configuration-loading.md) | Implement configuration loading | P1 | Draft |
-| [S029](../stories/S029-add-xdg-path-support.md) | Add XDG path support | P2 | Draft |
-| [S030](../stories/S030-create-default-configuration-file.md) | Create default configuration file | P2 | Draft |
+| [S027](../stories/S027-toml-configuration-schema.md) | Define TOML configuration schema | P1 | Draft |
+| [S028](../stories/S028-configuration-loading.md) | Implement configuration loading | P1 | Draft |
+| [S029](../stories/S029-xdg-path-support.md) | Add XDG path support | P2 | Draft |
+| [S030](../stories/S030-default-configuration-file.md) | Create default configuration file | P2 | Draft |
 
 ## Dependencies
 

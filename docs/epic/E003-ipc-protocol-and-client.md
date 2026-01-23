@@ -24,11 +24,11 @@ Users can interact with the Agent Console system through intuitive CLI commands.
 
 | Story ID | Title | Priority | Status |
 |----------|-------|----------|--------|
-| [S009](../stories/S009-define-ipc-message-protocol.md) | Define IPC message protocol | P1 | Draft |
-| [S010](../stories/S010-implement-set-command.md) | Implement SET command | P1 | Draft |
-| [S011](../stories/S011-implement-list-command.md) | Implement LIST command | P1 | Draft |
-| [S012](../stories/S012-implement-subscribe-command.md) | Implement SUBSCRIBE command | P1 | Draft |
-| [S013](../stories/S013-create-cli-client-commands.md) | Create CLI client commands | P1 | Draft |
+| [S009](../stories/S009-ipc-message-protocol.md) | Define IPC message protocol | P1 | Draft |
+| [S010](../stories/S010-set-command.md) | Implement SET command | P1 | Draft |
+| [S011](../stories/S011-list-command.md) | Implement LIST command | P1 | Draft |
+| [S012](../stories/S012-subscribe-command.md) | Implement SUBSCRIBE command | P1 | Draft |
+| [S013](../stories/S013-cli-client-commands.md) | Create CLI client commands | P1 | Draft |
 
 ## Dependencies
 
