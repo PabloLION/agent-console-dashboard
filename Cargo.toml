@@ -1,0 +1,17 @@
+[package]
+name = "agent-console"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Agent Console Dashboard daemon"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1.49", features = ["rt", "signal", "macros"] }
+fork = "0.6"
+
+[profile.release]
+opt-level = 'z'
+lto = true
+codegen-units = 1
+strip = true
