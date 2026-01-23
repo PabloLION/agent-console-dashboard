@@ -10,6 +10,9 @@ clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1.49", features = ["rt", "signal", "macros"] }
 fork = "0.6"
 
+[dev-dependencies]
+cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }
+
 [profile.release]
 opt-level = 'z'
 lto = true
