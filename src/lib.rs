@@ -2,6 +2,16 @@
 //!
 //! This crate provides the core functionality for the Agent Console daemon,
 //! including daemon process management and configuration.
+//!
+//! # Platform Support
+//!
+//! This crate currently supports **Unix-like systems only** (Linux, macOS).
+//! Windows support is planned for a future release.
+//!
+//! Unix-specific features used:
+//! - Unix domain sockets for IPC
+//! - `fork()` for daemon process creation
+//! - Unix signal handling (SIGTERM, SIGINT)
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
