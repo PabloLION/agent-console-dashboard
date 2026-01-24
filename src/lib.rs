@@ -16,6 +16,51 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+/// Custom serialization module for `std::time::Instant` as Unix timestamp milliseconds.
+///
+/// Since `Instant` is a monotonic clock that doesn't correspond to wall-clock time,
+/// this module converts to/from Unix timestamp milliseconds for IPC serialization.
+/// The conversion works by calculating the offset between the Instant and the current
+/// time, then applying that offset to the current SystemTime.
+///
+/// Note: This has minor precision limitations (~millisecond accuracy) but is acceptable
+/// for session tracking purposes.
+mod serde_instant {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+    pub fn serialize<S>(instant: &Instant, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Convert to milliseconds since UNIX epoch
+        let system_now = SystemTime::now();
+        let instant_now = Instant::now();
+        let elapsed = instant_now.duration_since(*instant);
+        let system_time = system_now - elapsed;
+        let millis = system_time
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        millis.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Instant, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let millis = u64::deserialize(deserializer)?;
+        // Convert milliseconds since UNIX epoch back to Instant
+        let system_now = SystemTime::now();
+        let now_millis = system_now
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let elapsed = std::time::Duration::from_millis(now_millis.saturating_sub(millis));
+        Ok(Instant::now() - elapsed)
+    }
+}
+
 /// Daemon module providing process lifecycle management and daemonization.
 pub mod daemon;
 
