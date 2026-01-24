@@ -10,7 +10,6 @@ description = "Agent Console Dashboard daemon"
 [features]
 # Feature flags for integration tests that depend on unimplemented components
 socket_server = []
-client_integration_tests = []
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }

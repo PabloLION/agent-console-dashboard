@@ -19,6 +19,10 @@ use std::time::{Duration, Instant};
 /// Daemon module providing process lifecycle management and daemonization.
 pub mod daemon;
 
+/// Internal client module for daemon communication with auto-start capability.
+/// This module is not part of the public API - external tools should use CLI commands.
+pub(crate) mod client;
+
 /// Session status enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {

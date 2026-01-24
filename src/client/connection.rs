@@ -70,16 +70,17 @@ impl Error for ClientError {
 ///
 /// # Example
 ///
-/// ```no_run
-/// use agent_console::client::{connect_with_auto_start, Client};
+/// ```ignore
+/// use crate::client::{connect_with_auto_start, Client};
 /// use std::path::Path;
 ///
-/// # async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-/// let client = connect_with_auto_start(Path::new("/tmp/agent-console.sock")).await?;
-/// // Use client for communication
-/// # Ok(())
-/// # }
+/// async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+///     let client = connect_with_auto_start(Path::new("/tmp/agent-console.sock")).await?;
+///     // Use client for communication
+///     Ok(())
+/// }
 /// ```
+#[derive(Debug)]
 pub struct Client {
     /// The underlying Unix socket stream.
     stream: UnixStream,
@@ -162,15 +163,15 @@ const MAX_RETRIES: u32 = 10;
 ///
 /// # Example
 ///
-/// ```no_run
-/// use agent_console::client::connect_with_auto_start;
+/// ```ignore
+/// use crate::client::connect_with_auto_start;
 /// use std::path::Path;
 ///
-/// # async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-/// let client = connect_with_auto_start(Path::new("/tmp/agent-console.sock")).await?;
-/// // Use client for communication with daemon
-/// # Ok(())
-/// # }
+/// async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+///     let client = connect_with_auto_start(Path::new("/tmp/agent-console.sock")).await?;
+///     // Use client for communication with daemon
+///     Ok(())
+/// }
 /// ```
 pub async fn connect_with_auto_start(socket_path: &Path) -> ClientResult<Client> {
     // Try to connect first (daemon might already be running)
@@ -266,6 +267,20 @@ fn calculate_backoff(attempt: u32) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tempfile::TempDir;
+    use tokio::net::UnixListener;
+    use tokio::time::timeout;
+
+    /// Atomic counter for generating unique socket paths across parallel tests.
+    static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    /// Generates a unique socket path within a temporary directory.
+    fn unique_socket_path(temp_dir: &TempDir, prefix: &str) -> PathBuf {
+        let count = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        temp_dir.path().join(format!("{}_{}.sock", prefix, count))
+    }
 
     #[test]
     fn test_client_error_display() {
@@ -381,5 +396,222 @@ mod tests {
         let spawn_err = ClientError::SpawnFailed(io_err);
         let debug_str = format!("{:?}", spawn_err);
         assert!(debug_str.contains("SpawnFailed"));
+    }
+
+    // =========================================================================
+    // Async connection tests (moved from tests/client_auto_start.rs)
+    // =========================================================================
+
+    /// Tests that a client can connect to an already-running daemon without spawning.
+    #[tokio::test]
+    async fn test_client_connects_to_existing_daemon() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let socket_path = unique_socket_path(&temp_dir, "existing_daemon");
+
+        // Start a mock daemon server
+        let listener = UnixListener::bind(&socket_path).expect("Failed to bind socket");
+
+        // Spawn a task to accept connections
+        let accept_handle = tokio::spawn(async move {
+            let result = timeout(Duration::from_secs(5), listener.accept()).await;
+            match result {
+                Ok(Ok((stream, _))) => {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    drop(stream);
+                    true
+                }
+                _ => false,
+            }
+        });
+
+        // Connect to the mock daemon - should succeed immediately without spawning
+        let connect_result = timeout(
+            Duration::from_secs(2),
+            connect_with_auto_start(&socket_path),
+        )
+        .await;
+
+        assert!(connect_result.is_ok(), "Connection timed out unexpectedly");
+        assert!(
+            connect_result.unwrap().is_ok(),
+            "Failed to connect to existing daemon"
+        );
+
+        // Verify the server accepted the connection
+        let accepted = accept_handle.await.expect("Accept task panicked");
+        assert!(accepted, "Server did not accept connection");
+    }
+
+    /// Tests that multiple clients can connect to the same daemon concurrently.
+    #[tokio::test]
+    async fn test_concurrent_clients_connect_to_existing_daemon() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let socket_path = unique_socket_path(&temp_dir, "concurrent");
+
+        let listener = UnixListener::bind(&socket_path).expect("Failed to bind socket");
+        let socket_path_clone = socket_path.clone();
+
+        // Spawn a task to accept multiple connections
+        let accept_handle = tokio::spawn(async move {
+            let mut connections = 0;
+            while let Ok(Ok((stream, _))) =
+                timeout(Duration::from_secs(5), listener.accept()).await
+            {
+                connections += 1;
+                tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    drop(stream);
+                });
+                if connections >= 3 {
+                    break;
+                }
+            }
+            connections
+        });
+
+        // Spawn 3 concurrent client connections
+        let mut handles = Vec::new();
+        for _ in 0..3 {
+            let path = socket_path_clone.clone();
+            let handle =
+                tokio::spawn(
+                    async move { timeout(Duration::from_secs(3), connect_with_auto_start(&path)).await },
+                );
+            handles.push(handle);
+        }
+
+        // Wait for all clients to connect
+        let mut successful_connections = 0;
+        for handle in handles {
+            if let Ok(Ok(Ok(_))) = handle.await {
+                successful_connections += 1;
+            }
+        }
+
+        assert_eq!(
+            successful_connections, 3,
+            "Not all concurrent clients connected successfully"
+        );
+
+        let accepted_count = accept_handle.await.expect("Accept task panicked");
+        assert_eq!(accepted_count, 3, "Server did not accept all connections");
+    }
+
+    /// Tests that timeout error is returned when daemon cannot be started.
+    #[tokio::test]
+    async fn test_timeout_error_when_daemon_fails_to_start() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let socket_path = unique_socket_path(&temp_dir, "timeout_test");
+
+        let start = std::time::Instant::now();
+        let result = connect_with_auto_start(&socket_path).await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_err(), "Expected connection to fail");
+
+        let err = result.unwrap_err();
+        let err_string = err.to_string();
+
+        // Accept either timeout or spawn failure
+        let is_expected_error = err_string.contains("Daemon failed to start")
+            || err_string.contains("Failed to spawn")
+            || err_string.contains("Failed to find current executable");
+
+        assert!(is_expected_error, "Unexpected error type: {}", err_string);
+
+        if err_string.contains("Daemon failed to start") {
+            assert!(
+                elapsed >= Duration::from_millis(500),
+                "Timeout happened too quickly: {:?}",
+                elapsed
+            );
+        }
+    }
+
+    /// Tests that connection succeeds after a brief startup delay.
+    #[tokio::test]
+    async fn test_connection_succeeds_after_startup_delay() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let socket_path = unique_socket_path(&temp_dir, "delayed_start");
+        let socket_path_for_listener = socket_path.clone();
+
+        let listener_handle = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            let listener =
+                UnixListener::bind(&socket_path_for_listener).expect("Failed to bind socket");
+
+            match timeout(Duration::from_secs(5), listener.accept()).await {
+                Ok(Ok((stream, _))) => {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    drop(stream);
+                    true
+                }
+                _ => false,
+            }
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let connect_result = timeout(
+            Duration::from_secs(5),
+            connect_with_auto_start(&socket_path),
+        )
+        .await;
+
+        if let Ok(Ok(_client)) = connect_result {
+            let accepted = listener_handle.await.expect("Listener task panicked");
+            assert!(accepted, "Server should have accepted the connection");
+        }
+    }
+
+    /// Tests that the Client struct properly wraps the UnixStream.
+    #[tokio::test]
+    async fn test_client_stream_access() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let socket_path = unique_socket_path(&temp_dir, "stream_access");
+
+        let listener = UnixListener::bind(&socket_path).expect("Failed to bind socket");
+
+        let accept_handle = tokio::spawn(async move {
+            let _ = timeout(Duration::from_secs(2), listener.accept()).await;
+        });
+
+        let result = timeout(
+            Duration::from_secs(2),
+            connect_with_auto_start(&socket_path),
+        )
+        .await;
+
+        if let Ok(Ok(client)) = result {
+            let _stream_ref = client.stream();
+            let _stream = client.into_stream();
+        }
+
+        let _ = accept_handle.await;
+    }
+
+    /// Tests that connecting to a non-existent socket triggers auto-start flow.
+    #[tokio::test]
+    async fn test_auto_start_triggered_on_missing_socket() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let socket_path = unique_socket_path(&temp_dir, "auto_start");
+
+        assert!(!socket_path.exists(), "Socket should not exist before test");
+
+        let result = connect_with_auto_start(&socket_path).await;
+
+        // In test environment, this will fail because spawn_daemon uses test binary
+        assert!(result.is_err(), "Expected failure in test environment");
+    }
+
+    /// Tests behavior when socket path is in a non-existent directory.
+    #[tokio::test]
+    async fn test_connection_to_invalid_path() {
+        let invalid_path = PathBuf::from("/nonexistent/directory/socket.sock");
+
+        let result = connect_with_auto_start(&invalid_path).await;
+
+        assert!(result.is_err(), "Expected failure for invalid path");
     }
 }
