@@ -13,6 +13,7 @@
 //! - `fork()` for daemon process creation
 //! - Unix signal handling (SIGTERM, SIGINT)
 
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -95,7 +96,8 @@ pub mod daemon;
 pub(crate) mod client;
 
 /// Session status enumeration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Status {
     /// Agent is actively working
     Working,
