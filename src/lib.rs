@@ -61,6 +61,32 @@ mod serde_instant {
     }
 }
 
+/// Custom serialization module for `std::time::Duration` as milliseconds.
+///
+/// This module serializes Duration values as u64 milliseconds for IPC communication.
+/// This provides a simple, language-agnostic representation that can be easily
+/// consumed by clients.
+mod serde_duration {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::time::Duration;
+
+    pub fn serialize<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Serialize as milliseconds (u64 for JSON compatibility)
+        (duration.as_millis() as u64).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let millis = u64::deserialize(deserializer)?;
+        Ok(Duration::from_millis(millis))
+    }
+}
+
 /// Daemon module providing process lifecycle management and daemonization.
 pub mod daemon;
 
