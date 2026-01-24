@@ -110,7 +110,8 @@ pub enum Status {
 }
 
 /// Agent type enumeration representing different AI coding agents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentType {
     /// Claude Code - Anthropic's AI coding assistant
     ClaudeCode,
