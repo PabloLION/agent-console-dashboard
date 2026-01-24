@@ -604,4 +604,230 @@ mod tests {
             since_diff
         );
     }
+
+    #[test]
+    fn test_instant_serializes_as_millis() {
+        // Create a wrapper struct to test the serde_instant module
+        #[derive(Serialize, Deserialize)]
+        struct InstantWrapper {
+            #[serde(with = "super::serde_instant")]
+            instant: Instant,
+        }
+
+        let now = Instant::now();
+        let wrapper = InstantWrapper { instant: now };
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&wrapper).expect("Failed to serialize Instant");
+
+        // The JSON should contain a number (milliseconds since epoch)
+        let value: serde_json::Value =
+            serde_json::from_str(&json).expect("Failed to parse JSON");
+        assert!(
+            value["instant"].is_number(),
+            "Expected instant to be serialized as a number (milliseconds)"
+        );
+
+        // The value should be a reasonable Unix timestamp in milliseconds
+        // (greater than year 2020 timestamp: 1577836800000)
+        let millis = value["instant"].as_u64().expect("Failed to get millis as u64");
+        assert!(
+            millis > 1577836800000,
+            "Timestamp should be a Unix timestamp in milliseconds (after 2020)"
+        );
+    }
+
+    #[test]
+    fn test_instant_roundtrip() {
+        #[derive(Serialize, Deserialize)]
+        struct InstantWrapper {
+            #[serde(with = "super::serde_instant")]
+            instant: Instant,
+        }
+
+        let original = Instant::now();
+        let wrapper = InstantWrapper { instant: original };
+
+        // Serialize and deserialize
+        let json = serde_json::to_string(&wrapper).expect("Failed to serialize");
+        let deserialized: InstantWrapper =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        // The deserialized instant should be approximately equal to the original
+        // (within 1 second tolerance due to timing variations)
+        let diff = if deserialized.instant > original {
+            deserialized.instant.duration_since(original)
+        } else {
+            original.duration_since(deserialized.instant)
+        };
+        assert!(
+            diff < Duration::from_secs(1),
+            "Instant roundtrip drift too large: {:?}",
+            diff
+        );
+    }
+
+    #[test]
+    fn test_instant_past_serialization() {
+        #[derive(Serialize, Deserialize)]
+        struct InstantWrapper {
+            #[serde(with = "super::serde_instant")]
+            instant: Instant,
+        }
+
+        // Test with an instant from the past (10 seconds ago)
+        let past_instant = Instant::now() - Duration::from_secs(10);
+        let wrapper = InstantWrapper {
+            instant: past_instant,
+        };
+
+        // Serialize and deserialize
+        let json = serde_json::to_string(&wrapper).expect("Failed to serialize");
+        let deserialized: InstantWrapper =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        // Verify the elapsed time is approximately preserved
+        let original_elapsed = past_instant.elapsed();
+        let deserialized_elapsed = deserialized.instant.elapsed();
+
+        // Both should show approximately 10 seconds elapsed (within 2 second tolerance)
+        assert!(
+            original_elapsed.as_secs() >= 10,
+            "Original elapsed should be at least 10 seconds"
+        );
+        assert!(
+            deserialized_elapsed.as_secs() >= 9 && deserialized_elapsed.as_secs() <= 12,
+            "Deserialized elapsed should be approximately 10 seconds, got: {:?}",
+            deserialized_elapsed
+        );
+    }
+
+    #[test]
+    fn test_duration_serializes_as_millis() {
+        #[derive(Serialize, Deserialize)]
+        struct DurationWrapper {
+            #[serde(with = "super::serde_duration")]
+            duration: Duration,
+        }
+
+        let wrapper = DurationWrapper {
+            duration: Duration::from_secs(5),
+        };
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&wrapper).expect("Failed to serialize Duration");
+
+        // The JSON should contain 5000 (milliseconds)
+        let value: serde_json::Value =
+            serde_json::from_str(&json).expect("Failed to parse JSON");
+        assert_eq!(
+            value["duration"].as_u64(),
+            Some(5000),
+            "5 seconds should serialize as 5000 milliseconds"
+        );
+    }
+
+    #[test]
+    fn test_duration_roundtrip() {
+        #[derive(Serialize, Deserialize)]
+        struct DurationWrapper {
+            #[serde(with = "super::serde_duration")]
+            duration: Duration,
+        }
+
+        let original = Duration::from_millis(12345);
+        let wrapper = DurationWrapper { duration: original };
+
+        // Serialize and deserialize
+        let json = serde_json::to_string(&wrapper).expect("Failed to serialize");
+        let deserialized: DurationWrapper =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(
+            deserialized.duration, original,
+            "Duration roundtrip should preserve exact value"
+        );
+    }
+
+    #[test]
+    fn test_duration_edge_cases() {
+        #[derive(Serialize, Deserialize)]
+        struct DurationWrapper {
+            #[serde(with = "super::serde_duration")]
+            duration: Duration,
+        }
+
+        // Test zero duration
+        let zero_wrapper = DurationWrapper {
+            duration: Duration::ZERO,
+        };
+        let json = serde_json::to_string(&zero_wrapper).expect("Failed to serialize zero");
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["duration"].as_u64(), Some(0));
+
+        // Test sub-millisecond duration (should truncate to 0)
+        let sub_ms_wrapper = DurationWrapper {
+            duration: Duration::from_micros(500),
+        };
+        let json = serde_json::to_string(&sub_ms_wrapper).expect("Failed to serialize sub-ms");
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            value["duration"].as_u64(),
+            Some(0),
+            "Sub-millisecond duration should truncate to 0"
+        );
+
+        // Test large duration (1 day)
+        let day_wrapper = DurationWrapper {
+            duration: Duration::from_secs(86400),
+        };
+        let json = serde_json::to_string(&day_wrapper).expect("Failed to serialize day");
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            value["duration"].as_u64(),
+            Some(86400000),
+            "1 day should be 86400000 milliseconds"
+        );
+    }
+
+    #[test]
+    fn test_state_transition_serialization() {
+        // Test the full StateTransition struct which uses both serde_instant and serde_duration
+        let transition = StateTransition {
+            timestamp: Instant::now(),
+            from: Status::Working,
+            to: Status::Question,
+            duration: Duration::from_secs(30),
+        };
+
+        // Serialize
+        let json = serde_json::to_string(&transition).expect("Failed to serialize StateTransition");
+
+        // Parse and verify structure
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        // timestamp should be a number (millis since epoch)
+        assert!(
+            value["timestamp"].is_number(),
+            "timestamp should be serialized as number"
+        );
+
+        // duration should be 30000 milliseconds
+        assert_eq!(
+            value["duration"].as_u64(),
+            Some(30000),
+            "duration should be 30000 ms"
+        );
+
+        // from/to should be lowercase strings
+        assert_eq!(value["from"].as_str(), Some("working"));
+        assert_eq!(value["to"].as_str(), Some("question"));
+
+        // Deserialize and verify
+        let deserialized: StateTransition =
+            serde_json::from_str(&json).expect("Failed to deserialize StateTransition");
+        assert_eq!(deserialized.from, Status::Working);
+        assert_eq!(deserialized.to, Status::Question);
+        assert_eq!(deserialized.duration, Duration::from_secs(30));
+    }
 }
