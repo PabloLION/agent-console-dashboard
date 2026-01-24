@@ -2,12 +2,26 @@
 //!
 //! This crate provides the core functionality for the Agent Console daemon,
 //! including daemon process management and configuration.
+//!
+//! # Platform Support
+//!
+//! This crate currently supports **Unix-like systems only** (Linux, macOS).
+//! Windows support is planned for a future release.
+//!
+//! Unix-specific features used:
+//! - Unix domain sockets for IPC
+//! - `fork()` for daemon process creation
+//! - Unix signal handling (SIGTERM, SIGINT)
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 /// Daemon module providing process lifecycle management and daemonization.
 pub mod daemon;
+
+/// Internal client module for daemon communication with auto-start capability.
+/// This module is not part of the public API - external tools should use CLI commands.
+pub(crate) mod client;
 
 /// Session status enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,7 +78,7 @@ pub struct Session {
     pub working_dir: PathBuf,
     /// Timestamp when status last changed.
     pub since: Instant,
-    /// History of state transitions (max 10 entries).
+    /// History of state transitions (display limited by dashboard, not enforced here).
     pub history: Vec<StateTransition>,
     /// Optional API usage tracking.
     pub api_usage: Option<ApiUsage>,
@@ -93,17 +107,7 @@ impl Session {
 
 impl Default for Session {
     fn default() -> Self {
-        Self {
-            id: String::new(),
-            agent_type: AgentType::ClaudeCode,
-            status: Status::Working,
-            working_dir: PathBuf::new(),
-            since: Instant::now(),
-            history: Vec::new(),
-            api_usage: None,
-            closed: false,
-            session_id: None,
-        }
+        Self::new(String::new(), AgentType::ClaudeCode, PathBuf::new())
     }
 }
 
