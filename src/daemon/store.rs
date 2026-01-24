@@ -383,9 +383,15 @@ impl SessionStore {
                     updated_session.status,
                     updated_session.since.elapsed().as_secs(),
                 );
-                // Use try_send to avoid blocking store operations
-                // Ignore send errors (no subscribers or channel full)
-                let _ = self.update_tx.send(update);
+                // Broadcast to subscribers; log if no receivers (expected when no subscribers)
+                match self.update_tx.send(update) {
+                    Ok(count) => {
+                        tracing::trace!("Broadcast update sent to {} subscribers", count);
+                    }
+                    Err(_) => {
+                        tracing::debug!("No subscribers for session update broadcast");
+                    }
+                }
             }
 
             Some(updated_session)
@@ -462,9 +468,15 @@ impl SessionStore {
                     closed_session.status,
                     closed_session.since.elapsed().as_secs(),
                 );
-                // Use try_send to avoid blocking store operations
-                // Ignore send errors (no subscribers or channel full)
-                let _ = self.update_tx.send(update);
+                // Broadcast to subscribers; log if no receivers (expected when no subscribers)
+                match self.update_tx.send(update) {
+                    Ok(count) => {
+                        tracing::trace!("Broadcast update sent to {} subscribers", count);
+                    }
+                    Err(_) => {
+                        tracing::debug!("No subscribers for session close broadcast");
+                    }
+                }
             }
 
             Some(closed_session)

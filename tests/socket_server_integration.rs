@@ -1285,7 +1285,7 @@ async fn test_subscriber_receives_update() {
     );
 
     // Verify UPDATE message format: UPDATE <session_id> <status> <elapsed_seconds>
-    let parts: Vec<&str> = sub_response.trim().split_whitespace().collect();
+    let parts: Vec<&str> = sub_response.split_whitespace().collect();
     assert!(
         parts.len() >= 4,
         "UPDATE message should have at least 4 parts, got: {}",
@@ -1444,7 +1444,7 @@ async fn test_multiple_subscribers() {
         match update_result {
             Ok(Ok(_)) => {
                 // Verify UPDATE message format: UPDATE <session_id> <status> <elapsed_seconds>
-                let parts: Vec<&str> = sub_response.trim().split_whitespace().collect();
+                let parts: Vec<&str> = sub_response.split_whitespace().collect();
                 assert!(
                     parts.len() >= 4,
                     "Subscriber {} UPDATE message should have at least 4 parts, got: {}",
