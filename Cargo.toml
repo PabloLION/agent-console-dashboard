@@ -15,6 +15,7 @@ socket_server = []
 clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1.49", features = ["rt-multi-thread", "signal", "macros", "sync", "net", "time", "io-util"] }
 fork = "0.6"
+serde = { version = "1", features = ["derive"] }
 tracing = "0.1"
 
 [dev-dependencies]
