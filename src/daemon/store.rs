@@ -4,16 +4,25 @@
 //! all active agent sessions. It uses `Arc<RwLock<HashMap>>` for O(1) lookups
 //! by session ID while supporting concurrent access from multiple async tasks.
 
-use crate::Session;
+use crate::{AgentType, Session, SessionUpdate, Status, StoreError};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast, RwLock};
+
+/// Default capacity for the subscriber notification channel.
+/// This allows for bursty update scenarios without dropping notifications.
+const DEFAULT_SUBSCRIBER_CHANNEL_CAPACITY: usize = 256;
 
 /// Thread-safe session store wrapping a HashMap with Arc<RwLock>.
 ///
 /// The SessionStore provides CRUD operations for managing agent sessions
 /// with safe concurrent access. Multiple async tasks can read simultaneously,
 /// while writes are exclusive.
+///
+/// The store also includes a broadcast channel for subscriber notifications.
+/// Clients can subscribe to receive [`SessionUpdate`] messages whenever a
+/// session's status changes.
 ///
 /// # Example
 ///
@@ -35,18 +44,33 @@ use tokio::sync::RwLock;
 ///     assert!(retrieved.is_some());
 /// }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SessionStore {
     /// Internal session storage wrapped in Arc<RwLock> for thread-safe access.
     sessions: Arc<RwLock<HashMap<String, Session>>>,
+    /// Broadcast channel sender for subscriber notifications.
+    /// Subscribers receive [`SessionUpdate`] messages on state changes.
+    update_tx: broadcast::Sender<SessionUpdate>,
+}
+
+impl std::fmt::Debug for SessionStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionStore")
+            .field("sessions", &self.sessions)
+            .field("subscriber_count", &self.update_tx.receiver_count())
+            .finish()
+    }
 }
 
 impl SessionStore {
     /// Creates a new empty SessionStore.
     ///
+    /// Initializes an empty session map and a broadcast channel for subscriber
+    /// notifications with the default capacity (256 messages).
+    ///
     /// # Returns
     ///
-    /// A new SessionStore instance with an empty session map.
+    /// A new SessionStore instance with an empty session map and notification channel.
     ///
     /// # Example
     ///
@@ -56,9 +80,48 @@ impl SessionStore {
     /// let store = SessionStore::new();
     /// ```
     pub fn new() -> Self {
+        let (update_tx, _rx) = broadcast::channel(DEFAULT_SUBSCRIBER_CHANNEL_CAPACITY);
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
+            update_tx,
         }
+    }
+
+    /// Subscribes to session update notifications.
+    ///
+    /// Returns a broadcast receiver that will receive [`SessionUpdate`] messages
+    /// whenever a session's status changes. Multiple subscribers can exist
+    /// simultaneously; all will receive the same updates.
+    ///
+    /// # Returns
+    ///
+    /// A `broadcast::Receiver<SessionUpdate>` for receiving notifications.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_console::daemon::store::SessionStore;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let store = SessionStore::new();
+    ///     let mut rx = store.subscribe();
+    ///     // rx.recv().await will receive SessionUpdate messages
+    /// }
+    /// ```
+    pub fn subscribe(&self) -> broadcast::Receiver<SessionUpdate> {
+        self.update_tx.subscribe()
+    }
+
+    /// Returns the number of active subscribers.
+    ///
+    /// This can be useful for monitoring or debugging purposes.
+    ///
+    /// # Returns
+    ///
+    /// The count of active broadcast receivers.
+    pub fn subscriber_count(&self) -> usize {
+        self.update_tx.receiver_count()
     }
 
     /// Retrieves a session by its unique ID.
@@ -117,6 +180,357 @@ impl SessionStore {
     pub async fn list_all(&self) -> Vec<Session> {
         let sessions = self.sessions.read().await;
         sessions.values().cloned().collect()
+    }
+
+    /// Creates a new session explicitly with provided metadata.
+    ///
+    /// This method is used for programmatic session creation where the caller
+    /// wants to ensure no existing session is overwritten. Unlike `set()`, this
+    /// method returns an error if a session with the given ID already exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique session identifier.
+    /// * `agent_type` - Type of agent (e.g., ClaudeCode).
+    /// * `working_dir` - Working directory path for this session.
+    /// * `session_id` - Optional Claude Code session ID for resume capability.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Session)` - The newly created session.
+    /// * `Err(StoreError::SessionExists)` - If a session with this ID already exists.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_console::daemon::store::SessionStore;
+    /// use agent_console::AgentType;
+    /// use std::path::PathBuf;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let store = SessionStore::new();
+    ///     let result = store.create_session(
+    ///         "session-1".to_string(),
+    ///         AgentType::ClaudeCode,
+    ///         PathBuf::from("/home/user/project"),
+    ///         Some("claude-session-abc".to_string()),
+    ///     ).await;
+    ///     assert!(result.is_ok());
+    ///
+    ///     // Attempting to create again returns error
+    ///     let result2 = store.create_session(
+    ///         "session-1".to_string(),
+    ///         AgentType::ClaudeCode,
+    ///         PathBuf::from("/home/user/project"),
+    ///         None,
+    ///     ).await;
+    ///     assert!(result2.is_err());
+    /// }
+    /// ```
+    pub async fn create_session(
+        &self,
+        id: String,
+        agent_type: AgentType,
+        working_dir: PathBuf,
+        session_id: Option<String>,
+    ) -> Result<Session, StoreError> {
+        let mut sessions = self.sessions.write().await;
+
+        // Check if session already exists
+        if sessions.contains_key(&id) {
+            return Err(StoreError::SessionExists(id));
+        }
+
+        // Create new session
+        let mut session = Session::new(id.clone(), agent_type, working_dir);
+        session.session_id = session_id;
+
+        // Insert and return clone
+        sessions.insert(id, session.clone());
+        Ok(session)
+    }
+
+    /// Gets existing session or creates new one if not found.
+    ///
+    /// This method is used for lazy session creation on first SET command.
+    /// Unlike `create_session()`, this method never fails - it always returns
+    /// a valid session. If a session with the given ID exists, it is returned.
+    /// Otherwise, a new session is created with the provided metadata.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique session identifier.
+    /// * `agent_type` - Type of agent (e.g., ClaudeCode).
+    /// * `working_dir` - Working directory path for this session.
+    /// * `session_id` - Optional Claude Code session ID for resume capability.
+    ///
+    /// # Returns
+    ///
+    /// The existing or newly created session.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_console::daemon::store::SessionStore;
+    /// use agent_console::AgentType;
+    /// use std::path::PathBuf;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let store = SessionStore::new();
+    ///
+    ///     // First call creates a new session
+    ///     let session1 = store.get_or_create_session(
+    ///         "session-1".to_string(),
+    ///         AgentType::ClaudeCode,
+    ///         PathBuf::from("/home/user/project"),
+    ///         Some("claude-session-abc".to_string()),
+    ///     ).await;
+    ///     assert_eq!(session1.id, "session-1");
+    ///
+    ///     // Second call returns the existing session
+    ///     let session2 = store.get_or_create_session(
+    ///         "session-1".to_string(),
+    ///         AgentType::ClaudeCode,
+    ///         PathBuf::from("/different/path"),  // Different path, but existing session returned
+    ///         None,
+    ///     ).await;
+    ///     assert_eq!(session2.working_dir, PathBuf::from("/home/user/project"));  // Original path preserved
+    /// }
+    /// ```
+    pub async fn get_or_create_session(
+        &self,
+        id: String,
+        agent_type: AgentType,
+        working_dir: PathBuf,
+        session_id: Option<String>,
+    ) -> Session {
+        let mut sessions = self.sessions.write().await;
+
+        // If session exists, return a clone
+        if let Some(existing) = sessions.get(&id) {
+            return existing.clone();
+        }
+
+        // Create new session
+        let mut session = Session::new(id.clone(), agent_type, working_dir);
+        session.session_id = session_id;
+
+        // Insert and return clone
+        sessions.insert(id, session.clone());
+        session
+    }
+
+    /// Updates a session's status and returns the updated session.
+    ///
+    /// This method looks up the session by ID, calls `Session::set_status()` to
+    /// update the status (which records the transition in history if the status
+    /// actually changed), and returns a clone of the updated session.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The session ID to update.
+    /// * `new_status` - The new status to set.
+    ///
+    /// # Returns
+    ///
+    /// `Some(Session)` with the updated session, or `None` if the session was not found.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_console::daemon::store::SessionStore;
+    /// use agent_console::{AgentType, Status};
+    /// use std::path::PathBuf;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let store = SessionStore::new();
+    ///
+    ///     // Create a session first
+    ///     let _ = store.create_session(
+    ///         "session-1".to_string(),
+    ///         AgentType::ClaudeCode,
+    ///         PathBuf::from("/home/user/project"),
+    ///         None,
+    ///     ).await;
+    ///
+    ///     // Update the session status
+    ///     let updated = store.update_session("session-1", Status::Attention).await;
+    ///     assert!(updated.is_some());
+    ///     assert_eq!(updated.unwrap().status, Status::Attention);
+    ///
+    ///     // Non-existent session returns None
+    ///     let missing = store.update_session("nonexistent", Status::Working).await;
+    ///     assert!(missing.is_none());
+    /// }
+    /// ```
+    pub async fn update_session(&self, id: &str, new_status: Status) -> Option<Session> {
+        let mut sessions = self.sessions.write().await;
+
+        // Get mutable reference to session, update status, return clone
+        if let Some(session) = sessions.get_mut(id) {
+            let old_status = session.status;
+            session.set_status(new_status);
+            let updated_session = session.clone();
+
+            // Broadcast notification to subscribers using non-blocking try_send
+            // Only notify if the status actually changed
+            if old_status != new_status {
+                let update = SessionUpdate::new(
+                    updated_session.id.clone(),
+                    updated_session.status,
+                    updated_session.since.elapsed().as_secs(),
+                );
+                // Use try_send to avoid blocking store operations
+                // Ignore send errors (no subscribers or channel full)
+                let _ = self.update_tx.send(update);
+            }
+
+            Some(updated_session)
+        } else {
+            None
+        }
+    }
+
+    /// Closes a session by marking it as closed.
+    ///
+    /// This method sets the session's `closed` flag to `true` and updates its
+    /// status to `Status::Closed`. The session remains in the store and can
+    /// be queried or potentially resurrected later.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The session ID to close.
+    ///
+    /// # Returns
+    ///
+    /// `Some(Session)` with the closed session, or `None` if the session was not found.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_console::daemon::store::SessionStore;
+    /// use agent_console::{AgentType, Status};
+    /// use std::path::PathBuf;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let store = SessionStore::new();
+    ///
+    ///     // Create a session first
+    ///     let _ = store.create_session(
+    ///         "session-1".to_string(),
+    ///         AgentType::ClaudeCode,
+    ///         PathBuf::from("/home/user/project"),
+    ///         None,
+    ///     ).await;
+    ///
+    ///     // Close the session
+    ///     let closed = store.close_session("session-1").await;
+    ///     assert!(closed.is_some());
+    ///     let session = closed.unwrap();
+    ///     assert!(session.closed);
+    ///     assert_eq!(session.status, Status::Closed);
+    ///
+    ///     // Session is still in the store
+    ///     let retrieved = store.get("session-1").await;
+    ///     assert!(retrieved.is_some());
+    ///     assert!(retrieved.unwrap().closed);
+    ///
+    ///     // Non-existent session returns None
+    ///     let missing = store.close_session("nonexistent").await;
+    ///     assert!(missing.is_none());
+    /// }
+    /// ```
+    pub async fn close_session(&self, id: &str) -> Option<Session> {
+        let mut sessions = self.sessions.write().await;
+
+        // Get mutable reference to session, close it, return clone
+        if let Some(session) = sessions.get_mut(id) {
+            let old_status = session.status;
+            session.closed = true;
+            session.set_status(Status::Closed);
+            let closed_session = session.clone();
+
+            // Broadcast notification to subscribers using non-blocking try_send
+            // Only notify if the status actually changed (not already closed)
+            if old_status != Status::Closed {
+                let update = SessionUpdate::new(
+                    closed_session.id.clone(),
+                    closed_session.status,
+                    closed_session.since.elapsed().as_secs(),
+                );
+                // Use try_send to avoid blocking store operations
+                // Ignore send errors (no subscribers or channel full)
+                let _ = self.update_tx.send(update);
+            }
+
+            Some(closed_session)
+        } else {
+            None
+        }
+    }
+
+    /// Permanently removes a session from the store.
+    ///
+    /// Unlike `close_session()`, which marks a session as closed but keeps it
+    /// in the store for historical purposes, this method completely removes
+    /// the session from the store. Use this for cleanup of sessions that are
+    /// no longer needed.
+    ///
+    /// This operation is idempotent - removing a non-existent session
+    /// returns `None` without error.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The session ID to remove.
+    ///
+    /// # Returns
+    ///
+    /// `Some(Session)` with the removed session, or `None` if not found.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_console::daemon::store::SessionStore;
+    /// use agent_console::AgentType;
+    /// use std::path::PathBuf;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let store = SessionStore::new();
+    ///
+    ///     // Create a session first
+    ///     let _ = store.create_session(
+    ///         "session-1".to_string(),
+    ///         AgentType::ClaudeCode,
+    ///         PathBuf::from("/home/user/project"),
+    ///         None,
+    ///     ).await;
+    ///
+    ///     // Remove the session permanently
+    ///     let removed = store.remove_session("session-1").await;
+    ///     assert!(removed.is_some());
+    ///     assert_eq!(removed.unwrap().id, "session-1");
+    ///
+    ///     // Session is no longer in the store
+    ///     let retrieved = store.get("session-1").await;
+    ///     assert!(retrieved.is_none());
+    ///
+    ///     // Also no longer appears in list_all
+    ///     let sessions = store.list_all().await;
+    ///     assert!(sessions.is_empty());
+    ///
+    ///     // Non-existent session returns None
+    ///     let missing = store.remove_session("nonexistent").await;
+    ///     assert!(missing.is_none());
+    /// }
+    /// ```
+    pub async fn remove_session(&self, id: &str) -> Option<Session> {
+        let mut sessions = self.sessions.write().await;
+        sessions.remove(id)
     }
 }
 
@@ -384,6 +798,848 @@ mod tests {
         let debug_str = format!("{:?}", store);
         // Debug output should contain "SessionStore"
         assert!(debug_str.contains("SessionStore"));
+    }
+
+    // =========================================================================
+    // Lifecycle Method Tests: create_session
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_create_session() {
+        let store = SessionStore::new();
+
+        // Create session successfully
+        let result = store
+            .create_session(
+                "new-session".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/home/user/project"),
+                Some("claude-session-123".to_string()),
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let session = result.unwrap();
+        assert_eq!(session.id, "new-session");
+        assert_eq!(session.agent_type, AgentType::ClaudeCode);
+        assert_eq!(session.working_dir, PathBuf::from("/home/user/project"));
+        assert_eq!(session.session_id, Some("claude-session-123".to_string()));
+        assert!(!session.closed);
+
+        // Verify session is in store
+        let retrieved = store.get("new-session").await;
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().id, "new-session");
+    }
+
+    #[tokio::test]
+    async fn test_create_session_without_session_id() {
+        let store = SessionStore::new();
+
+        // Create session without session_id
+        let result = store
+            .create_session(
+                "no-session-id".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let session = result.unwrap();
+        assert_eq!(session.id, "no-session-id");
+        assert!(session.session_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_create_session_already_exists_error() {
+        use crate::StoreError;
+
+        let store = SessionStore::new();
+
+        // Create first session
+        let result1 = store
+            .create_session(
+                "duplicate-id".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/path/1"),
+                None,
+            )
+            .await;
+        assert!(result1.is_ok());
+
+        // Attempt to create session with same ID
+        let result2 = store
+            .create_session(
+                "duplicate-id".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/path/2"),
+                None,
+            )
+            .await;
+
+        assert!(result2.is_err());
+        match result2.unwrap_err() {
+            StoreError::SessionExists(id) => {
+                assert_eq!(id, "duplicate-id");
+            }
+            other => panic!("Expected SessionExists error, got: {:?}", other),
+        }
+
+        // Verify original session is unchanged
+        let retrieved = store.get("duplicate-id").await.unwrap();
+        assert_eq!(retrieved.working_dir, PathBuf::from("/path/1"));
+    }
+
+    #[tokio::test]
+    async fn test_create_session_explicit_vs_set() {
+        // Verify create_session() differs from set() - it doesn't overwrite
+        let store = SessionStore::new();
+
+        // First use set() to create a session
+        let session1 = create_test_session("test-id");
+        store.set("test-id".to_string(), session1).await;
+
+        // Now try create_session() - should fail
+        let result = store
+            .create_session(
+                "test-id".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/new/path"),
+                None,
+            )
+            .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_create_session_multiple_unique() {
+        let store = SessionStore::new();
+
+        // Create multiple unique sessions
+        for i in 0..5 {
+            let result = store
+                .create_session(
+                    format!("unique-{}", i),
+                    AgentType::ClaudeCode,
+                    PathBuf::from(format!("/path/{}", i)),
+                    None,
+                )
+                .await;
+            assert!(result.is_ok(), "Failed to create session unique-{}", i);
+        }
+
+        // Verify all sessions exist
+        let sessions = store.list_all().await;
+        assert_eq!(sessions.len(), 5);
+    }
+
+    // =========================================================================
+    // Lifecycle Method Tests: get_or_create_session
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_get_or_create_session_creates_new() {
+        let store = SessionStore::new();
+
+        // Call get_or_create_session for a new ID
+        let session = store
+            .get_or_create_session(
+                "new-session".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/home/user/project"),
+                Some("claude-session-123".to_string()),
+            )
+            .await;
+
+        // Verify session was created with correct data
+        assert_eq!(session.id, "new-session");
+        assert_eq!(session.agent_type, AgentType::ClaudeCode);
+        assert_eq!(session.working_dir, PathBuf::from("/home/user/project"));
+        assert_eq!(session.session_id, Some("claude-session-123".to_string()));
+        assert!(!session.closed);
+
+        // Verify session is in store
+        let retrieved = store.get("new-session").await;
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().id, "new-session");
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_session_returns_existing() {
+        let store = SessionStore::new();
+
+        // First create a session
+        let original = store
+            .get_or_create_session(
+                "existing-session".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/original/path"),
+                Some("original-session-id".to_string()),
+            )
+            .await;
+
+        // Now call get_or_create_session with the same ID but different metadata
+        let retrieved = store
+            .get_or_create_session(
+                "existing-session".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/different/path"), // Different path
+                Some("different-session-id".to_string()), // Different session_id
+            )
+            .await;
+
+        // Verify original session is returned, not modified
+        assert_eq!(retrieved.id, "existing-session");
+        assert_eq!(retrieved.working_dir, PathBuf::from("/original/path"));
+        assert_eq!(
+            retrieved.session_id,
+            Some("original-session-id".to_string())
+        );
+
+        // Verify store still has original
+        let from_store = store.get("existing-session").await.unwrap();
+        assert_eq!(from_store.working_dir, original.working_dir);
+        assert_eq!(from_store.session_id, original.session_id);
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_session_without_session_id() {
+        let store = SessionStore::new();
+
+        // Create session without session_id
+        let session = store
+            .get_or_create_session(
+                "no-session-id".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        assert_eq!(session.id, "no-session-id");
+        assert!(session.session_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_session_after_set() {
+        let store = SessionStore::new();
+
+        // First use set() to create a session
+        let session1 = create_test_session("test-id");
+        store.set("test-id".to_string(), session1).await;
+
+        // Now call get_or_create_session - should return existing
+        let session2 = store
+            .get_or_create_session(
+                "test-id".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/new/path"),
+                None,
+            )
+            .await;
+
+        // Should return the original session
+        assert_eq!(session2.id, "test-id");
+        assert_eq!(session2.working_dir, PathBuf::from("/home/user/test-id")); // Original path
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_session_after_create_session() {
+        let store = SessionStore::new();
+
+        // First use create_session() to create a session
+        let result = store
+            .create_session(
+                "test-id".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/original/path"),
+                Some("original-id".to_string()),
+            )
+            .await;
+        assert!(result.is_ok());
+
+        // Now call get_or_create_session - should return existing
+        let session = store
+            .get_or_create_session(
+                "test-id".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/new/path"),
+                Some("new-id".to_string()),
+            )
+            .await;
+
+        // Should return the original session
+        assert_eq!(session.id, "test-id");
+        assert_eq!(session.working_dir, PathBuf::from("/original/path"));
+        assert_eq!(session.session_id, Some("original-id".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_session_multiple_unique() {
+        let store = SessionStore::new();
+
+        // Create multiple unique sessions using get_or_create_session
+        for i in 0..5 {
+            let session = store
+                .get_or_create_session(
+                    format!("session-{}", i),
+                    AgentType::ClaudeCode,
+                    PathBuf::from(format!("/path/{}", i)),
+                    None,
+                )
+                .await;
+            assert_eq!(session.id, format!("session-{}", i));
+        }
+
+        // Verify all sessions exist
+        let sessions = store.list_all().await;
+        assert_eq!(sessions.len(), 5);
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_session_idempotent() {
+        let store = SessionStore::new();
+
+        // Call get_or_create_session multiple times with same ID
+        let session1 = store
+            .get_or_create_session(
+                "idempotent-test".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/path/1"),
+                None,
+            )
+            .await;
+
+        let session2 = store
+            .get_or_create_session(
+                "idempotent-test".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/path/2"),
+                None,
+            )
+            .await;
+
+        let session3 = store
+            .get_or_create_session(
+                "idempotent-test".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/path/3"),
+                None,
+            )
+            .await;
+
+        // All should have the original path (first call's metadata)
+        assert_eq!(session1.working_dir, PathBuf::from("/path/1"));
+        assert_eq!(session2.working_dir, PathBuf::from("/path/1"));
+        assert_eq!(session3.working_dir, PathBuf::from("/path/1"));
+
+        // Store should only have one session
+        let sessions = store.list_all().await;
+        assert_eq!(sessions.len(), 1);
+    }
+
+    // =========================================================================
+    // Lifecycle Method Tests: update_session
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_update_session() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Create a session first
+        let _ = store
+            .create_session(
+                "update-test".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/home/user/project"),
+                None,
+            )
+            .await;
+
+        // Update the session status
+        let updated = store.update_session("update-test", Status::Attention).await;
+
+        assert!(updated.is_some());
+        let session = updated.unwrap();
+        assert_eq!(session.id, "update-test");
+        assert_eq!(session.status, Status::Attention);
+        // Should have one transition recorded (Working -> Attention)
+        assert_eq!(session.history.len(), 1);
+        assert_eq!(session.history[0].from, Status::Working);
+        assert_eq!(session.history[0].to, Status::Attention);
+    }
+
+    #[tokio::test]
+    async fn test_update_session_not_found() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Try to update a non-existent session
+        let result = store.update_session("nonexistent", Status::Attention).await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_update_session_same_status_no_transition() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Create a session (starts with Working status)
+        let _ = store
+            .create_session(
+                "same-status".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Update to the same status (Working)
+        let updated = store.update_session("same-status", Status::Working).await;
+
+        assert!(updated.is_some());
+        let session = updated.unwrap();
+        assert_eq!(session.status, Status::Working);
+        // No transition should be recorded since status didn't change
+        assert!(session.history.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_update_session_multiple_transitions() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Create a session
+        let _ = store
+            .create_session(
+                "multi-transition".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Perform multiple status transitions
+        let _ = store
+            .update_session("multi-transition", Status::Attention)
+            .await;
+        let _ = store
+            .update_session("multi-transition", Status::Question)
+            .await;
+        let result = store
+            .update_session("multi-transition", Status::Working)
+            .await;
+
+        assert!(result.is_some());
+        let session = result.unwrap();
+        assert_eq!(session.status, Status::Working);
+        assert_eq!(session.history.len(), 3);
+
+        // Verify transition sequence
+        assert_eq!(session.history[0].from, Status::Working);
+        assert_eq!(session.history[0].to, Status::Attention);
+        assert_eq!(session.history[1].from, Status::Attention);
+        assert_eq!(session.history[1].to, Status::Question);
+        assert_eq!(session.history[2].from, Status::Question);
+        assert_eq!(session.history[2].to, Status::Working);
+    }
+
+    #[tokio::test]
+    async fn test_update_session_persists_in_store() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Create a session
+        let _ = store
+            .create_session(
+                "persist-test".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Update status
+        let _ = store
+            .update_session("persist-test", Status::Question)
+            .await;
+
+        // Verify the update persisted by reading from store again
+        let retrieved = store.get("persist-test").await;
+        assert!(retrieved.is_some());
+        let session = retrieved.unwrap();
+        assert_eq!(session.status, Status::Question);
+        assert_eq!(session.history.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_update_session_preserves_metadata() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Create a session with metadata
+        let _ = store
+            .create_session(
+                "preserve-meta".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/specific/path"),
+                Some("claude-session-xyz".to_string()),
+            )
+            .await;
+
+        // Update status
+        let updated = store
+            .update_session("preserve-meta", Status::Attention)
+            .await;
+
+        assert!(updated.is_some());
+        let session = updated.unwrap();
+
+        // Verify metadata is preserved
+        assert_eq!(session.id, "preserve-meta");
+        assert_eq!(session.agent_type, AgentType::ClaudeCode);
+        assert_eq!(session.working_dir, PathBuf::from("/specific/path"));
+        assert_eq!(session.session_id, Some("claude-session-xyz".to_string()));
+        assert_eq!(session.status, Status::Attention);
+    }
+
+    // =========================================================================
+    // Lifecycle Method Tests: close_session
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_close_session() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Create a session first
+        let _ = store
+            .create_session(
+                "close-test".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/home/user/project"),
+                None,
+            )
+            .await;
+
+        // Close the session
+        let closed = store.close_session("close-test").await;
+
+        assert!(closed.is_some());
+        let session = closed.unwrap();
+        assert_eq!(session.id, "close-test");
+        assert!(session.closed);
+        assert_eq!(session.status, Status::Closed);
+    }
+
+    #[tokio::test]
+    async fn test_close_session_not_found() {
+        let store = SessionStore::new();
+
+        // Try to close a non-existent session
+        let result = store.close_session("nonexistent").await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_close_session_persists_in_store() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Create a session
+        let _ = store
+            .create_session(
+                "persist-close".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Close the session
+        let _ = store.close_session("persist-close").await;
+
+        // Session should still be in the store
+        let retrieved = store.get("persist-close").await;
+        assert!(retrieved.is_some());
+        let session = retrieved.unwrap();
+        assert!(session.closed);
+        assert_eq!(session.status, Status::Closed);
+    }
+
+    #[tokio::test]
+    async fn test_close_session_records_transition() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Create a session (starts with Working status)
+        let _ = store
+            .create_session(
+                "transition-close".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Close the session
+        let closed = store.close_session("transition-close").await;
+
+        assert!(closed.is_some());
+        let session = closed.unwrap();
+        // Should have one transition recorded (Working -> Closed)
+        assert_eq!(session.history.len(), 1);
+        assert_eq!(session.history[0].from, Status::Working);
+        assert_eq!(session.history[0].to, Status::Closed);
+    }
+
+    #[tokio::test]
+    async fn test_close_session_preserves_metadata() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Create a session with metadata
+        let _ = store
+            .create_session(
+                "preserve-close".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/specific/path"),
+                Some("claude-session-xyz".to_string()),
+            )
+            .await;
+
+        // Close the session
+        let closed = store.close_session("preserve-close").await;
+
+        assert!(closed.is_some());
+        let session = closed.unwrap();
+
+        // Verify metadata is preserved
+        assert_eq!(session.id, "preserve-close");
+        assert_eq!(session.agent_type, AgentType::ClaudeCode);
+        assert_eq!(session.working_dir, PathBuf::from("/specific/path"));
+        assert_eq!(session.session_id, Some("claude-session-xyz".to_string()));
+        assert!(session.closed);
+        assert_eq!(session.status, Status::Closed);
+    }
+
+    #[tokio::test]
+    async fn test_close_session_idempotent() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Create a session
+        let _ = store
+            .create_session(
+                "idempotent-close".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Close the session twice
+        let closed1 = store.close_session("idempotent-close").await;
+        let closed2 = store.close_session("idempotent-close").await;
+
+        // Both calls should succeed
+        assert!(closed1.is_some());
+        assert!(closed2.is_some());
+
+        // Session should still be closed
+        let session = closed2.unwrap();
+        assert!(session.closed);
+        assert_eq!(session.status, Status::Closed);
+
+        // Only one transition recorded (second close has same status, so no transition)
+        assert_eq!(session.history.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_close_session_list_all_includes_closed() {
+        let store = SessionStore::new();
+
+        // Create two sessions
+        let _ = store
+            .create_session(
+                "session-1".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/path/1"),
+                None,
+            )
+            .await;
+        let _ = store
+            .create_session(
+                "session-2".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/path/2"),
+                None,
+            )
+            .await;
+
+        // Close one session
+        let _ = store.close_session("session-1").await;
+
+        // list_all should include both sessions
+        let sessions = store.list_all().await;
+        assert_eq!(sessions.len(), 2);
+
+        // Find the closed session
+        let closed_session = sessions.iter().find(|s| s.id == "session-1");
+        assert!(closed_session.is_some());
+        assert!(closed_session.unwrap().closed);
+
+        // Find the active session
+        let active_session = sessions.iter().find(|s| s.id == "session-2");
+        assert!(active_session.is_some());
+        assert!(!active_session.unwrap().closed);
+    }
+
+    // =========================================================================
+    // Lifecycle Method Tests: remove_session
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_remove_session() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+
+        // Create three sessions
+        let _ = store
+            .create_session(
+                "session-to-remove".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/path/remove"),
+                None,
+            )
+            .await;
+        let _ = store
+            .create_session(
+                "session-to-close".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/path/close"),
+                None,
+            )
+            .await;
+        let _ = store
+            .create_session(
+                "session-active".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/path/active"),
+                None,
+            )
+            .await;
+
+        // Close one session (should still appear in list_all)
+        let closed = store.close_session("session-to-close").await;
+        assert!(closed.is_some());
+        assert!(closed.unwrap().closed);
+
+        // Remove one session (should NOT appear in list_all)
+        let removed = store.remove_session("session-to-remove").await;
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().id, "session-to-remove");
+
+        // Verify list_all behavior:
+        // - Closed sessions STILL appear in list_all
+        // - Removed sessions do NOT appear in list_all
+        let sessions = store.list_all().await;
+        assert_eq!(sessions.len(), 2);
+
+        // Find the closed session (should be present)
+        let closed_session = sessions.iter().find(|s| s.id == "session-to-close");
+        assert!(closed_session.is_some());
+        assert!(closed_session.unwrap().closed);
+        assert_eq!(closed_session.unwrap().status, Status::Closed);
+
+        // Find the active session (should be present)
+        let active_session = sessions.iter().find(|s| s.id == "session-active");
+        assert!(active_session.is_some());
+        assert!(!active_session.unwrap().closed);
+
+        // The removed session should NOT be in list_all
+        let removed_session = sessions.iter().find(|s| s.id == "session-to-remove");
+        assert!(removed_session.is_none());
+
+        // Also verify get returns None for removed session
+        assert!(store.get("session-to-remove").await.is_none());
+
+        // But get still works for closed session
+        assert!(store.get("session-to-close").await.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_remove_session_not_found() {
+        let store = SessionStore::new();
+
+        // Try to remove a non-existent session
+        let result = store.remove_session("nonexistent").await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_remove_session_idempotent() {
+        let store = SessionStore::new();
+
+        // Create a session
+        let _ = store
+            .create_session(
+                "to-remove".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // First remove succeeds
+        let removed1 = store.remove_session("to-remove").await;
+        assert!(removed1.is_some());
+
+        // Second remove returns None (idempotent)
+        let removed2 = store.remove_session("to-remove").await;
+        assert!(removed2.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_remove_session_preserves_data() {
+        let store = SessionStore::new();
+
+        // Create a session with specific data
+        let _ = store
+            .create_session(
+                "data-session".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/specific/path"),
+                Some("claude-session-xyz".to_string()),
+            )
+            .await;
+
+        // Remove the session
+        let removed = store.remove_session("data-session").await;
+
+        // Verify the returned session has all the original data
+        assert!(removed.is_some());
+        let session = removed.unwrap();
+        assert_eq!(session.id, "data-session");
+        assert_eq!(session.agent_type, AgentType::ClaudeCode);
+        assert_eq!(session.working_dir, PathBuf::from("/specific/path"));
+        assert_eq!(session.session_id, Some("claude-session-xyz".to_string()));
     }
 
     // =========================================================================
@@ -693,5 +1949,343 @@ mod tests {
             assert!(store3.get(key).await.is_some());
             assert!(store4.get(key).await.is_some());
         }
+    }
+
+    // =========================================================================
+    // Subscriber Channel Tests
+    // =========================================================================
+
+    #[test]
+    fn test_store_new_initializes_subscriber_channel() {
+        let store = SessionStore::new();
+        // Initially, no subscribers (the receiver from channel creation is dropped)
+        assert_eq!(store.subscriber_count(), 0);
+    }
+
+    #[test]
+    fn test_store_subscribe_returns_receiver() {
+        let store = SessionStore::new();
+        let _rx = store.subscribe();
+        // After subscribing, we should have one subscriber
+        assert_eq!(store.subscriber_count(), 1);
+    }
+
+    #[test]
+    fn test_store_multiple_subscribers() {
+        let store = SessionStore::new();
+        let _rx1 = store.subscribe();
+        let _rx2 = store.subscribe();
+        let _rx3 = store.subscribe();
+        // After multiple subscribes, count should match
+        assert_eq!(store.subscriber_count(), 3);
+    }
+
+    #[test]
+    fn test_store_subscriber_dropped_decrements_count() {
+        let store = SessionStore::new();
+        let rx1 = store.subscribe();
+        let rx2 = store.subscribe();
+        assert_eq!(store.subscriber_count(), 2);
+
+        // Drop one receiver
+        drop(rx1);
+        assert_eq!(store.subscriber_count(), 1);
+
+        // Drop the other
+        drop(rx2);
+        assert_eq!(store.subscriber_count(), 0);
+    }
+
+    #[test]
+    fn test_store_clones_share_subscriber_channel() {
+        let store = SessionStore::new();
+        let cloned = store.clone();
+
+        // Subscribe through original
+        let _rx1 = store.subscribe();
+        assert_eq!(store.subscriber_count(), 1);
+        assert_eq!(cloned.subscriber_count(), 1); // Clone sees same count
+
+        // Subscribe through clone
+        let _rx2 = cloned.subscribe();
+        assert_eq!(store.subscriber_count(), 2);
+        assert_eq!(cloned.subscriber_count(), 2); // Both see same count
+    }
+
+    #[test]
+    fn test_store_debug_includes_subscriber_count() {
+        let store = SessionStore::new();
+        let debug_str = format!("{:?}", store);
+        // Debug output should contain "SessionStore" and subscriber count info
+        assert!(debug_str.contains("SessionStore"));
+        assert!(debug_str.contains("subscriber_count"));
+    }
+
+    // =========================================================================
+    // Subscriber Notification Broadcasting Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_subscriber_receives_update_on_status_change() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+        let mut rx = store.subscribe();
+
+        // Create a session first
+        let _ = store
+            .create_session(
+                "notify-test".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/home/user/project"),
+                None,
+            )
+            .await;
+
+        // Update the session status
+        let _ = store.update_session("notify-test", Status::Attention).await;
+
+        // Subscriber should receive the notification
+        let update = rx.try_recv();
+        assert!(update.is_ok(), "Subscriber should receive update notification");
+        let update = update.unwrap();
+        assert_eq!(update.session_id, "notify-test");
+        assert_eq!(update.status, Status::Attention);
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_no_notification_on_same_status() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+        let mut rx = store.subscribe();
+
+        // Create a session (starts with Working status)
+        let _ = store
+            .create_session(
+                "same-status-notify".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Update to the same status (Working)
+        let _ = store
+            .update_session("same-status-notify", Status::Working)
+            .await;
+
+        // Subscriber should NOT receive a notification
+        let update = rx.try_recv();
+        assert!(
+            update.is_err(),
+            "Subscriber should not receive notification when status unchanged"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_receives_notification_on_close() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+        let mut rx = store.subscribe();
+
+        // Create a session
+        let _ = store
+            .create_session(
+                "close-notify".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Close the session
+        let _ = store.close_session("close-notify").await;
+
+        // Subscriber should receive the notification
+        let update = rx.try_recv();
+        assert!(
+            update.is_ok(),
+            "Subscriber should receive notification on close"
+        );
+        let update = update.unwrap();
+        assert_eq!(update.session_id, "close-notify");
+        assert_eq!(update.status, Status::Closed);
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_no_notification_on_already_closed() {
+        let store = SessionStore::new();
+
+        // Create and close a session
+        let _ = store
+            .create_session(
+                "already-closed".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+        let _ = store.close_session("already-closed").await;
+
+        // Subscribe after first close
+        let mut rx = store.subscribe();
+
+        // Try to close again
+        let _ = store.close_session("already-closed").await;
+
+        // Subscriber should NOT receive a notification (already closed)
+        let update = rx.try_recv();
+        assert!(
+            update.is_err(),
+            "Subscriber should not receive notification when already closed"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_multiple_updates_receive_all() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+        let mut rx = store.subscribe();
+
+        // Create a session
+        let _ = store
+            .create_session(
+                "multi-update".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Perform multiple status transitions
+        let _ = store
+            .update_session("multi-update", Status::Attention)
+            .await;
+        let _ = store
+            .update_session("multi-update", Status::Question)
+            .await;
+        let _ = store.close_session("multi-update").await;
+
+        // Subscriber should receive all three notifications
+        let update1 = rx.try_recv();
+        assert!(update1.is_ok());
+        assert_eq!(update1.unwrap().status, Status::Attention);
+
+        let update2 = rx.try_recv();
+        assert!(update2.is_ok());
+        assert_eq!(update2.unwrap().status, Status::Question);
+
+        let update3 = rx.try_recv();
+        assert!(update3.is_ok());
+        assert_eq!(update3.unwrap().status, Status::Closed);
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_multiple_subscribers_all_notified() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+        let mut rx1 = store.subscribe();
+        let mut rx2 = store.subscribe();
+        let mut rx3 = store.subscribe();
+
+        // Create a session
+        let _ = store
+            .create_session(
+                "multi-subscriber".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Update session status
+        let _ = store
+            .update_session("multi-subscriber", Status::Attention)
+            .await;
+
+        // All subscribers should receive the notification
+        let update1 = rx1.try_recv();
+        let update2 = rx2.try_recv();
+        let update3 = rx3.try_recv();
+
+        assert!(update1.is_ok(), "Subscriber 1 should receive notification");
+        assert!(update2.is_ok(), "Subscriber 2 should receive notification");
+        assert!(update3.is_ok(), "Subscriber 3 should receive notification");
+
+        // All should have the same content
+        assert_eq!(update1.unwrap().status, Status::Attention);
+        assert_eq!(update2.unwrap().status, Status::Attention);
+        assert_eq!(update3.unwrap().status, Status::Attention);
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_notification_does_not_block_without_subscribers() {
+        use crate::Status;
+
+        let store = SessionStore::new();
+        // No subscribers
+
+        // Create a session
+        let _ = store
+            .create_session(
+                "no-subscriber".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Update session status - should not block or panic even without subscribers
+        let result = store
+            .update_session("no-subscriber", Status::Attention)
+            .await;
+        assert!(result.is_some());
+
+        // Close session - should also work
+        let closed = store.close_session("no-subscriber").await;
+        assert!(closed.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_subscriber_update_contains_correct_elapsed_seconds() {
+        use crate::Status;
+        use std::time::Duration;
+
+        let store = SessionStore::new();
+        let mut rx = store.subscribe();
+
+        // Create a session
+        let _ = store
+            .create_session(
+                "elapsed-test".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/test"),
+                None,
+            )
+            .await;
+
+        // Wait a short time
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Update session status
+        let _ = store
+            .update_session("elapsed-test", Status::Attention)
+            .await;
+
+        // Subscriber should receive notification with elapsed_seconds >= 0
+        let update = rx.try_recv();
+        assert!(update.is_ok());
+        let update = update.unwrap();
+        // Elapsed seconds should be 0 or small (since we just changed status)
+        // The elapsed is calculated from the updated 'since' timestamp,
+        // so right after status change it should be very small
+        assert!(
+            update.elapsed_seconds < 5,
+            "Elapsed seconds should be small right after status change"
+        );
     }
 }

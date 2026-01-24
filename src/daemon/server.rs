@@ -24,11 +24,14 @@
 //! ```
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::broadcast;
+
+use crate::daemon::store::SessionStore;
+use crate::{AgentType, Status};
 
 /// Unix socket server for daemon IPC.
 ///
@@ -43,6 +46,8 @@ pub struct SocketServer {
     socket_path: String,
     /// The Unix listener, set after start() is called
     listener: Option<UnixListener>,
+    /// Thread-safe session store for managing agent sessions
+    store: SessionStore,
 }
 
 impl SocketServer {
@@ -67,6 +72,7 @@ impl SocketServer {
         Self {
             socket_path,
             listener: None,
+            store: SessionStore::new(),
         }
     }
 
@@ -162,8 +168,9 @@ impl SocketServer {
             match listener.accept().await {
                 Ok((stream, _addr)) => {
                     tracing::debug!("Accepted new client connection");
+                    let store = self.store.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = handle_client(stream).await {
+                        if let Err(e) = handle_client(stream, store).await {
                             tracing::warn!("Client handler error: {}", e);
                         }
                     });
@@ -218,8 +225,9 @@ impl SocketServer {
                     match result {
                         Ok((stream, _addr)) => {
                             tracing::debug!("Accepted new client connection");
+                            let store = self.store.clone();
                             tokio::spawn(async move {
-                                if let Err(e) = handle_client(stream).await {
+                                if let Err(e) = handle_client(stream, store).await {
                                     tracing::warn!("Client handler error: {}", e);
                                 }
                             });
@@ -253,19 +261,54 @@ impl Drop for SocketServer {
     }
 }
 
+/// Parses a status string into a Status enum.
+///
+/// Supported values (case-insensitive):
+/// - "working" -> Status::Working
+/// - "attention" -> Status::Attention
+/// - "question" -> Status::Question
+/// - "closed" -> Status::Closed
+fn parse_status(s: &str) -> Option<Status> {
+    match s.to_lowercase().as_str() {
+        "working" => Some(Status::Working),
+        "attention" => Some(Status::Attention),
+        "question" => Some(Status::Question),
+        "closed" => Some(Status::Closed),
+        _ => None,
+    }
+}
+
+/// Formats a Status enum as a lowercase string.
+fn format_status(status: Status) -> &'static str {
+    match status {
+        Status::Working => "working",
+        Status::Attention => "attention",
+        Status::Question => "question",
+        Status::Closed => "closed",
+    }
+}
+
 /// Handles a single client connection.
 ///
-/// This function reads lines from the client and echoes them back.
-/// Protocol parsing is handled elsewhere (E003 scope).
+/// This function reads commands from the client and processes them:
+/// - SET <session_id> <status> [working_dir] - Create or update session
+/// - RM <session_id> - Close session (mark as closed, don't remove)
+/// - LIST - List all sessions
+/// - GET <session_id> - Get a single session
+/// - SUB - Subscribe to session updates
 ///
 /// # Arguments
 ///
 /// * `stream` - The Unix stream connected to the client.
+/// * `store` - The session store for managing agent sessions.
 ///
 /// # Errors
 ///
 /// Returns an error if reading or writing fails.
-async fn handle_client(stream: UnixStream) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn handle_client(
+    stream: UnixStream,
+    store: SessionStore,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
@@ -282,9 +325,206 @@ async fn handle_client(stream: UnixStream) -> Result<(), Box<dyn std::error::Err
             break;
         }
 
-        // Echo back the line (protocol parsing is E003 scope)
-        writer.write_all(line.as_bytes()).await?;
+        let trimmed = line.trim();
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+
+        if parts.is_empty() {
+            writer.write_all(b"ERR empty command\n").await?;
+            writer.flush().await?;
+            continue;
+        }
+
+        let command = parts[0].to_uppercase();
+        let response = match command.as_str() {
+            "SET" => handle_set_command(&parts[1..], &store).await,
+            "RM" => handle_rm_command(&parts[1..], &store).await,
+            "LIST" => handle_list_command(&store).await,
+            "GET" => handle_get_command(&parts[1..], &store).await,
+            "SUB" => {
+                // Subscribe mode: send UPDATE notifications to client
+                handle_sub_command(&store, &mut writer).await?;
+                // After SUB returns (client disconnected or error), exit the loop
+                break;
+            }
+            _ => format!("ERR unknown command: {}\n", parts[0]),
+        };
+
+        writer.write_all(response.as_bytes()).await?;
         writer.flush().await?;
+    }
+
+    Ok(())
+}
+
+/// Handles the SET command: SET <session_id> <status> [working_dir]
+///
+/// Creates a new session if it doesn't exist, or updates the status if it does.
+async fn handle_set_command(args: &[&str], store: &SessionStore) -> String {
+    if args.len() < 2 {
+        return "ERR SET requires: <session_id> <status> [working_dir]\n".to_string();
+    }
+
+    let session_id = args[0];
+    let status_str = args[1];
+    let working_dir = if args.len() > 2 {
+        PathBuf::from(args[2])
+    } else {
+        PathBuf::from("unknown")
+    };
+
+    let status = match parse_status(status_str) {
+        Some(s) => s,
+        None => {
+            return format!(
+                "ERR invalid status: {} (expected: working, attention, question, closed)\n",
+                status_str
+            );
+        }
+    };
+
+    // Get or create the session (lazy creation)
+    let _session = store
+        .get_or_create_session(
+            session_id.to_string(),
+            AgentType::ClaudeCode,
+            working_dir,
+            None, // session_id for resume capability not provided in basic command
+        )
+        .await;
+
+    // Update the session status (this will notify subscribers if status changed)
+    match store.update_session(session_id, status).await {
+        Some(session) => {
+            format!(
+                "OK {} {}\n",
+                session.id,
+                format_status(session.status)
+            )
+        }
+        None => {
+            // This shouldn't happen since we just created/got the session, but handle it
+            format!("ERR session not found: {}\n", session_id)
+        }
+    }
+}
+
+/// Handles the RM command: RM <session_id>
+///
+/// Closes the session (marks as closed, doesn't remove from store).
+async fn handle_rm_command(args: &[&str], store: &SessionStore) -> String {
+    if args.is_empty() {
+        return "ERR RM requires: <session_id>\n".to_string();
+    }
+
+    let session_id = args[0];
+
+    match store.close_session(session_id).await {
+        Some(session) => {
+            format!("OK {} closed\n", session.id)
+        }
+        None => {
+            format!("ERR session not found: {}\n", session_id)
+        }
+    }
+}
+
+/// Handles the LIST command: LIST
+///
+/// Returns all sessions in the format: OK\n<session_id> <status> <elapsed_seconds>\n...
+async fn handle_list_command(store: &SessionStore) -> String {
+    let sessions = store.list_all().await;
+
+    if sessions.is_empty() {
+        return "OK\n".to_string();
+    }
+
+    let mut response = String::from("OK\n");
+    for session in sessions {
+        let elapsed = session.since.elapsed().as_secs();
+        response.push_str(&format!(
+            "{} {} {}\n",
+            session.id,
+            format_status(session.status),
+            elapsed
+        ));
+    }
+
+    response
+}
+
+/// Handles the GET command: GET <session_id>
+///
+/// Returns a single session in the format: OK <session_id> <status> <elapsed_seconds> <working_dir>
+async fn handle_get_command(args: &[&str], store: &SessionStore) -> String {
+    if args.is_empty() {
+        return "ERR GET requires: <session_id>\n".to_string();
+    }
+
+    let session_id = args[0];
+
+    match store.get(session_id).await {
+        Some(session) => {
+            let elapsed = session.since.elapsed().as_secs();
+            format!(
+                "OK {} {} {} {}\n",
+                session.id,
+                format_status(session.status),
+                elapsed,
+                session.working_dir.display()
+            )
+        }
+        None => {
+            format!("ERR session not found: {}\n", session_id)
+        }
+    }
+}
+
+/// Handles the SUB command: SUB
+///
+/// Subscribes to session updates and sends UPDATE notifications to the client.
+/// Format: UPDATE <session_id> <status> <elapsed_seconds>\n
+///
+/// This function runs until the client disconnects or an error occurs.
+async fn handle_sub_command(
+    store: &SessionStore,
+    writer: &mut tokio::net::unix::OwnedWriteHalf,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    writer.write_all(b"OK subscribed\n").await?;
+    writer.flush().await?;
+
+    let mut rx = store.subscribe();
+
+    tracing::debug!("Client subscribed to session updates");
+
+    loop {
+        match rx.recv().await {
+            Ok(update) => {
+                let message = format!(
+                    "UPDATE {} {} {}\n",
+                    update.session_id,
+                    format_status(update.status),
+                    update.elapsed_seconds
+                );
+                if writer.write_all(message.as_bytes()).await.is_err() {
+                    // Client disconnected
+                    tracing::debug!("Subscriber disconnected (write failed)");
+                    break;
+                }
+                if writer.flush().await.is_err() {
+                    tracing::debug!("Subscriber disconnected (flush failed)");
+                    break;
+                }
+            }
+            Err(broadcast::error::RecvError::Closed) => {
+                // Channel closed
+                tracing::debug!("Subscriber channel closed");
+                break;
+            }
+            Err(broadcast::error::RecvError::Lagged(count)) => {
+                // Subscriber fell behind, skip missed messages
+                tracing::warn!("Subscriber lagged, missed {} messages", count);
+            }
+        }
     }
 
     Ok(())

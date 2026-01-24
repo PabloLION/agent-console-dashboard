@@ -13,80 +13,8 @@
 //! - `fork()` for daemon process creation
 //! - Unix signal handling (SIGTERM, SIGINT)
 
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-
-/// Custom serialization module for `std::time::Instant` as Unix timestamp milliseconds.
-///
-/// Since `Instant` is a monotonic clock that doesn't correspond to wall-clock time,
-/// this module converts to/from Unix timestamp milliseconds for IPC serialization.
-/// The conversion works by calculating the offset between the Instant and the current
-/// time, then applying that offset to the current SystemTime.
-///
-/// Note: This has minor precision limitations (~millisecond accuracy) but is acceptable
-/// for session tracking purposes.
-mod serde_instant {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::time::{Instant, SystemTime, UNIX_EPOCH};
-
-    pub fn serialize<S>(instant: &Instant, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Convert to milliseconds since UNIX epoch
-        let system_now = SystemTime::now();
-        let instant_now = Instant::now();
-        let elapsed = instant_now.duration_since(*instant);
-        let system_time = system_now - elapsed;
-        let millis = system_time
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-        millis.serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Instant, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let millis = u64::deserialize(deserializer)?;
-        // Convert milliseconds since UNIX epoch back to Instant
-        let system_now = SystemTime::now();
-        let now_millis = system_now
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-        let elapsed = std::time::Duration::from_millis(now_millis.saturating_sub(millis));
-        Ok(Instant::now() - elapsed)
-    }
-}
-
-/// Custom serialization module for `std::time::Duration` as milliseconds.
-///
-/// This module serializes Duration values as u64 milliseconds for IPC communication.
-/// This provides a simple, language-agnostic representation that can be easily
-/// consumed by clients.
-mod serde_duration {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::time::Duration;
-
-    pub fn serialize<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Serialize as milliseconds (u64 for JSON compatibility)
-        (duration.as_millis() as u64).serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let millis = u64::deserialize(deserializer)?;
-        Ok(Duration::from_millis(millis))
-    }
-}
 
 /// Daemon module providing process lifecycle management and daemonization.
 pub mod daemon;
@@ -96,8 +24,7 @@ pub mod daemon;
 pub(crate) mod client;
 
 /// Session status enumeration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     /// Agent is actively working
     Working,
@@ -110,30 +37,27 @@ pub enum Status {
 }
 
 /// Agent type enumeration representing different AI coding agents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentType {
     /// Claude Code - Anthropic's AI coding assistant
     ClaudeCode,
 }
 
 /// Record of a state transition for tracking session history.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct StateTransition {
     /// When the transition occurred.
-    #[serde(with = "serde_instant")]
     pub timestamp: Instant,
     /// Previous status before the transition.
     pub from: Status,
     /// New status after the transition.
     pub to: Status,
     /// Duration spent in the previous status.
-    #[serde(with = "serde_duration")]
     pub duration: Duration,
 }
 
 /// API token usage tracking for a session.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ApiUsage {
     /// Number of input tokens consumed.
     pub input_tokens: u64,
@@ -142,7 +66,7 @@ pub struct ApiUsage {
 }
 
 /// Agent session state with history tracking.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Session {
     /// Unique session identifier.
     pub id: String,
@@ -153,7 +77,6 @@ pub struct Session {
     /// Working directory for this session.
     pub working_dir: PathBuf,
     /// Timestamp when status last changed.
-    #[serde(with = "serde_instant")]
     pub since: Instant,
     /// History of state transitions (display limited by dashboard, not enforced here).
     pub history: Vec<StateTransition>,
@@ -179,6 +102,58 @@ impl Session {
             closed: false,
             session_id: None,
         }
+    }
+
+    /// Updates the session status, recording a state transition if the status changes.
+    ///
+    /// If the new status is the same as the current status, no transition is recorded
+    /// and the method returns early. Otherwise, a `StateTransition` is appended to
+    /// the history with the duration spent in the previous state.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_status` - The new status to set for this session.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_console::{Session, Status, AgentType};
+    /// use std::path::PathBuf;
+    ///
+    /// let mut session = Session::new(
+    ///     "session-1".to_string(),
+    ///     AgentType::ClaudeCode,
+    ///     PathBuf::from("/home/user/project"),
+    /// );
+    /// assert_eq!(session.status, Status::Working);
+    /// assert!(session.history.is_empty());
+    ///
+    /// session.set_status(Status::Attention);
+    /// assert_eq!(session.status, Status::Attention);
+    /// assert_eq!(session.history.len(), 1);
+    /// ```
+    pub fn set_status(&mut self, new_status: Status) {
+        // No-op if status unchanged
+        if self.status == new_status {
+            return;
+        }
+
+        let now = Instant::now();
+        let duration = now.duration_since(self.since);
+
+        // Record the transition
+        let transition = StateTransition {
+            timestamp: now,
+            from: self.status,
+            to: new_status,
+            duration,
+        };
+
+        self.history.push(transition);
+
+        // Update current status and timestamp
+        self.status = new_status;
+        self.since = now;
     }
 }
 
@@ -212,6 +187,92 @@ impl Default for DaemonConfig {
         Self {
             socket_path: PathBuf::from("/tmp/agent-console.sock"),
             daemonize: false,
+        }
+    }
+}
+
+/// Errors that can occur during session store operations.
+#[derive(Debug, thiserror::Error)]
+pub enum StoreError {
+    /// Attempted to create a session that already exists.
+    #[error("Session already exists: {0}")]
+    SessionExists(String),
+
+    /// Session was not found in the store.
+    #[error("Session not found: {0}")]
+    SessionNotFound(String),
+}
+
+/// Metadata parsed from SET command JSON payload.
+///
+/// This struct is used to pass optional session metadata when creating
+/// or updating sessions via the SET command. All fields are optional
+/// to allow for partial updates or default values.
+#[derive(Debug, Clone, Default)]
+pub struct SessionMetadata {
+    /// Working directory for this session.
+    pub working_dir: Option<PathBuf>,
+    /// Claude Code session ID for resume capability.
+    pub session_id: Option<String>,
+    /// Agent type (defaults to ClaudeCode if not specified).
+    pub agent_type: Option<AgentType>,
+}
+
+impl SessionMetadata {
+    /// Creates a new SessionMetadata with all fields set to None.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a SessionMetadata with the specified working directory.
+    pub fn with_working_dir(working_dir: PathBuf) -> Self {
+        Self {
+            working_dir: Some(working_dir),
+            ..Default::default()
+        }
+    }
+
+    /// Sets the working directory and returns self for chaining.
+    pub fn working_dir(mut self, path: PathBuf) -> Self {
+        self.working_dir = Some(path);
+        self
+    }
+
+    /// Sets the session ID and returns self for chaining.
+    pub fn session_id(mut self, id: String) -> Self {
+        self.session_id = Some(id);
+        self
+    }
+
+    /// Sets the agent type and returns self for chaining.
+    pub fn agent_type(mut self, agent_type: AgentType) -> Self {
+        self.agent_type = Some(agent_type);
+        self
+    }
+}
+
+/// Notification payload for session updates sent to subscribers.
+///
+/// This struct contains the essential information about a session update
+/// that gets broadcast to all registered subscribers when a session's
+/// state changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionUpdate {
+    /// Unique session identifier.
+    pub session_id: String,
+    /// Current session status.
+    pub status: Status,
+    /// Elapsed seconds in the current status.
+    pub elapsed_seconds: u64,
+}
+
+impl SessionUpdate {
+    /// Creates a new SessionUpdate with the specified parameters.
+    pub fn new(session_id: String, status: Status, elapsed_seconds: u64) -> Self {
+        Self {
+            session_id,
+            status,
+            elapsed_seconds,
         }
     }
 }
@@ -392,6 +453,106 @@ mod tests {
     }
 
     #[test]
+    fn test_session_set_status_changes_status() {
+        let mut session = Session::new(
+            "status-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+        assert_eq!(session.status, Status::Working);
+
+        session.set_status(Status::Attention);
+        assert_eq!(session.status, Status::Attention);
+    }
+
+    #[test]
+    fn test_session_set_status_records_transition() {
+        let mut session = Session::new(
+            "transition-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+        assert!(session.history.is_empty());
+
+        session.set_status(Status::Question);
+
+        assert_eq!(session.history.len(), 1);
+        assert_eq!(session.history[0].from, Status::Working);
+        assert_eq!(session.history[0].to, Status::Question);
+    }
+
+    #[test]
+    fn test_session_set_status_same_status_no_transition() {
+        let mut session = Session::new(
+            "same-status-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+
+        // Setting to the same status should not record a transition
+        session.set_status(Status::Working);
+        assert!(session.history.is_empty());
+        assert_eq!(session.status, Status::Working);
+    }
+
+    #[test]
+    fn test_session_set_status_multiple_transitions() {
+        let mut session = Session::new(
+            "multi-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+
+        session.set_status(Status::Attention);
+        session.set_status(Status::Question);
+        session.set_status(Status::Closed);
+
+        assert_eq!(session.history.len(), 3);
+        assert_eq!(session.history[0].from, Status::Working);
+        assert_eq!(session.history[0].to, Status::Attention);
+        assert_eq!(session.history[1].from, Status::Attention);
+        assert_eq!(session.history[1].to, Status::Question);
+        assert_eq!(session.history[2].from, Status::Question);
+        assert_eq!(session.history[2].to, Status::Closed);
+    }
+
+    #[test]
+    fn test_session_set_status_updates_since() {
+        let mut session = Session::new(
+            "since-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+        let original_since = session.since;
+
+        // Small delay to ensure time difference
+        std::thread::sleep(Duration::from_millis(10));
+
+        session.set_status(Status::Attention);
+
+        // 'since' should be updated to a later time
+        assert!(session.since > original_since);
+    }
+
+    #[test]
+    fn test_session_set_status_transition_has_duration() {
+        let mut session = Session::new(
+            "duration-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+
+        // Small delay to ensure measurable duration
+        std::thread::sleep(Duration::from_millis(10));
+
+        session.set_status(Status::Question);
+
+        assert_eq!(session.history.len(), 1);
+        // Duration should be at least 10ms
+        assert!(session.history[0].duration >= Duration::from_millis(10));
+    }
+
+    #[test]
     fn test_status_copy() {
         let status = Status::Working;
         let copied = status;
@@ -527,432 +688,195 @@ mod tests {
     }
 
     #[test]
-    fn test_status_serializes_lowercase() {
-        // Verify that Status enum serializes to lowercase strings
-        assert_eq!(
-            serde_json::to_string(&Status::Working).unwrap(),
-            "\"working\""
-        );
-        assert_eq!(
-            serde_json::to_string(&Status::Attention).unwrap(),
-            "\"attention\""
-        );
-        assert_eq!(
-            serde_json::to_string(&Status::Question).unwrap(),
-            "\"question\""
-        );
-        assert_eq!(
-            serde_json::to_string(&Status::Closed).unwrap(),
-            "\"closed\""
-        );
+    fn test_store_error_session_exists() {
+        let error = StoreError::SessionExists("test-session".to_string());
+        let error_msg = format!("{}", error);
+        assert!(error_msg.contains("Session already exists"));
+        assert!(error_msg.contains("test-session"));
     }
 
     #[test]
-    fn test_session_json_roundtrip() {
-        // Create a Session with all fields populated
-        let mut original = Session::new(
-            "roundtrip-test-123".to_string(),
-            AgentType::ClaudeCode,
-            PathBuf::from("/home/user/my-project"),
-        );
-        original.status = Status::Question;
-        original.api_usage = Some(ApiUsage {
-            input_tokens: 15000,
-            output_tokens: 8500,
-        });
-        original.closed = true;
-        original.session_id = Some("claude-sess-abc123".to_string());
-        original.history.push(StateTransition {
-            timestamp: Instant::now(),
-            from: Status::Working,
-            to: Status::Question,
-            duration: Duration::from_secs(120),
-        });
+    fn test_store_error_session_not_found() {
+        let error = StoreError::SessionNotFound("missing-session".to_string());
+        let error_msg = format!("{}", error);
+        assert!(error_msg.contains("Session not found"));
+        assert!(error_msg.contains("missing-session"));
+    }
 
-        // Serialize to JSON
-        let json = serde_json::to_string(&original).expect("Failed to serialize Session");
+    #[test]
+    fn test_store_error_debug_format() {
+        let error = StoreError::SessionExists("debug-test".to_string());
+        let debug_str = format!("{:?}", error);
+        assert!(debug_str.contains("SessionExists"));
+        assert!(debug_str.contains("debug-test"));
+    }
 
-        // Deserialize back
-        let deserialized: Session =
-            serde_json::from_str(&json).expect("Failed to deserialize Session");
+    #[test]
+    fn test_store_error_is_std_error() {
+        let error: Box<dyn std::error::Error> =
+            Box::new(StoreError::SessionNotFound("test".to_string()));
+        // Verify it can be used as a std::error::Error
+        assert!(error.to_string().contains("Session not found"));
+    }
 
-        // Verify all fields match
-        assert_eq!(deserialized.id, original.id);
-        assert_eq!(deserialized.agent_type, original.agent_type);
-        assert_eq!(deserialized.status, original.status);
-        assert_eq!(deserialized.working_dir, original.working_dir);
-        assert_eq!(deserialized.api_usage, original.api_usage);
-        assert_eq!(deserialized.closed, original.closed);
-        assert_eq!(deserialized.session_id, original.session_id);
+    #[test]
+    fn test_session_metadata_default() {
+        let metadata = SessionMetadata::default();
+        assert!(metadata.working_dir.is_none());
+        assert!(metadata.session_id.is_none());
+        assert!(metadata.agent_type.is_none());
+    }
 
-        // Verify history was preserved
-        assert_eq!(deserialized.history.len(), 1);
-        assert_eq!(deserialized.history[0].from, Status::Working);
-        assert_eq!(deserialized.history[0].to, Status::Question);
-        assert_eq!(deserialized.history[0].duration, Duration::from_secs(120));
+    #[test]
+    fn test_session_metadata_new() {
+        let metadata = SessionMetadata::new();
+        assert!(metadata.working_dir.is_none());
+        assert!(metadata.session_id.is_none());
+        assert!(metadata.agent_type.is_none());
+    }
 
-        // Verify since timestamp is approximately preserved (within 1 second tolerance
-        // due to serialization timing variations)
-        let since_diff = if deserialized.since > original.since {
-            deserialized.since.duration_since(original.since)
-        } else {
-            original.since.duration_since(deserialized.since)
+    #[test]
+    fn test_session_metadata_with_working_dir() {
+        let metadata = SessionMetadata::with_working_dir(PathBuf::from("/home/user/project"));
+        assert_eq!(metadata.working_dir, Some(PathBuf::from("/home/user/project")));
+        assert!(metadata.session_id.is_none());
+        assert!(metadata.agent_type.is_none());
+    }
+
+    #[test]
+    fn test_session_metadata_builder_pattern() {
+        let metadata = SessionMetadata::new()
+            .working_dir(PathBuf::from("/tmp/test"))
+            .session_id("session-123".to_string())
+            .agent_type(AgentType::ClaudeCode);
+
+        assert_eq!(metadata.working_dir, Some(PathBuf::from("/tmp/test")));
+        assert_eq!(metadata.session_id, Some("session-123".to_string()));
+        assert_eq!(metadata.agent_type, Some(AgentType::ClaudeCode));
+    }
+
+    #[test]
+    fn test_session_metadata_clone() {
+        let metadata = SessionMetadata::new()
+            .working_dir(PathBuf::from("/clone/test"))
+            .session_id("clone-session".to_string());
+
+        let cloned = metadata.clone();
+        assert_eq!(cloned.working_dir, metadata.working_dir);
+        assert_eq!(cloned.session_id, metadata.session_id);
+        assert_eq!(cloned.agent_type, metadata.agent_type);
+    }
+
+    #[test]
+    fn test_session_metadata_debug_format() {
+        let metadata = SessionMetadata::new()
+            .working_dir(PathBuf::from("/debug/path"))
+            .session_id("debug-session".to_string());
+
+        let debug_str = format!("{:?}", metadata);
+        assert!(debug_str.contains("SessionMetadata"));
+        assert!(debug_str.contains("/debug/path"));
+        assert!(debug_str.contains("debug-session"));
+    }
+
+    #[test]
+    fn test_session_metadata_partial_fields() {
+        // Test with only working_dir
+        let metadata1 = SessionMetadata {
+            working_dir: Some(PathBuf::from("/only/working/dir")),
+            session_id: None,
+            agent_type: None,
         };
-        assert!(
-            since_diff < Duration::from_secs(1),
-            "since timestamp drift too large: {:?}",
-            since_diff
-        );
+        assert!(metadata1.working_dir.is_some());
+        assert!(metadata1.session_id.is_none());
+
+        // Test with only session_id
+        let metadata2 = SessionMetadata {
+            working_dir: None,
+            session_id: Some("only-session-id".to_string()),
+            agent_type: None,
+        };
+        assert!(metadata2.working_dir.is_none());
+        assert!(metadata2.session_id.is_some());
+
+        // Test with only agent_type
+        let metadata3 = SessionMetadata {
+            working_dir: None,
+            session_id: None,
+            agent_type: Some(AgentType::ClaudeCode),
+        };
+        assert!(metadata3.working_dir.is_none());
+        assert!(metadata3.agent_type.is_some());
     }
 
     #[test]
-    fn test_instant_serializes_as_millis() {
-        // Create a wrapper struct to test the serde_instant module
-        #[derive(Serialize, Deserialize)]
-        struct InstantWrapper {
-            #[serde(with = "super::serde_instant")]
-            instant: Instant,
+    fn test_session_update_new() {
+        let update = SessionUpdate::new(
+            "session-1".to_string(),
+            Status::Working,
+            120,
+        );
+        assert_eq!(update.session_id, "session-1");
+        assert_eq!(update.status, Status::Working);
+        assert_eq!(update.elapsed_seconds, 120);
+    }
+
+    #[test]
+    fn test_session_update_clone() {
+        let update = SessionUpdate::new(
+            "clone-test".to_string(),
+            Status::Attention,
+            60,
+        );
+        let cloned = update.clone();
+        assert_eq!(cloned.session_id, update.session_id);
+        assert_eq!(cloned.status, update.status);
+        assert_eq!(cloned.elapsed_seconds, update.elapsed_seconds);
+    }
+
+    #[test]
+    fn test_session_update_equality() {
+        let update1 = SessionUpdate::new(
+            "eq-test".to_string(),
+            Status::Question,
+            30,
+        );
+        let update2 = SessionUpdate::new(
+            "eq-test".to_string(),
+            Status::Question,
+            30,
+        );
+        let update3 = SessionUpdate::new(
+            "eq-test".to_string(),
+            Status::Working,
+            30,
+        );
+        assert_eq!(update1, update2);
+        assert_ne!(update1, update3);
+    }
+
+    #[test]
+    fn test_session_update_debug_format() {
+        let update = SessionUpdate::new(
+            "debug-test".to_string(),
+            Status::Closed,
+            45,
+        );
+        let debug_str = format!("{:?}", update);
+        assert!(debug_str.contains("debug-test"));
+        assert!(debug_str.contains("Closed"));
+        assert!(debug_str.contains("45"));
+    }
+
+    #[test]
+    fn test_session_update_all_statuses() {
+        for status in [Status::Working, Status::Attention, Status::Question, Status::Closed] {
+            let update = SessionUpdate::new(
+                "status-test".to_string(),
+                status,
+                0,
+            );
+            assert_eq!(update.status, status);
         }
-
-        let now = Instant::now();
-        let wrapper = InstantWrapper { instant: now };
-
-        // Serialize to JSON
-        let json = serde_json::to_string(&wrapper).expect("Failed to serialize Instant");
-
-        // The JSON should contain a number (milliseconds since epoch)
-        let value: serde_json::Value =
-            serde_json::from_str(&json).expect("Failed to parse JSON");
-        assert!(
-            value["instant"].is_number(),
-            "Expected instant to be serialized as a number (milliseconds)"
-        );
-
-        // The value should be a reasonable Unix timestamp in milliseconds
-        // (greater than year 2020 timestamp: 1577836800000)
-        let millis = value["instant"].as_u64().expect("Failed to get millis as u64");
-        assert!(
-            millis > 1577836800000,
-            "Timestamp should be a Unix timestamp in milliseconds (after 2020)"
-        );
-    }
-
-    #[test]
-    fn test_instant_roundtrip() {
-        #[derive(Serialize, Deserialize)]
-        struct InstantWrapper {
-            #[serde(with = "super::serde_instant")]
-            instant: Instant,
-        }
-
-        let original = Instant::now();
-        let wrapper = InstantWrapper { instant: original };
-
-        // Serialize and deserialize
-        let json = serde_json::to_string(&wrapper).expect("Failed to serialize");
-        let deserialized: InstantWrapper =
-            serde_json::from_str(&json).expect("Failed to deserialize");
-
-        // The deserialized instant should be approximately equal to the original
-        // (within 1 second tolerance due to timing variations)
-        let diff = if deserialized.instant > original {
-            deserialized.instant.duration_since(original)
-        } else {
-            original.duration_since(deserialized.instant)
-        };
-        assert!(
-            diff < Duration::from_secs(1),
-            "Instant roundtrip drift too large: {:?}",
-            diff
-        );
-    }
-
-    #[test]
-    fn test_instant_past_serialization() {
-        #[derive(Serialize, Deserialize)]
-        struct InstantWrapper {
-            #[serde(with = "super::serde_instant")]
-            instant: Instant,
-        }
-
-        // Test with an instant from the past (10 seconds ago)
-        let past_instant = Instant::now() - Duration::from_secs(10);
-        let wrapper = InstantWrapper {
-            instant: past_instant,
-        };
-
-        // Serialize and deserialize
-        let json = serde_json::to_string(&wrapper).expect("Failed to serialize");
-        let deserialized: InstantWrapper =
-            serde_json::from_str(&json).expect("Failed to deserialize");
-
-        // Verify the elapsed time is approximately preserved
-        let original_elapsed = past_instant.elapsed();
-        let deserialized_elapsed = deserialized.instant.elapsed();
-
-        // Both should show approximately 10 seconds elapsed (within 2 second tolerance)
-        assert!(
-            original_elapsed.as_secs() >= 10,
-            "Original elapsed should be at least 10 seconds"
-        );
-        assert!(
-            deserialized_elapsed.as_secs() >= 9 && deserialized_elapsed.as_secs() <= 12,
-            "Deserialized elapsed should be approximately 10 seconds, got: {:?}",
-            deserialized_elapsed
-        );
-    }
-
-    #[test]
-    fn test_duration_serializes_as_millis() {
-        #[derive(Serialize, Deserialize)]
-        struct DurationWrapper {
-            #[serde(with = "super::serde_duration")]
-            duration: Duration,
-        }
-
-        let wrapper = DurationWrapper {
-            duration: Duration::from_secs(5),
-        };
-
-        // Serialize to JSON
-        let json = serde_json::to_string(&wrapper).expect("Failed to serialize Duration");
-
-        // The JSON should contain 5000 (milliseconds)
-        let value: serde_json::Value =
-            serde_json::from_str(&json).expect("Failed to parse JSON");
-        assert_eq!(
-            value["duration"].as_u64(),
-            Some(5000),
-            "5 seconds should serialize as 5000 milliseconds"
-        );
-    }
-
-    #[test]
-    fn test_duration_roundtrip() {
-        #[derive(Serialize, Deserialize)]
-        struct DurationWrapper {
-            #[serde(with = "super::serde_duration")]
-            duration: Duration,
-        }
-
-        let original = Duration::from_millis(12345);
-        let wrapper = DurationWrapper { duration: original };
-
-        // Serialize and deserialize
-        let json = serde_json::to_string(&wrapper).expect("Failed to serialize");
-        let deserialized: DurationWrapper =
-            serde_json::from_str(&json).expect("Failed to deserialize");
-
-        assert_eq!(
-            deserialized.duration, original,
-            "Duration roundtrip should preserve exact value"
-        );
-    }
-
-    #[test]
-    fn test_duration_edge_cases() {
-        #[derive(Serialize, Deserialize)]
-        struct DurationWrapper {
-            #[serde(with = "super::serde_duration")]
-            duration: Duration,
-        }
-
-        // Test zero duration
-        let zero_wrapper = DurationWrapper {
-            duration: Duration::ZERO,
-        };
-        let json = serde_json::to_string(&zero_wrapper).expect("Failed to serialize zero");
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(value["duration"].as_u64(), Some(0));
-
-        // Test sub-millisecond duration (should truncate to 0)
-        let sub_ms_wrapper = DurationWrapper {
-            duration: Duration::from_micros(500),
-        };
-        let json = serde_json::to_string(&sub_ms_wrapper).expect("Failed to serialize sub-ms");
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(
-            value["duration"].as_u64(),
-            Some(0),
-            "Sub-millisecond duration should truncate to 0"
-        );
-
-        // Test large duration (1 day)
-        let day_wrapper = DurationWrapper {
-            duration: Duration::from_secs(86400),
-        };
-        let json = serde_json::to_string(&day_wrapper).expect("Failed to serialize day");
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(
-            value["duration"].as_u64(),
-            Some(86400000),
-            "1 day should be 86400000 milliseconds"
-        );
-    }
-
-    #[test]
-    fn test_state_transition_serialization() {
-        // Test the full StateTransition struct which uses both serde_instant and serde_duration
-        let transition = StateTransition {
-            timestamp: Instant::now(),
-            from: Status::Working,
-            to: Status::Question,
-            duration: Duration::from_secs(30),
-        };
-
-        // Serialize
-        let json = serde_json::to_string(&transition).expect("Failed to serialize StateTransition");
-
-        // Parse and verify structure
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-
-        // timestamp should be a number (millis since epoch)
-        assert!(
-            value["timestamp"].is_number(),
-            "timestamp should be serialized as number"
-        );
-
-        // duration should be 30000 milliseconds
-        assert_eq!(
-            value["duration"].as_u64(),
-            Some(30000),
-            "duration should be 30000 ms"
-        );
-
-        // from/to should be lowercase strings
-        assert_eq!(value["from"].as_str(), Some("working"));
-        assert_eq!(value["to"].as_str(), Some("question"));
-
-        // Deserialize and verify
-        let deserialized: StateTransition =
-            serde_json::from_str(&json).expect("Failed to deserialize StateTransition");
-        assert_eq!(deserialized.from, Status::Working);
-        assert_eq!(deserialized.to, Status::Question);
-        assert_eq!(deserialized.duration, Duration::from_secs(30));
-    }
-
-    #[test]
-    fn test_session_serialization_edge_cases() {
-        // Test 1: Session with all Optional fields as None and empty history vector
-        let minimal_session = Session::new(
-            "minimal-session".to_string(),
-            AgentType::ClaudeCode,
-            PathBuf::from("/tmp/minimal"),
-        );
-
-        // Serialize
-        let json =
-            serde_json::to_string(&minimal_session).expect("Failed to serialize minimal session");
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-
-        // Verify Optional fields serialize as null
-        assert!(
-            value["api_usage"].is_null(),
-            "None ApiUsage should serialize as null"
-        );
-        assert!(
-            value["session_id"].is_null(),
-            "None session_id should serialize as null"
-        );
-
-        // Verify empty history vector serializes as empty array
-        assert!(
-            value["history"].is_array(),
-            "history should be an array"
-        );
-        assert_eq!(
-            value["history"].as_array().unwrap().len(),
-            0,
-            "empty history should serialize as empty array"
-        );
-
-        // Roundtrip test for minimal session
-        let deserialized: Session =
-            serde_json::from_str(&json).expect("Failed to deserialize minimal session");
-        assert_eq!(deserialized.id, minimal_session.id);
-        assert!(deserialized.api_usage.is_none());
-        assert!(deserialized.session_id.is_none());
-        assert!(deserialized.history.is_empty());
-
-        // Test 2: Session with Some values for Optional fields
-        let mut full_session = Session::new(
-            "full-session".to_string(),
-            AgentType::ClaudeCode,
-            PathBuf::from("/tmp/full"),
-        );
-        full_session.api_usage = Some(ApiUsage {
-            input_tokens: 0,
-            output_tokens: 0,
-        });
-        full_session.session_id = Some(String::new()); // empty string is still Some
-
-        let json =
-            serde_json::to_string(&full_session).expect("Failed to serialize full session");
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-
-        // Verify Some values are properly serialized (not null)
-        assert!(
-            !value["api_usage"].is_null(),
-            "Some(ApiUsage) should not serialize as null"
-        );
-        assert!(
-            !value["session_id"].is_null(),
-            "Some(String) should not serialize as null"
-        );
-
-        // Verify ApiUsage with zero values serializes correctly
-        assert_eq!(value["api_usage"]["input_tokens"].as_u64(), Some(0));
-        assert_eq!(value["api_usage"]["output_tokens"].as_u64(), Some(0));
-
-        // Verify empty string session_id serializes as empty string
-        assert_eq!(value["session_id"].as_str(), Some(""));
-
-        // Roundtrip test for full session with edge case values
-        let deserialized: Session =
-            serde_json::from_str(&json).expect("Failed to deserialize full session");
-        assert_eq!(deserialized.api_usage, Some(ApiUsage::default()));
-        assert_eq!(deserialized.session_id, Some(String::new()));
-
-        // Test 3: Deserialize from JSON with explicit null values
-        let json_with_nulls = r#"{
-            "id": "null-test",
-            "agent_type": "claude_code",
-            "status": "working",
-            "working_dir": "/test",
-            "since": 1700000000000,
-            "history": [],
-            "api_usage": null,
-            "closed": false,
-            "session_id": null
-        }"#;
-
-        let from_nulls: Session =
-            serde_json::from_str(json_with_nulls).expect("Failed to deserialize JSON with nulls");
-        assert_eq!(from_nulls.id, "null-test");
-        assert!(from_nulls.api_usage.is_none());
-        assert!(from_nulls.session_id.is_none());
-        assert!(from_nulls.history.is_empty());
-
-        // Test 4: Large history vector serializes correctly
-        let mut session_with_history = Session::default();
-        for i in 0..100 {
-            session_with_history.history.push(StateTransition {
-                timestamp: Instant::now(),
-                from: Status::Working,
-                to: Status::Question,
-                duration: Duration::from_millis(i as u64),
-            });
-        }
-
-        let json = serde_json::to_string(&session_with_history)
-            .expect("Failed to serialize session with large history");
-        let deserialized: Session =
-            serde_json::from_str(&json).expect("Failed to deserialize session with large history");
-        assert_eq!(deserialized.history.len(), 100);
-        assert_eq!(deserialized.history[0].duration, Duration::ZERO);
-        assert_eq!(
-            deserialized.history[99].duration,
-            Duration::from_millis(99)
-        );
     }
 }

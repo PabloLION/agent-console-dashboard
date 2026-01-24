@@ -3,7 +3,12 @@
 //! This module provides process lifecycle management, daemonization, and the
 //! main entry point for running the daemon.
 
+pub mod server;
 pub mod store;
+
+// Re-export commonly used types for convenience
+pub use server::SocketServer;
+pub use store::SessionStore;
 
 use crate::DaemonConfig;
 use fork::{daemon, Fork};

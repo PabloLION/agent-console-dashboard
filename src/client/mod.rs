@@ -34,6 +34,10 @@
 //! }
 //! ```
 
+// Allow unused items - this module exposes public APIs for TUI/CLI integration
+// that are not yet consumed but are part of the planned architecture.
+#![allow(unused)]
+
 pub mod connection;
 
 pub use connection::{connect_with_auto_start, Client, ClientError};
