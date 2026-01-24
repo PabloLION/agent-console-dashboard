@@ -546,4 +546,62 @@ mod tests {
             "\"closed\""
         );
     }
+
+    #[test]
+    fn test_session_json_roundtrip() {
+        // Create a Session with all fields populated
+        let mut original = Session::new(
+            "roundtrip-test-123".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/home/user/my-project"),
+        );
+        original.status = Status::Question;
+        original.api_usage = Some(ApiUsage {
+            input_tokens: 15000,
+            output_tokens: 8500,
+        });
+        original.closed = true;
+        original.session_id = Some("claude-sess-abc123".to_string());
+        original.history.push(StateTransition {
+            timestamp: Instant::now(),
+            from: Status::Working,
+            to: Status::Question,
+            duration: Duration::from_secs(120),
+        });
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&original).expect("Failed to serialize Session");
+
+        // Deserialize back
+        let deserialized: Session =
+            serde_json::from_str(&json).expect("Failed to deserialize Session");
+
+        // Verify all fields match
+        assert_eq!(deserialized.id, original.id);
+        assert_eq!(deserialized.agent_type, original.agent_type);
+        assert_eq!(deserialized.status, original.status);
+        assert_eq!(deserialized.working_dir, original.working_dir);
+        assert_eq!(deserialized.api_usage, original.api_usage);
+        assert_eq!(deserialized.closed, original.closed);
+        assert_eq!(deserialized.session_id, original.session_id);
+
+        // Verify history was preserved
+        assert_eq!(deserialized.history.len(), 1);
+        assert_eq!(deserialized.history[0].from, Status::Working);
+        assert_eq!(deserialized.history[0].to, Status::Question);
+        assert_eq!(deserialized.history[0].duration, Duration::from_secs(120));
+
+        // Verify since timestamp is approximately preserved (within 1 second tolerance
+        // due to serialization timing variations)
+        let since_diff = if deserialized.since > original.since {
+            deserialized.since.duration_since(original.since)
+        } else {
+            original.since.duration_since(deserialized.since)
+        };
+        assert!(
+            since_diff < Duration::from_secs(1),
+            "since timestamp drift too large: {:?}",
+            since_diff
+        );
+    }
 }
