@@ -13,8 +13,80 @@
 //! - `fork()` for daemon process creation
 //! - Unix signal handling (SIGTERM, SIGINT)
 
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
+
+/// Custom serialization module for `std::time::Instant` as Unix timestamp milliseconds.
+///
+/// Since `Instant` is a monotonic clock that doesn't correspond to wall-clock time,
+/// this module converts to/from Unix timestamp milliseconds for IPC serialization.
+/// The conversion works by calculating the offset between the Instant and the current
+/// time, then applying that offset to the current SystemTime.
+///
+/// Note: This has minor precision limitations (~millisecond accuracy) but is acceptable
+/// for session tracking purposes.
+mod serde_instant {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+    pub fn serialize<S>(instant: &Instant, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Convert to milliseconds since UNIX epoch
+        let system_now = SystemTime::now();
+        let instant_now = Instant::now();
+        let elapsed = instant_now.duration_since(*instant);
+        let system_time = system_now - elapsed;
+        let millis = system_time
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        millis.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Instant, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let millis = u64::deserialize(deserializer)?;
+        // Convert milliseconds since UNIX epoch back to Instant
+        let system_now = SystemTime::now();
+        let now_millis = system_now
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let elapsed = std::time::Duration::from_millis(now_millis.saturating_sub(millis));
+        Ok(Instant::now() - elapsed)
+    }
+}
+
+/// Custom serialization module for `std::time::Duration` as milliseconds.
+///
+/// This module serializes Duration values as u64 milliseconds for IPC communication.
+/// This provides a simple, language-agnostic representation that can be easily
+/// consumed by clients.
+mod serde_duration {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::time::Duration;
+
+    pub fn serialize<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Serialize as milliseconds (u64 for JSON compatibility)
+        (duration.as_millis() as u64).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let millis = u64::deserialize(deserializer)?;
+        Ok(Duration::from_millis(millis))
+    }
+}
 
 /// Daemon module providing process lifecycle management and daemonization.
 pub mod daemon;
@@ -24,7 +96,8 @@ pub mod daemon;
 pub(crate) mod client;
 
 /// Session status enumeration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Status {
     /// Agent is actively working
     Working,
@@ -37,27 +110,30 @@ pub enum Status {
 }
 
 /// Agent type enumeration representing different AI coding agents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentType {
     /// Claude Code - Anthropic's AI coding assistant
     ClaudeCode,
 }
 
 /// Record of a state transition for tracking session history.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateTransition {
     /// When the transition occurred.
+    #[serde(with = "serde_instant")]
     pub timestamp: Instant,
     /// Previous status before the transition.
     pub from: Status,
     /// New status after the transition.
     pub to: Status,
     /// Duration spent in the previous status.
+    #[serde(with = "serde_duration")]
     pub duration: Duration,
 }
 
 /// API token usage tracking for a session.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApiUsage {
     /// Number of input tokens consumed.
     pub input_tokens: u64,
@@ -66,7 +142,7 @@ pub struct ApiUsage {
 }
 
 /// Agent session state with history tracking.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     /// Unique session identifier.
     pub id: String,
@@ -77,6 +153,7 @@ pub struct Session {
     /// Working directory for this session.
     pub working_dir: PathBuf,
     /// Timestamp when status last changed.
+    #[serde(with = "serde_instant")]
     pub since: Instant,
     /// History of state transitions (display limited by dashboard, not enforced here).
     pub history: Vec<StateTransition>,
@@ -447,5 +524,435 @@ mod tests {
         let debug_str = format!("{:?}", usage);
         assert!(debug_str.contains("42"));
         assert!(debug_str.contains("84"));
+    }
+
+    #[test]
+    fn test_status_serializes_lowercase() {
+        // Verify that Status enum serializes to lowercase strings
+        assert_eq!(
+            serde_json::to_string(&Status::Working).unwrap(),
+            "\"working\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Status::Attention).unwrap(),
+            "\"attention\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Status::Question).unwrap(),
+            "\"question\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Status::Closed).unwrap(),
+            "\"closed\""
+        );
+    }
+
+    #[test]
+    fn test_session_json_roundtrip() {
+        // Create a Session with all fields populated
+        let mut original = Session::new(
+            "roundtrip-test-123".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/home/user/my-project"),
+        );
+        original.status = Status::Question;
+        original.api_usage = Some(ApiUsage {
+            input_tokens: 15000,
+            output_tokens: 8500,
+        });
+        original.closed = true;
+        original.session_id = Some("claude-sess-abc123".to_string());
+        original.history.push(StateTransition {
+            timestamp: Instant::now(),
+            from: Status::Working,
+            to: Status::Question,
+            duration: Duration::from_secs(120),
+        });
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&original).expect("Failed to serialize Session");
+
+        // Deserialize back
+        let deserialized: Session =
+            serde_json::from_str(&json).expect("Failed to deserialize Session");
+
+        // Verify all fields match
+        assert_eq!(deserialized.id, original.id);
+        assert_eq!(deserialized.agent_type, original.agent_type);
+        assert_eq!(deserialized.status, original.status);
+        assert_eq!(deserialized.working_dir, original.working_dir);
+        assert_eq!(deserialized.api_usage, original.api_usage);
+        assert_eq!(deserialized.closed, original.closed);
+        assert_eq!(deserialized.session_id, original.session_id);
+
+        // Verify history was preserved
+        assert_eq!(deserialized.history.len(), 1);
+        assert_eq!(deserialized.history[0].from, Status::Working);
+        assert_eq!(deserialized.history[0].to, Status::Question);
+        assert_eq!(deserialized.history[0].duration, Duration::from_secs(120));
+
+        // Verify since timestamp is approximately preserved (within 1 second tolerance
+        // due to serialization timing variations)
+        let since_diff = if deserialized.since > original.since {
+            deserialized.since.duration_since(original.since)
+        } else {
+            original.since.duration_since(deserialized.since)
+        };
+        assert!(
+            since_diff < Duration::from_secs(1),
+            "since timestamp drift too large: {:?}",
+            since_diff
+        );
+    }
+
+    #[test]
+    fn test_instant_serializes_as_millis() {
+        // Create a wrapper struct to test the serde_instant module
+        #[derive(Serialize, Deserialize)]
+        struct InstantWrapper {
+            #[serde(with = "super::serde_instant")]
+            instant: Instant,
+        }
+
+        let now = Instant::now();
+        let wrapper = InstantWrapper { instant: now };
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&wrapper).expect("Failed to serialize Instant");
+
+        // The JSON should contain a number (milliseconds since epoch)
+        let value: serde_json::Value =
+            serde_json::from_str(&json).expect("Failed to parse JSON");
+        assert!(
+            value["instant"].is_number(),
+            "Expected instant to be serialized as a number (milliseconds)"
+        );
+
+        // The value should be a reasonable Unix timestamp in milliseconds
+        // (greater than year 2020 timestamp: 1577836800000)
+        let millis = value["instant"].as_u64().expect("Failed to get millis as u64");
+        assert!(
+            millis > 1577836800000,
+            "Timestamp should be a Unix timestamp in milliseconds (after 2020)"
+        );
+    }
+
+    #[test]
+    fn test_instant_roundtrip() {
+        #[derive(Serialize, Deserialize)]
+        struct InstantWrapper {
+            #[serde(with = "super::serde_instant")]
+            instant: Instant,
+        }
+
+        let original = Instant::now();
+        let wrapper = InstantWrapper { instant: original };
+
+        // Serialize and deserialize
+        let json = serde_json::to_string(&wrapper).expect("Failed to serialize");
+        let deserialized: InstantWrapper =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        // The deserialized instant should be approximately equal to the original
+        // (within 1 second tolerance due to timing variations)
+        let diff = if deserialized.instant > original {
+            deserialized.instant.duration_since(original)
+        } else {
+            original.duration_since(deserialized.instant)
+        };
+        assert!(
+            diff < Duration::from_secs(1),
+            "Instant roundtrip drift too large: {:?}",
+            diff
+        );
+    }
+
+    #[test]
+    fn test_instant_past_serialization() {
+        #[derive(Serialize, Deserialize)]
+        struct InstantWrapper {
+            #[serde(with = "super::serde_instant")]
+            instant: Instant,
+        }
+
+        // Test with an instant from the past (10 seconds ago)
+        let past_instant = Instant::now() - Duration::from_secs(10);
+        let wrapper = InstantWrapper {
+            instant: past_instant,
+        };
+
+        // Serialize and deserialize
+        let json = serde_json::to_string(&wrapper).expect("Failed to serialize");
+        let deserialized: InstantWrapper =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        // Verify the elapsed time is approximately preserved
+        let original_elapsed = past_instant.elapsed();
+        let deserialized_elapsed = deserialized.instant.elapsed();
+
+        // Both should show approximately 10 seconds elapsed (within 2 second tolerance)
+        assert!(
+            original_elapsed.as_secs() >= 10,
+            "Original elapsed should be at least 10 seconds"
+        );
+        assert!(
+            deserialized_elapsed.as_secs() >= 9 && deserialized_elapsed.as_secs() <= 12,
+            "Deserialized elapsed should be approximately 10 seconds, got: {:?}",
+            deserialized_elapsed
+        );
+    }
+
+    #[test]
+    fn test_duration_serializes_as_millis() {
+        #[derive(Serialize, Deserialize)]
+        struct DurationWrapper {
+            #[serde(with = "super::serde_duration")]
+            duration: Duration,
+        }
+
+        let wrapper = DurationWrapper {
+            duration: Duration::from_secs(5),
+        };
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&wrapper).expect("Failed to serialize Duration");
+
+        // The JSON should contain 5000 (milliseconds)
+        let value: serde_json::Value =
+            serde_json::from_str(&json).expect("Failed to parse JSON");
+        assert_eq!(
+            value["duration"].as_u64(),
+            Some(5000),
+            "5 seconds should serialize as 5000 milliseconds"
+        );
+    }
+
+    #[test]
+    fn test_duration_roundtrip() {
+        #[derive(Serialize, Deserialize)]
+        struct DurationWrapper {
+            #[serde(with = "super::serde_duration")]
+            duration: Duration,
+        }
+
+        let original = Duration::from_millis(12345);
+        let wrapper = DurationWrapper { duration: original };
+
+        // Serialize and deserialize
+        let json = serde_json::to_string(&wrapper).expect("Failed to serialize");
+        let deserialized: DurationWrapper =
+            serde_json::from_str(&json).expect("Failed to deserialize");
+
+        assert_eq!(
+            deserialized.duration, original,
+            "Duration roundtrip should preserve exact value"
+        );
+    }
+
+    #[test]
+    fn test_duration_edge_cases() {
+        #[derive(Serialize, Deserialize)]
+        struct DurationWrapper {
+            #[serde(with = "super::serde_duration")]
+            duration: Duration,
+        }
+
+        // Test zero duration
+        let zero_wrapper = DurationWrapper {
+            duration: Duration::ZERO,
+        };
+        let json = serde_json::to_string(&zero_wrapper).expect("Failed to serialize zero");
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["duration"].as_u64(), Some(0));
+
+        // Test sub-millisecond duration (should truncate to 0)
+        let sub_ms_wrapper = DurationWrapper {
+            duration: Duration::from_micros(500),
+        };
+        let json = serde_json::to_string(&sub_ms_wrapper).expect("Failed to serialize sub-ms");
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            value["duration"].as_u64(),
+            Some(0),
+            "Sub-millisecond duration should truncate to 0"
+        );
+
+        // Test large duration (1 day)
+        let day_wrapper = DurationWrapper {
+            duration: Duration::from_secs(86400),
+        };
+        let json = serde_json::to_string(&day_wrapper).expect("Failed to serialize day");
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            value["duration"].as_u64(),
+            Some(86400000),
+            "1 day should be 86400000 milliseconds"
+        );
+    }
+
+    #[test]
+    fn test_state_transition_serialization() {
+        // Test the full StateTransition struct which uses both serde_instant and serde_duration
+        let transition = StateTransition {
+            timestamp: Instant::now(),
+            from: Status::Working,
+            to: Status::Question,
+            duration: Duration::from_secs(30),
+        };
+
+        // Serialize
+        let json = serde_json::to_string(&transition).expect("Failed to serialize StateTransition");
+
+        // Parse and verify structure
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        // timestamp should be a number (millis since epoch)
+        assert!(
+            value["timestamp"].is_number(),
+            "timestamp should be serialized as number"
+        );
+
+        // duration should be 30000 milliseconds
+        assert_eq!(
+            value["duration"].as_u64(),
+            Some(30000),
+            "duration should be 30000 ms"
+        );
+
+        // from/to should be lowercase strings
+        assert_eq!(value["from"].as_str(), Some("working"));
+        assert_eq!(value["to"].as_str(), Some("question"));
+
+        // Deserialize and verify
+        let deserialized: StateTransition =
+            serde_json::from_str(&json).expect("Failed to deserialize StateTransition");
+        assert_eq!(deserialized.from, Status::Working);
+        assert_eq!(deserialized.to, Status::Question);
+        assert_eq!(deserialized.duration, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_session_serialization_edge_cases() {
+        // Test 1: Session with all Optional fields as None and empty history vector
+        let minimal_session = Session::new(
+            "minimal-session".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp/minimal"),
+        );
+
+        // Serialize
+        let json =
+            serde_json::to_string(&minimal_session).expect("Failed to serialize minimal session");
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        // Verify Optional fields serialize as null
+        assert!(
+            value["api_usage"].is_null(),
+            "None ApiUsage should serialize as null"
+        );
+        assert!(
+            value["session_id"].is_null(),
+            "None session_id should serialize as null"
+        );
+
+        // Verify empty history vector serializes as empty array
+        assert!(
+            value["history"].is_array(),
+            "history should be an array"
+        );
+        assert_eq!(
+            value["history"].as_array().unwrap().len(),
+            0,
+            "empty history should serialize as empty array"
+        );
+
+        // Roundtrip test for minimal session
+        let deserialized: Session =
+            serde_json::from_str(&json).expect("Failed to deserialize minimal session");
+        assert_eq!(deserialized.id, minimal_session.id);
+        assert!(deserialized.api_usage.is_none());
+        assert!(deserialized.session_id.is_none());
+        assert!(deserialized.history.is_empty());
+
+        // Test 2: Session with Some values for Optional fields
+        let mut full_session = Session::new(
+            "full-session".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp/full"),
+        );
+        full_session.api_usage = Some(ApiUsage {
+            input_tokens: 0,
+            output_tokens: 0,
+        });
+        full_session.session_id = Some(String::new()); // empty string is still Some
+
+        let json =
+            serde_json::to_string(&full_session).expect("Failed to serialize full session");
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        // Verify Some values are properly serialized (not null)
+        assert!(
+            !value["api_usage"].is_null(),
+            "Some(ApiUsage) should not serialize as null"
+        );
+        assert!(
+            !value["session_id"].is_null(),
+            "Some(String) should not serialize as null"
+        );
+
+        // Verify ApiUsage with zero values serializes correctly
+        assert_eq!(value["api_usage"]["input_tokens"].as_u64(), Some(0));
+        assert_eq!(value["api_usage"]["output_tokens"].as_u64(), Some(0));
+
+        // Verify empty string session_id serializes as empty string
+        assert_eq!(value["session_id"].as_str(), Some(""));
+
+        // Roundtrip test for full session with edge case values
+        let deserialized: Session =
+            serde_json::from_str(&json).expect("Failed to deserialize full session");
+        assert_eq!(deserialized.api_usage, Some(ApiUsage::default()));
+        assert_eq!(deserialized.session_id, Some(String::new()));
+
+        // Test 3: Deserialize from JSON with explicit null values
+        let json_with_nulls = r#"{
+            "id": "null-test",
+            "agent_type": "claude_code",
+            "status": "working",
+            "working_dir": "/test",
+            "since": 1700000000000,
+            "history": [],
+            "api_usage": null,
+            "closed": false,
+            "session_id": null
+        }"#;
+
+        let from_nulls: Session =
+            serde_json::from_str(json_with_nulls).expect("Failed to deserialize JSON with nulls");
+        assert_eq!(from_nulls.id, "null-test");
+        assert!(from_nulls.api_usage.is_none());
+        assert!(from_nulls.session_id.is_none());
+        assert!(from_nulls.history.is_empty());
+
+        // Test 4: Large history vector serializes correctly
+        let mut session_with_history = Session::default();
+        for i in 0..100 {
+            session_with_history.history.push(StateTransition {
+                timestamp: Instant::now(),
+                from: Status::Working,
+                to: Status::Question,
+                duration: Duration::from_millis(i as u64),
+            });
+        }
+
+        let json = serde_json::to_string(&session_with_history)
+            .expect("Failed to serialize session with large history");
+        let deserialized: Session =
+            serde_json::from_str(&json).expect("Failed to deserialize session with large history");
+        assert_eq!(deserialized.history.len(), 100);
+        assert_eq!(deserialized.history[0].duration, Duration::ZERO);
+        assert_eq!(
+            deserialized.history[99].duration,
+            Duration::from_millis(99)
+        );
     }
 }
