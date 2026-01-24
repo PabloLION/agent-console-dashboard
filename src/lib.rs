@@ -830,4 +830,129 @@ mod tests {
         assert_eq!(deserialized.to, Status::Question);
         assert_eq!(deserialized.duration, Duration::from_secs(30));
     }
+
+    #[test]
+    fn test_session_serialization_edge_cases() {
+        // Test 1: Session with all Optional fields as None and empty history vector
+        let minimal_session = Session::new(
+            "minimal-session".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp/minimal"),
+        );
+
+        // Serialize
+        let json =
+            serde_json::to_string(&minimal_session).expect("Failed to serialize minimal session");
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        // Verify Optional fields serialize as null
+        assert!(
+            value["api_usage"].is_null(),
+            "None ApiUsage should serialize as null"
+        );
+        assert!(
+            value["session_id"].is_null(),
+            "None session_id should serialize as null"
+        );
+
+        // Verify empty history vector serializes as empty array
+        assert!(
+            value["history"].is_array(),
+            "history should be an array"
+        );
+        assert_eq!(
+            value["history"].as_array().unwrap().len(),
+            0,
+            "empty history should serialize as empty array"
+        );
+
+        // Roundtrip test for minimal session
+        let deserialized: Session =
+            serde_json::from_str(&json).expect("Failed to deserialize minimal session");
+        assert_eq!(deserialized.id, minimal_session.id);
+        assert!(deserialized.api_usage.is_none());
+        assert!(deserialized.session_id.is_none());
+        assert!(deserialized.history.is_empty());
+
+        // Test 2: Session with Some values for Optional fields
+        let mut full_session = Session::new(
+            "full-session".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp/full"),
+        );
+        full_session.api_usage = Some(ApiUsage {
+            input_tokens: 0,
+            output_tokens: 0,
+        });
+        full_session.session_id = Some(String::new()); // empty string is still Some
+
+        let json =
+            serde_json::to_string(&full_session).expect("Failed to serialize full session");
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        // Verify Some values are properly serialized (not null)
+        assert!(
+            !value["api_usage"].is_null(),
+            "Some(ApiUsage) should not serialize as null"
+        );
+        assert!(
+            !value["session_id"].is_null(),
+            "Some(String) should not serialize as null"
+        );
+
+        // Verify ApiUsage with zero values serializes correctly
+        assert_eq!(value["api_usage"]["input_tokens"].as_u64(), Some(0));
+        assert_eq!(value["api_usage"]["output_tokens"].as_u64(), Some(0));
+
+        // Verify empty string session_id serializes as empty string
+        assert_eq!(value["session_id"].as_str(), Some(""));
+
+        // Roundtrip test for full session with edge case values
+        let deserialized: Session =
+            serde_json::from_str(&json).expect("Failed to deserialize full session");
+        assert_eq!(deserialized.api_usage, Some(ApiUsage::default()));
+        assert_eq!(deserialized.session_id, Some(String::new()));
+
+        // Test 3: Deserialize from JSON with explicit null values
+        let json_with_nulls = r#"{
+            "id": "null-test",
+            "agent_type": "claude_code",
+            "status": "working",
+            "working_dir": "/test",
+            "since": 1700000000000,
+            "history": [],
+            "api_usage": null,
+            "closed": false,
+            "session_id": null
+        }"#;
+
+        let from_nulls: Session =
+            serde_json::from_str(json_with_nulls).expect("Failed to deserialize JSON with nulls");
+        assert_eq!(from_nulls.id, "null-test");
+        assert!(from_nulls.api_usage.is_none());
+        assert!(from_nulls.session_id.is_none());
+        assert!(from_nulls.history.is_empty());
+
+        // Test 4: Large history vector serializes correctly
+        let mut session_with_history = Session::default();
+        for i in 0..100 {
+            session_with_history.history.push(StateTransition {
+                timestamp: Instant::now(),
+                from: Status::Working,
+                to: Status::Question,
+                duration: Duration::from_millis(i as u64),
+            });
+        }
+
+        let json = serde_json::to_string(&session_with_history)
+            .expect("Failed to serialize session with large history");
+        let deserialized: Session =
+            serde_json::from_str(&json).expect("Failed to deserialize session with large history");
+        assert_eq!(deserialized.history.len(), 100);
+        assert_eq!(deserialized.history[0].duration, Duration::ZERO);
+        assert_eq!(
+            deserialized.history[99].duration,
+            Duration::from_millis(99)
+        );
+    }
 }
