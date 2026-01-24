@@ -20,20 +20,31 @@ pub type DaemonResult<T> = Result<T, Box<dyn Error>>;
 /// This async function blocks until either Ctrl+C (SIGINT) or SIGTERM
 /// is received, enabling graceful shutdown of the daemon.
 ///
-/// # Panics
-///
-/// Panics if the SIGTERM signal handler cannot be registered.
+/// If SIGTERM handler registration fails, falls back to SIGINT only
+/// with a warning message.
 async fn wait_for_shutdown() {
-    let mut sigterm =
-        unix_signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
-
-    tokio::select! {
-        _ = signal::ctrl_c() => {
-            eprintln!("Received SIGINT (Ctrl+C), shutting down...");
-        },
-        _ = sigterm.recv() => {
-            eprintln!("Received SIGTERM, shutting down...");
-        },
+    match unix_signal(SignalKind::terminate()) {
+        Ok(mut sigterm) => {
+            tokio::select! {
+                _ = signal::ctrl_c() => {
+                    eprintln!("Received SIGINT (Ctrl+C), shutting down...");
+                },
+                _ = sigterm.recv() => {
+                    eprintln!("Received SIGTERM, shutting down...");
+                },
+            }
+        }
+        Err(e) => {
+            eprintln!(
+                "Warning: Could not register SIGTERM handler: {}. Using SIGINT only.",
+                e
+            );
+            if let Err(e) = signal::ctrl_c().await {
+                eprintln!("Error waiting for SIGINT: {}", e);
+            } else {
+                eprintln!("Received SIGINT (Ctrl+C), shutting down...");
+            }
+        }
     }
 }
 

@@ -22,7 +22,21 @@ pub enum ClientError {
     /// This error occurs when the client attempts to spawn the daemon
     /// and the daemon does not become available for connection within
     /// the retry window (approximately 5 seconds).
-    DaemonStartFailed,
+    ///
+    /// Contains the last connection error for diagnostic purposes.
+    DaemonStartFailed {
+        /// Number of connection attempts made.
+        attempts: u32,
+        /// The last error encountered during retry attempts.
+        last_error: Option<std::io::Error>,
+    },
+
+    /// Connection failed with a non-recoverable error.
+    ///
+    /// This error occurs when the initial connection attempt fails with
+    /// an error that cannot be resolved by auto-starting the daemon
+    /// (e.g., permission denied, invalid path).
+    ConnectionFailed(std::io::Error),
 
     /// Failed to spawn the daemon process.
     ///
@@ -40,8 +54,27 @@ pub enum ClientError {
 impl fmt::Display for ClientError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ClientError::DaemonStartFailed => {
-                write!(f, "Daemon failed to start within timeout period")
+            ClientError::DaemonStartFailed { attempts, last_error } => {
+                write!(
+                    f,
+                    "Daemon failed to start after {} attempts. \
+                    Last error: {}. \
+                    Try: 1) Check socket path permissions, 2) Check for existing daemon, \
+                    3) Verify binary has execute permissions",
+                    attempts,
+                    last_error
+                        .as_ref()
+                        .map(|e| e.to_string())
+                        .unwrap_or_else(|| "unknown".to_string())
+                )
+            }
+            ClientError::ConnectionFailed(e) => {
+                write!(
+                    f,
+                    "Connection to daemon failed: {}. \
+                    This error cannot be resolved by auto-starting the daemon",
+                    e
+                )
             }
             ClientError::SpawnFailed(e) => {
                 write!(f, "Failed to spawn daemon process: {}", e)
@@ -56,7 +89,10 @@ impl fmt::Display for ClientError {
 impl Error for ClientError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            ClientError::DaemonStartFailed => None,
+            ClientError::DaemonStartFailed { last_error, .. } => {
+                last_error.as_ref().map(|e| e as &(dyn Error + 'static))
+            }
+            ClientError::ConnectionFailed(e) => Some(e),
             ClientError::SpawnFailed(e) => Some(e),
             ClientError::ExecutableNotFound(e) => Some(e),
         }
@@ -178,40 +214,62 @@ pub async fn connect_with_auto_start(socket_path: &Path) -> ClientResult<Client>
     match UnixStream::connect(socket_path).await {
         Ok(stream) => {
             tracing::debug!("Connected to existing daemon at {:?}", socket_path);
-            Ok(Client::new(stream))
+            return Ok(Client::new(stream));
         }
-        Err(_) => {
-            tracing::debug!("Daemon not running, attempting to spawn");
-            // Daemon not running, try to start it
-            spawn_daemon(socket_path)?;
-
-            // Wait for daemon to be ready with exponential backoff
-            let mut delay = Duration::from_millis(INITIAL_BACKOFF_MS);
-            for attempt in 0..MAX_RETRIES {
-                sleep(delay).await;
-
-                match UnixStream::connect(socket_path).await {
-                    Ok(stream) => {
-                        tracing::info!("Connected to daemon after {} retries", attempt + 1);
-                        return Ok(Client::new(stream));
-                    }
-                    Err(e) => {
-                        tracing::debug!(
-                            "Connection attempt {} failed: {}, retrying in {:?}",
-                            attempt + 1,
-                            e,
-                            delay
-                        );
-                    }
+        Err(e) => {
+            // Only attempt auto-start for errors indicating daemon is not running
+            match e.kind() {
+                std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotFound => {
+                    tracing::info!(
+                        "Daemon not running at {:?} ({}), attempting auto-start",
+                        socket_path,
+                        e
+                    );
                 }
-
-                // Double the delay, but cap at MAX_BACKOFF_MS
-                delay = (delay * 2).min(Duration::from_millis(MAX_BACKOFF_MS));
+                _ => {
+                    // Non-recoverable errors: permission denied, invalid path, etc.
+                    tracing::error!(
+                        "Connection to daemon at {:?} failed with non-recoverable error: {}",
+                        socket_path,
+                        e
+                    );
+                    return Err(Box::new(ClientError::ConnectionFailed(e)));
+                }
             }
-
-            Err(Box::new(ClientError::DaemonStartFailed))
         }
     }
+
+    // Daemon not running, try to start it
+    spawn_daemon(socket_path)?;
+
+    // Wait for daemon to be ready with exponential backoff
+    let mut last_error: Option<std::io::Error> = None;
+
+    for attempt in 0..MAX_RETRIES {
+        let delay = calculate_backoff(attempt);
+        sleep(delay).await;
+
+        match UnixStream::connect(socket_path).await {
+            Ok(stream) => {
+                tracing::info!("Connected to daemon after {} retries", attempt + 1);
+                return Ok(Client::new(stream));
+            }
+            Err(e) => {
+                tracing::debug!(
+                    "Connection attempt {} failed: {}, retrying in {:?}",
+                    attempt + 1,
+                    e,
+                    delay
+                );
+                last_error = Some(e);
+            }
+        }
+    }
+
+    Err(Box::new(ClientError::DaemonStartFailed {
+        attempts: MAX_RETRIES,
+        last_error,
+    }))
 }
 
 /// Spawns the daemon process in the background.
@@ -238,12 +296,13 @@ fn spawn_daemon(socket_path: &Path) -> Result<(), ClientError> {
 
     tracing::info!("Spawning daemon from {:?}", exe);
 
-    Command::new(&exe)
+    let child = Command::new(&exe)
         .args(["daemon", "--daemonize", "--socket"])
         .arg(socket_path)
         .spawn()
         .map_err(ClientError::SpawnFailed)?;
 
+    tracing::info!("Daemon spawned successfully with PID {}", child.id());
     Ok(())
 }
 
@@ -258,7 +317,6 @@ fn spawn_daemon(socket_path: &Path) -> Result<(), ClientError> {
 /// # Returns
 ///
 /// The delay duration for this attempt.
-#[allow(dead_code)]
 fn calculate_backoff(attempt: u32) -> Duration {
     let delay_ms = INITIAL_BACKOFF_MS.saturating_mul(1 << attempt);
     Duration::from_millis(delay_ms.min(MAX_BACKOFF_MS))
@@ -284,11 +342,13 @@ mod tests {
 
     #[test]
     fn test_client_error_display() {
-        let err = ClientError::DaemonStartFailed;
-        assert_eq!(
-            err.to_string(),
-            "Daemon failed to start within timeout period"
-        );
+        let err = ClientError::DaemonStartFailed {
+            attempts: 10,
+            last_error: None,
+        };
+        let display = err.to_string();
+        assert!(display.contains("Daemon failed to start after 10 attempts"));
+        assert!(display.contains("Last error: unknown"));
     }
 
     #[test]
@@ -308,10 +368,39 @@ mod tests {
     }
 
     #[test]
+    fn test_client_error_connection_failed_display() {
+        let io_err =
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
+        let err = ClientError::ConnectionFailed(io_err);
+        let display = err.to_string();
+        assert!(display.contains("Connection to daemon failed"));
+        assert!(display.contains("cannot be resolved by auto-starting"));
+    }
+
+    #[test]
+    fn test_client_error_source_connection_failed() {
+        let io_err =
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
+        let err = ClientError::ConnectionFailed(io_err);
+        assert!(err.source().is_some());
+    }
+
+    #[test]
     fn test_client_error_source_daemon_start_failed() {
-        // DaemonStartFailed has no underlying source error
-        let err = ClientError::DaemonStartFailed;
+        // DaemonStartFailed with no last_error has no source
+        let err = ClientError::DaemonStartFailed {
+            attempts: 5,
+            last_error: None,
+        };
         assert!(err.source().is_none());
+
+        // DaemonStartFailed with last_error has a source
+        let io_err = std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "refused");
+        let err_with_source = ClientError::DaemonStartFailed {
+            attempts: 5,
+            last_error: Some(io_err),
+        };
+        assert!(err_with_source.source().is_some());
     }
 
     #[test]
@@ -371,7 +460,10 @@ mod tests {
         // Verify ClientResult type is properly defined and usable
         // This test verifies type compatibility without actual socket operations
         let _result: ClientResult<()> = Ok(());
-        let _err_result: ClientResult<()> = Err(Box::new(ClientError::DaemonStartFailed));
+        let _err_result: ClientResult<()> = Err(Box::new(ClientError::DaemonStartFailed {
+            attempts: 10,
+            last_error: None,
+        }));
     }
 
     #[test]
@@ -388,9 +480,13 @@ mod tests {
     #[test]
     fn test_client_error_debug() {
         // Verify Debug trait is derived
-        let err = ClientError::DaemonStartFailed;
+        let err = ClientError::DaemonStartFailed {
+            attempts: 3,
+            last_error: None,
+        };
         let debug_str = format!("{:?}", err);
         assert!(debug_str.contains("DaemonStartFailed"));
+        assert!(debug_str.contains("attempts: 3"));
 
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "test");
         let spawn_err = ClientError::SpawnFailed(io_err);
