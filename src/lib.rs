@@ -131,7 +131,7 @@ pub struct StateTransition {
 }
 
 /// API token usage tracking for a session.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApiUsage {
     /// Number of input tokens consumed.
     pub input_tokens: u64,
