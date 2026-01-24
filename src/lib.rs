@@ -525,4 +525,25 @@ mod tests {
         assert!(debug_str.contains("42"));
         assert!(debug_str.contains("84"));
     }
+
+    #[test]
+    fn test_status_serializes_lowercase() {
+        // Verify that Status enum serializes to lowercase strings
+        assert_eq!(
+            serde_json::to_string(&Status::Working).unwrap(),
+            "\"working\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Status::Attention).unwrap(),
+            "\"attention\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Status::Question).unwrap(),
+            "\"question\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Status::Closed).unwrap(),
+            "\"closed\""
+        );
+    }
 }
