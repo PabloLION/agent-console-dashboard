@@ -142,7 +142,7 @@ pub struct ApiUsage {
 }
 
 /// Agent session state with history tracking.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     /// Unique session identifier.
     pub id: String,
@@ -153,6 +153,7 @@ pub struct Session {
     /// Working directory for this session.
     pub working_dir: PathBuf,
     /// Timestamp when status last changed.
+    #[serde(with = "serde_instant")]
     pub since: Instant,
     /// History of state transitions (display limited by dashboard, not enforced here).
     pub history: Vec<StateTransition>,
