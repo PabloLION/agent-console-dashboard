@@ -118,15 +118,17 @@ pub enum AgentType {
 }
 
 /// Record of a state transition for tracking session history.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateTransition {
     /// When the transition occurred.
+    #[serde(with = "serde_instant")]
     pub timestamp: Instant,
     /// Previous status before the transition.
     pub from: Status,
     /// New status after the transition.
     pub to: Status,
     /// Duration spent in the previous status.
+    #[serde(with = "serde_duration")]
     pub duration: Duration,
 }
 
