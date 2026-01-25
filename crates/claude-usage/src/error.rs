@@ -33,3 +33,30 @@ pub enum CredentialError {
     #[error("HOME environment variable not set")]
     NoHomeDir,
 }
+
+/// Errors that can occur when calling the Anthropic API.
+#[derive(Debug, Error)]
+pub enum ApiError {
+    /// Network error during HTTP request.
+    #[error("Network error: {0}")]
+    Network(String),
+
+    /// API returned 401 Unauthorized - token is invalid or expired.
+    #[error("Unauthorized. Run `claude` to re-login.")]
+    Unauthorized,
+
+    /// API returned 429 Too Many Requests.
+    #[error("Rate limited. Retry after: {retry_after:?}")]
+    RateLimited {
+        /// Value of the retry-after header, if present.
+        retry_after: Option<String>,
+    },
+
+    /// API returned 5xx server error.
+    #[error("Server error: {0}")]
+    Server(u16),
+
+    /// API returned an unexpected status code.
+    #[error("Unexpected status code: {0}")]
+    Unexpected(u16),
+}

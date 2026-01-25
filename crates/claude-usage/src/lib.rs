@@ -33,8 +33,11 @@
 //! The `CLAUDE_CODE_OAUTH_TOKEN` environment variable can be set to override
 //! file-based credential retrieval on any platform.
 
+pub mod client;
 pub mod credentials;
 pub mod error;
 
+#[cfg(feature = "blocking")]
+pub use client::fetch_usage_raw;
 pub use credentials::get_token;
-pub use error::CredentialError;
+pub use error::{ApiError, CredentialError};
