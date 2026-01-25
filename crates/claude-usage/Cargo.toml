@@ -2,11 +2,16 @@
 name = "claude-usage"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.74"
+authors = ["Pablo LION <pablo.lion.music@gmail.com>"]
 description = "Fetch Claude API usage data from Anthropic"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/PabloLION/agent-console-dashboard"
-keywords = ["claude", "anthropic", "usage", "api"]
-categories = ["api-bindings"]
+homepage = "https://github.com/PabloLION/agent-console-dashboard"
+documentation = "https://docs.rs/claude-usage"
+readme = "README.md"
+keywords = ["claude", "anthropic", "usage", "api", "oauth"]
+categories = ["api-bindings", "authentication"]
 
 [features]
 default = ["blocking"]
