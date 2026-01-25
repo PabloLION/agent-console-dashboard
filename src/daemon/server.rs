@@ -266,32 +266,6 @@ impl Drop for SocketServer {
     }
 }
 
-/// Parses a status string into a Status enum.
-///
-/// Supported values (case-insensitive):
-/// - "working" -> Status::Working
-/// - "attention" -> Status::Attention
-/// - "question" -> Status::Question
-/// - "closed" -> Status::Closed
-fn parse_status(s: &str) -> Option<Status> {
-    match s.to_lowercase().as_str() {
-        "working" => Some(Status::Working),
-        "attention" => Some(Status::Attention),
-        "question" => Some(Status::Question),
-        "closed" => Some(Status::Closed),
-        _ => None,
-    }
-}
-
-/// Formats a Status enum as a lowercase string.
-fn format_status(status: Status) -> &'static str {
-    match status {
-        Status::Working => "working",
-        Status::Attention => "attention",
-        Status::Question => "question",
-        Status::Closed => "closed",
-    }
-}
 
 /// Handles a single client connection.
 ///
@@ -377,9 +351,9 @@ async fn handle_set_command(args: &[&str], store: &SessionStore) -> String {
         PathBuf::from("unknown")
     };
 
-    let status = match parse_status(status_str) {
-        Some(s) => s,
-        None => {
+    let status: Status = match status_str.parse() {
+        Ok(s) => s,
+        Err(_) => {
             return format!(
                 "ERR invalid status: {} (expected: working, attention, question, closed)\n",
                 status_str
@@ -400,11 +374,7 @@ async fn handle_set_command(args: &[&str], store: &SessionStore) -> String {
     // Update the session status (this will notify subscribers if status changed)
     match store.update_session(session_id, status).await {
         Some(session) => {
-            format!(
-                "OK {} {}\n",
-                session.id,
-                format_status(session.status)
-            )
+            format!("OK {} {}\n", session.id, session.status)
         }
         None => {
             // This should never happen - log as error for investigation
@@ -453,7 +423,7 @@ async fn handle_list_command(store: &SessionStore) -> String {
         response.push_str(&format!(
             "{} {} {}\n",
             session.id,
-            format_status(session.status),
+            session.status,
             elapsed
         ));
     }
@@ -477,7 +447,7 @@ async fn handle_get_command(args: &[&str], store: &SessionStore) -> String {
             format!(
                 "OK {} {} {} {}\n",
                 session.id,
-                format_status(session.status),
+                session.status,
                 elapsed,
                 session.working_dir.display()
             )
@@ -511,7 +481,7 @@ async fn handle_sub_command(
                 let message = format!(
                     "UPDATE {} {} {}\n",
                     update.session_id,
-                    format_status(update.status),
+                    update.status,
                     update.elapsed_seconds
                 );
                 if let Err(e) = writer.write_all(message.as_bytes()).await {

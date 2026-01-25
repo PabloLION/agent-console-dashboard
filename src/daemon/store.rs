@@ -87,6 +87,28 @@ impl SessionStore {
         }
     }
 
+    /// Broadcasts a status change notification to all subscribers.
+    ///
+    /// Only sends if the status actually changed (old_status != session.status).
+    /// Logs the result at trace/debug level.
+    fn broadcast_status_change(&self, old_status: Status, session: &Session) {
+        if old_status != session.status {
+            let update = SessionUpdate::new(
+                session.id.clone(),
+                session.status,
+                session.since.elapsed().as_secs(),
+            );
+            match self.update_tx.send(update) {
+                Ok(count) => {
+                    tracing::trace!("Broadcast update sent to {} subscribers", count);
+                }
+                Err(_) => {
+                    tracing::debug!("No subscribers for session update broadcast");
+                }
+            }
+        }
+    }
+
     /// Subscribes to session update notifications.
     ///
     /// Returns a broadcast receiver that will receive [`SessionUpdate`] messages
@@ -375,25 +397,7 @@ impl SessionStore {
             session.set_status(new_status);
             let updated_session = session.clone();
 
-            // Broadcast notification to subscribers using non-blocking try_send
-            // Only notify if the status actually changed
-            if old_status != new_status {
-                let update = SessionUpdate::new(
-                    updated_session.id.clone(),
-                    updated_session.status,
-                    updated_session.since.elapsed().as_secs(),
-                );
-                // Broadcast to subscribers; log if no receivers (expected when no subscribers)
-                match self.update_tx.send(update) {
-                    Ok(count) => {
-                        tracing::trace!("Broadcast update sent to {} subscribers", count);
-                    }
-                    Err(_) => {
-                        tracing::debug!("No subscribers for session update broadcast");
-                    }
-                }
-            }
-
+            self.broadcast_status_change(old_status, &updated_session);
             Some(updated_session)
         } else {
             None
@@ -460,25 +464,7 @@ impl SessionStore {
             session.set_status(Status::Closed);
             let closed_session = session.clone();
 
-            // Broadcast notification to subscribers using non-blocking try_send
-            // Only notify if the status actually changed (not already closed)
-            if old_status != Status::Closed {
-                let update = SessionUpdate::new(
-                    closed_session.id.clone(),
-                    closed_session.status,
-                    closed_session.since.elapsed().as_secs(),
-                );
-                // Broadcast to subscribers; log if no receivers (expected when no subscribers)
-                match self.update_tx.send(update) {
-                    Ok(count) => {
-                        tracing::trace!("Broadcast update sent to {} subscribers", count);
-                    }
-                    Err(_) => {
-                        tracing::debug!("No subscribers for session close broadcast");
-                    }
-                }
-            }
-
+            self.broadcast_status_change(old_status, &closed_session);
             Some(closed_session)
         } else {
             None
@@ -541,8 +527,8 @@ impl SessionStore {
     /// }
     /// ```
     pub async fn remove_session(&self, id: &str) -> Option<Session> {
-        let mut sessions = self.sessions.write().await;
-        sessions.remove(id)
+        // Delegates to remove() - both methods are equivalent
+        self.remove(id).await
     }
 }
 
