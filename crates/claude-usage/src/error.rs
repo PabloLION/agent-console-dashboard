@@ -60,3 +60,22 @@ pub enum ApiError {
     #[error("Unexpected status code: {0}")]
     Unexpected(u16),
 }
+
+/// Unified error type for [`get_usage()`](crate::get_usage).
+///
+/// This error type wraps all possible errors that can occur when
+/// fetching usage data.
+#[derive(Debug, Error)]
+pub enum Error {
+    /// Error retrieving credentials.
+    #[error(transparent)]
+    Credential(#[from] CredentialError),
+
+    /// Error calling the API.
+    #[error(transparent)]
+    Api(#[from] ApiError),
+
+    /// Error parsing the API response.
+    #[error("Failed to parse API response: {0}")]
+    Parse(String),
+}
