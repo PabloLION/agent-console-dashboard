@@ -14,6 +14,9 @@
 #[cfg(target_os = "macos")]
 mod macos;
 
+#[cfg(target_os = "linux")]
+mod linux;
+
 use crate::error::CredentialError;
 
 /// Service name used by Claude Code in macOS Keychain.
