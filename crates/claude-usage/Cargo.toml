@@ -1,0 +1,31 @@
+[package]
+name = "claude-usage"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+authors = ["Pablo LION <pablo.lion.music@gmail.com>"]
+description = "Fetch Claude API usage data from Anthropic"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/PabloLION/agent-console-dashboard"
+homepage = "https://github.com/PabloLION/agent-console-dashboard"
+documentation = "https://docs.rs/claude-usage"
+readme = "README.md"
+keywords = ["claude", "anthropic", "usage", "api", "oauth"]
+categories = ["api-bindings", "authentication"]
+
+[features]
+default = ["blocking"]
+blocking = ["reqwest/blocking"]
+
+[dependencies]
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "2"
+
+[dev-dependencies]
+tempfile = "3"

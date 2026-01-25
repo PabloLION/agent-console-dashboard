@@ -41,9 +41,7 @@ fn unique_socket_path(temp_dir: &TempDir, prefix: &str) -> String {
 }
 
 /// Helper to start a server and run it in the background with shutdown support
-async fn start_server_with_shutdown(
-    socket_path: String,
-) -> (SocketServer, broadcast::Sender<()>) {
+async fn start_server_with_shutdown(socket_path: String) -> (SocketServer, broadcast::Sender<()>) {
     let mut server = SocketServer::new(socket_path);
     server.start().await.expect("Failed to start server");
     let (shutdown_tx, _) = broadcast::channel(1);
@@ -72,16 +70,9 @@ async fn test_client_can_connect_to_server() {
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     // Connect client
-    let connect_result = timeout(
-        Duration::from_secs(1),
-        UnixStream::connect(&socket_path),
-    )
-    .await;
+    let connect_result = timeout(Duration::from_secs(1), UnixStream::connect(&socket_path)).await;
 
-    assert!(
-        connect_result.is_ok(),
-        "Connection should not timeout"
-    );
+    assert!(connect_result.is_ok(), "Connection should not timeout");
     assert!(
         connect_result.unwrap().is_ok(),
         "Client should successfully connect to server"
@@ -163,15 +154,15 @@ async fn test_client_sends_command_and_receives_response() {
 
     // Read response
     let mut response = String::new();
-    let read_result = timeout(
-        Duration::from_secs(1),
-        reader.read_line(&mut response),
-    )
-    .await;
+    let read_result = timeout(Duration::from_secs(1), reader.read_line(&mut response)).await;
 
     assert!(read_result.is_ok(), "Read should not timeout");
     assert!(read_result.unwrap().is_ok(), "Read should succeed");
-    assert!(response.starts_with("OK"), "Server should respond with OK for LIST command, got: {}", response);
+    assert!(
+        response.starts_with("OK"),
+        "Server should respond with OK for LIST command, got: {}",
+        response
+    );
 
     // Shutdown
     shutdown_tx.send(()).ok();
@@ -204,8 +195,14 @@ async fn test_client_sends_multiple_commands() {
 
     // Send multiple valid commands
     let commands = vec![
-        ("SET multi-test-1 working /project1\n", "OK multi-test-1 working"),
-        ("SET multi-test-2 attention /project2\n", "OK multi-test-2 attention"),
+        (
+            "SET multi-test-1 working /project1\n",
+            "OK multi-test-1 working",
+        ),
+        (
+            "SET multi-test-2 attention /project2\n",
+            "OK multi-test-2 attention",
+        ),
         ("LIST\n", "OK"),
     ];
 
@@ -285,7 +282,11 @@ async fn test_command_io_latency_under_1ms() {
         round_trip
     );
 
-    assert!(response.starts_with("OK"), "Should receive OK response, got: {}", response);
+    assert!(
+        response.starts_with("OK"),
+        "Should receive OK response, got: {}",
+        response
+    );
 
     // Shutdown
     shutdown_tx.send(()).ok();
@@ -320,9 +321,7 @@ async fn test_multiple_concurrent_clients() {
     for i in 0..num_clients {
         let path = socket_path.clone();
         let handle = tokio::spawn(async move {
-            let stream = UnixStream::connect(&path)
-                .await
-                .expect("Failed to connect");
+            let stream = UnixStream::connect(&path).await.expect("Failed to connect");
             let (reader, mut writer) = stream.into_split();
             let mut reader = BufReader::new(reader);
 
@@ -471,15 +470,16 @@ async fn test_rapid_connect_disconnect() {
     let mut reader = BufReader::new(reader);
 
     // Use a valid LIST command to verify server is responsive
-    writer
-        .write_all(b"LIST\n")
-        .await
-        .expect("Should write");
+    writer.write_all(b"LIST\n").await.expect("Should write");
     writer.flush().await.expect("Should flush");
 
     let mut response = String::new();
     reader.read_line(&mut response).await.expect("Should read");
-    assert!(response.starts_with("OK"), "Server should respond with OK, got: {}", response);
+    assert!(
+        response.starts_with("OK"),
+        "Server should respond with OK, got: {}",
+        response
+    );
 
     // Shutdown
     shutdown_tx.send(()).ok();
@@ -497,10 +497,7 @@ async fn test_stale_socket_cleaned_up_on_startup() {
 
     // Create a fake stale socket file
     fs::write(&socket_path, "fake stale socket content").expect("Failed to create stale file");
-    assert!(
-        Path::new(&socket_path).exists(),
-        "Stale file should exist"
-    );
+    assert!(Path::new(&socket_path).exists(), "Stale file should exist");
 
     // Start server - should clean up stale file
     let mut server = SocketServer::new(socket_path.clone());
@@ -707,8 +704,15 @@ async fn test_server_handles_client_disconnect_gracefully() {
         writer.flush().await.expect("Failed to flush");
 
         let mut response = String::new();
-        reader.read_line(&mut response).await.expect("Failed to read");
-        assert!(response.starts_with("OK disconnect-session working"), "Got: {}", response);
+        reader
+            .read_line(&mut response)
+            .await
+            .expect("Failed to read");
+        assert!(
+            response.starts_with("OK disconnect-session working"),
+            "Got: {}",
+            response
+        );
     } // First client disconnects here
 
     // Give server time to process disconnect
@@ -729,8 +733,15 @@ async fn test_server_handles_client_disconnect_gracefully() {
     writer.flush().await.expect("Failed to flush");
 
     let mut response = String::new();
-    reader.read_line(&mut response).await.expect("Failed to read");
-    assert!(response.starts_with("OK disconnect-session working"), "Server should respond to GET, got: {}", response);
+    reader
+        .read_line(&mut response)
+        .await
+        .expect("Failed to read");
+    assert!(
+        response.starts_with("OK disconnect-session working"),
+        "Server should respond to GET, got: {}",
+        response
+    );
 
     // Shutdown
     shutdown_tx.send(()).ok();
@@ -756,7 +767,9 @@ async fn test_server_continues_after_client_error() {
 
     // Connect and abruptly drop without proper protocol
     for _ in 0..5 {
-        let stream = UnixStream::connect(&socket_path).await.expect("Failed to connect");
+        let stream = UnixStream::connect(&socket_path)
+            .await
+            .expect("Failed to connect");
         // Write partial data and drop
         let (_, mut writer) = stream.into_split();
         let _ = writer.write_all(b"partial data no newline").await;
@@ -774,15 +787,19 @@ async fn test_server_continues_after_client_error() {
     let mut reader = BufReader::new(reader);
 
     // Use a valid LIST command to verify server still responds correctly
-    writer
-        .write_all(b"LIST\n")
-        .await
-        .expect("Failed to write");
+    writer.write_all(b"LIST\n").await.expect("Failed to write");
     writer.flush().await.expect("Failed to flush");
 
     let mut response = String::new();
-    reader.read_line(&mut response).await.expect("Failed to read");
-    assert!(response.starts_with("OK"), "Server should respond with OK, got: {}", response);
+    reader
+        .read_line(&mut response)
+        .await
+        .expect("Failed to read");
+    assert!(
+        response.starts_with("OK"),
+        "Server should respond with OK, got: {}",
+        response
+    );
 
     // Shutdown
     shutdown_tx.send(()).ok();
@@ -997,7 +1014,11 @@ async fn test_lifecycle_multiple_sessions() {
         .read_line(&mut response)
         .await
         .expect("Failed to read LIST header");
-    assert!(response.starts_with("OK"), "LIST header failed: {}", response);
+    assert!(
+        response.starts_with("OK"),
+        "LIST header failed: {}",
+        response
+    );
 
     // Read all session lines
     let mut sessions = Vec::new();
@@ -1084,8 +1105,14 @@ async fn test_lifecycle_status_transitions() {
     writer.flush().await.expect("Failed to flush");
 
     response.clear();
-    reader.read_line(&mut response).await.expect("Failed to read");
-    assert!(response.contains("working"), "Initial status should be working");
+    reader
+        .read_line(&mut response)
+        .await
+        .expect("Failed to read");
+    assert!(
+        response.contains("working"),
+        "Initial status should be working"
+    );
 
     // Transition: working -> attention
     writer
@@ -1095,7 +1122,10 @@ async fn test_lifecycle_status_transitions() {
     writer.flush().await.expect("Failed to flush");
 
     response.clear();
-    reader.read_line(&mut response).await.expect("Failed to read");
+    reader
+        .read_line(&mut response)
+        .await
+        .expect("Failed to read");
     assert!(
         response.contains("attention"),
         "Status should transition to attention"
@@ -1109,7 +1139,10 @@ async fn test_lifecycle_status_transitions() {
     writer.flush().await.expect("Failed to flush");
 
     response.clear();
-    reader.read_line(&mut response).await.expect("Failed to read");
+    reader
+        .read_line(&mut response)
+        .await
+        .expect("Failed to read");
     assert!(
         response.contains("question"),
         "Status should transition to question"
@@ -1123,7 +1156,10 @@ async fn test_lifecycle_status_transitions() {
     writer.flush().await.expect("Failed to flush");
 
     response.clear();
-    reader.read_line(&mut response).await.expect("Failed to read");
+    reader
+        .read_line(&mut response)
+        .await
+        .expect("Failed to read");
     assert!(
         response.contains("working"),
         "Status should transition back to working"
@@ -1137,7 +1173,10 @@ async fn test_lifecycle_status_transitions() {
     writer.flush().await.expect("Failed to flush");
 
     response.clear();
-    reader.read_line(&mut response).await.expect("Failed to read");
+    reader
+        .read_line(&mut response)
+        .await
+        .expect("Failed to read");
     assert!(
         response.contains("closed"),
         "Session should be closed after RM"
@@ -1151,7 +1190,10 @@ async fn test_lifecycle_status_transitions() {
     writer.flush().await.expect("Failed to flush");
 
     response.clear();
-    reader.read_line(&mut response).await.expect("Failed to read");
+    reader
+        .read_line(&mut response)
+        .await
+        .expect("Failed to read");
     assert!(
         response.contains("closed"),
         "GET should show closed status, got: {}",
@@ -1254,7 +1296,10 @@ async fn test_subscriber_receives_update() {
         .write_all(b"SET sub-test-session attention\n")
         .await
         .expect("Failed to write SET update");
-    client_writer.flush().await.expect("Failed to flush SET update");
+    client_writer
+        .flush()
+        .await
+        .expect("Failed to flush SET update");
 
     // Read SET update response on client
     client_reader
@@ -1454,20 +1499,17 @@ async fn test_multiple_subscribers() {
                 assert_eq!(
                     parts[0], "UPDATE",
                     "Subscriber {} message should start with UPDATE, got: {}",
-                    i,
-                    sub_response
+                    i, sub_response
                 );
                 assert_eq!(
                     parts[1], "multi-sub-session",
                     "Subscriber {} session ID should match, got: {}",
-                    i,
-                    parts[1]
+                    i, parts[1]
                 );
                 assert_eq!(
                     parts[2], "attention",
                     "Subscriber {} status should be attention, got: {}",
-                    i,
-                    parts[2]
+                    i, parts[2]
                 );
                 // Verify elapsed_seconds is a valid number
                 let elapsed: Result<u64, _> = parts[3].parse();

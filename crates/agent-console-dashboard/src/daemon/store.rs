@@ -14,7 +14,7 @@ use tokio::sync::{broadcast, RwLock};
 /// This allows for bursty update scenarios without dropping notifications.
 const DEFAULT_SUBSCRIBER_CHANNEL_CAPACITY: usize = 256;
 
-/// Thread-safe session store wrapping a HashMap with Arc<RwLock>.
+/// Thread-safe session store wrapping a HashMap with `Arc<RwLock>`.
 ///
 /// The SessionStore provides CRUD operations for managing agent sessions
 /// with safe concurrent access. Multiple async tasks can read simultaneously,
@@ -46,7 +46,7 @@ const DEFAULT_SUBSCRIBER_CHANNEL_CAPACITY: usize = 256;
 /// ```
 #[derive(Clone)]
 pub struct SessionStore {
-    /// Internal session storage wrapped in Arc<RwLock> for thread-safe access.
+    /// Internal session storage wrapped in `Arc<RwLock>` for thread-safe access.
     sessions: Arc<RwLock<HashMap<String, Session>>>,
     /// Broadcast channel sender for subscriber notifications.
     /// Subscribers receive [`SessionUpdate`] messages on state changes.
@@ -1267,9 +1267,7 @@ mod tests {
             .await;
 
         // Update status
-        let _ = store
-            .update_session("persist-test", Status::Question)
-            .await;
+        let _ = store.update_session("persist-test", Status::Question).await;
 
         // Verify the update persisted by reading from store again
         let retrieved = store.get("persist-test").await;
@@ -2045,7 +2043,10 @@ mod tests {
 
         // Subscriber should receive the notification
         let update = rx.try_recv();
-        assert!(update.is_ok(), "Subscriber should receive update notification");
+        assert!(
+            update.is_ok(),
+            "Subscriber should receive update notification"
+        );
         let update = update.unwrap();
         assert_eq!(update.session_id, "notify-test");
         assert_eq!(update.status, Status::Attention);
@@ -2162,9 +2163,7 @@ mod tests {
         let _ = store
             .update_session("multi-update", Status::Attention)
             .await;
-        let _ = store
-            .update_session("multi-update", Status::Question)
-            .await;
+        let _ = store.update_session("multi-update", Status::Question).await;
         let _ = store.close_session("multi-update").await;
 
         // Subscriber should receive all three notifications

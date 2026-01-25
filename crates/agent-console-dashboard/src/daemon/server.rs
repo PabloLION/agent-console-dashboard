@@ -266,7 +266,6 @@ impl Drop for SocketServer {
     }
 }
 
-
 /// Handles a single client connection.
 ///
 /// This function reads commands from the client and processes them:
@@ -420,12 +419,7 @@ async fn handle_list_command(store: &SessionStore) -> String {
     let mut response = String::from("OK\n");
     for session in sessions {
         let elapsed = session.since.elapsed().as_secs();
-        response.push_str(&format!(
-            "{} {} {}\n",
-            session.id,
-            session.status,
-            elapsed
-        ));
+        response.push_str(&format!("{} {} {}\n", session.id, session.status, elapsed));
     }
 
     response
@@ -480,9 +474,7 @@ async fn handle_sub_command(
             Ok(update) => {
                 let message = format!(
                     "UPDATE {} {} {}\n",
-                    update.session_id,
-                    update.status,
-                    update.elapsed_seconds
+                    update.session_id, update.status, update.elapsed_seconds
                 );
                 if let Err(e) = writer.write_all(message.as_bytes()).await {
                     tracing::debug!("Subscriber disconnected (write failed): {}", e);
