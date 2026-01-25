@@ -52,7 +52,9 @@ fn map_response(response: reqwest::blocking::Response) -> Result<String, ApiErro
     let status = response.status().as_u16();
 
     match status {
-        200 => response.text().map_err(|e| ApiError::Network(e.to_string())),
+        200 => response
+            .text()
+            .map_err(|e| ApiError::Network(e.to_string())),
         401 => Err(ApiError::Unauthorized),
         429 => {
             let retry_after = response

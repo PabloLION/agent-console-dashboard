@@ -24,8 +24,7 @@ pub fn get_token_macos() -> Result<String, CredentialError> {
         get_generic_password(KEYCHAIN_SERVICE, "").map_err(|_| CredentialError::NotFound)?;
 
     // Convert bytes to string
-    let content =
-        String::from_utf8(password).map_err(|e| CredentialError::Parse(e.to_string()))?;
+    let content = String::from_utf8(password).map_err(|e| CredentialError::Parse(e.to_string()))?;
 
     // Parse and extract token
     parse_credential_json(&content)

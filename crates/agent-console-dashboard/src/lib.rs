@@ -778,7 +778,10 @@ mod tests {
     #[test]
     fn test_session_metadata_with_working_dir() {
         let metadata = SessionMetadata::with_working_dir(PathBuf::from("/home/user/project"));
-        assert_eq!(metadata.working_dir, Some(PathBuf::from("/home/user/project")));
+        assert_eq!(
+            metadata.working_dir,
+            Some(PathBuf::from("/home/user/project"))
+        );
         assert!(metadata.session_id.is_none());
         assert!(metadata.agent_type.is_none());
     }
@@ -851,11 +854,7 @@ mod tests {
 
     #[test]
     fn test_session_update_new() {
-        let update = SessionUpdate::new(
-            "session-1".to_string(),
-            Status::Working,
-            120,
-        );
+        let update = SessionUpdate::new("session-1".to_string(), Status::Working, 120);
         assert_eq!(update.session_id, "session-1");
         assert_eq!(update.status, Status::Working);
         assert_eq!(update.elapsed_seconds, 120);
@@ -863,11 +862,7 @@ mod tests {
 
     #[test]
     fn test_session_update_clone() {
-        let update = SessionUpdate::new(
-            "clone-test".to_string(),
-            Status::Attention,
-            60,
-        );
+        let update = SessionUpdate::new("clone-test".to_string(), Status::Attention, 60);
         let cloned = update.clone();
         assert_eq!(cloned.session_id, update.session_id);
         assert_eq!(cloned.status, update.status);
@@ -876,32 +871,16 @@ mod tests {
 
     #[test]
     fn test_session_update_equality() {
-        let update1 = SessionUpdate::new(
-            "eq-test".to_string(),
-            Status::Question,
-            30,
-        );
-        let update2 = SessionUpdate::new(
-            "eq-test".to_string(),
-            Status::Question,
-            30,
-        );
-        let update3 = SessionUpdate::new(
-            "eq-test".to_string(),
-            Status::Working,
-            30,
-        );
+        let update1 = SessionUpdate::new("eq-test".to_string(), Status::Question, 30);
+        let update2 = SessionUpdate::new("eq-test".to_string(), Status::Question, 30);
+        let update3 = SessionUpdate::new("eq-test".to_string(), Status::Working, 30);
         assert_eq!(update1, update2);
         assert_ne!(update1, update3);
     }
 
     #[test]
     fn test_session_update_debug_format() {
-        let update = SessionUpdate::new(
-            "debug-test".to_string(),
-            Status::Closed,
-            45,
-        );
+        let update = SessionUpdate::new("debug-test".to_string(), Status::Closed, 45);
         let debug_str = format!("{:?}", update);
         assert!(debug_str.contains("debug-test"));
         assert!(debug_str.contains("Closed"));
@@ -910,12 +889,13 @@ mod tests {
 
     #[test]
     fn test_session_update_all_statuses() {
-        for status in [Status::Working, Status::Attention, Status::Question, Status::Closed] {
-            let update = SessionUpdate::new(
-                "status-test".to_string(),
-                status,
-                0,
-            );
+        for status in [
+            Status::Working,
+            Status::Attention,
+            Status::Question,
+            Status::Closed,
+        ] {
+            let update = SessionUpdate::new("status-test".to_string(), status, 0);
             assert_eq!(update.status, status);
         }
     }

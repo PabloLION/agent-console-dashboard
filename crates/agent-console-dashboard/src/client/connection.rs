@@ -54,7 +54,10 @@ pub enum ClientError {
 impl fmt::Display for ClientError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ClientError::DaemonStartFailed { attempts, last_error } => {
+            ClientError::DaemonStartFailed {
+                attempts,
+                last_error,
+            } => {
                 write!(
                     f,
                     "Daemon failed to start after {} attempts. \
@@ -369,8 +372,7 @@ mod tests {
 
     #[test]
     fn test_client_error_connection_failed_display() {
-        let io_err =
-            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
+        let io_err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
         let err = ClientError::ConnectionFailed(io_err);
         let display = err.to_string();
         assert!(display.contains("Connection to daemon failed"));
@@ -379,8 +381,7 @@ mod tests {
 
     #[test]
     fn test_client_error_source_connection_failed() {
-        let io_err =
-            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
+        let io_err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
         let err = ClientError::ConnectionFailed(io_err);
         assert!(err.source().is_some());
     }
@@ -550,8 +551,7 @@ mod tests {
         // Spawn a task to accept multiple connections
         let accept_handle = tokio::spawn(async move {
             let mut connections = 0;
-            while let Ok(Ok((stream, _))) =
-                timeout(Duration::from_secs(5), listener.accept()).await
+            while let Ok(Ok((stream, _))) = timeout(Duration::from_secs(5), listener.accept()).await
             {
                 connections += 1;
                 tokio::spawn(async move {
@@ -569,10 +569,9 @@ mod tests {
         let mut handles = Vec::new();
         for _ in 0..3 {
             let path = socket_path_clone.clone();
-            let handle =
-                tokio::spawn(
-                    async move { timeout(Duration::from_secs(3), connect_with_auto_start(&path)).await },
-                );
+            let handle = tokio::spawn(async move {
+                timeout(Duration::from_secs(3), connect_with_auto_start(&path)).await
+            });
             handles.push(handle);
         }
 

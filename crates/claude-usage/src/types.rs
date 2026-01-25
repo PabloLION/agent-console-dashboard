@@ -218,7 +218,10 @@ mod tests {
             utilization: 30.0,
             resets_at: Utc::now() + Duration::minutes(150), // 50% remaining
         };
-        assert!(period.is_on_pace(5), "30% usage at 50% time should be on pace");
+        assert!(
+            period.is_on_pace(5),
+            "30% usage at 50% time should be on pace"
+        );
     }
 
     #[test]
