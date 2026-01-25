@@ -1,0 +1,139 @@
+# Story: Linux Credential File Fetch
+
+**Story ID:** S042 **Epic:**
+[E011 - Claude Usage Crate](../epic/E011-claude-usage-crate.md) **Status:**
+Draft **Priority:** P1 **Estimated Points:** 2
+
+## Description
+
+As a Linux user, I want the claude-usage crate to fetch OAuth credentials from
+the credential file, So that I can retrieve my API usage without manually
+providing credentials.
+
+## Context
+
+On Linux, Claude Code stores OAuth credentials in a JSON file at
+`~/.claude/.credentials.json`. The format is identical to the macOS Keychain
+value. This story implements credential retrieval for Linux systems.
+
+## Implementation Details
+
+### Technical Approach
+
+1. Read file from `~/.claude/.credentials.json`
+2. Also check `CLAUDE_CODE_OAUTH_TOKEN` environment variable (takes precedence)
+3. Parse JSON to extract `claudeAiOauth.accessToken`
+4. Check `expiresAt` to detect expired tokens
+5. Return token or appropriate error
+6. Ensure token is not logged or stored beyond immediate use
+
+### Credential Location
+
+```text
+~/.claude/.credentials.json
+```
+
+### Files to Create/Modify
+
+- `crates/claude-usage/src/credentials/linux.rs` - Linux implementation
+- `crates/claude-usage/src/credentials/mod.rs` - Add Linux to module
+
+### Dependencies
+
+- [S040 - Workspace Restructure](./S040-workspace-restructure.md)
+- [S041 - macOS Credential Fetch](./S041-macos-credential-fetch.md) - Shares
+  error types and parsing logic
+
+## Acceptance Criteria
+
+- [ ] Given valid credentials file, when `get_token()` is called, then the
+      access token is returned
+- [ ] Given `CLAUDE_CODE_OAUTH_TOKEN` env var set, when `get_token()` is called,
+      then env var value is used (precedence over file)
+- [ ] Given missing credentials file, when `get_token()` is called, then
+      `CredentialNotFound` error is returned
+- [ ] Given unreadable file (permissions), when `get_token()` is called, then
+      appropriate error is returned
+- [ ] Given expired credentials, when `get_token()` is called, then
+      `TokenExpired` error is returned
+
+## Testing Requirements
+
+- [ ] Unit test: Parse valid credential JSON correctly
+- [ ] Unit test: Environment variable takes precedence over file
+- [ ] Unit test: Handle missing file gracefully
+- [ ] Unit test: Handle permission errors gracefully
+- [ ] Integration test: Read real credential file (manual/CI skip)
+
+## Out of Scope
+
+- secret-service/libsecret integration (may add later)
+- Token refresh
+- Writing credentials to file
+
+## Notes
+
+### Implementation
+
+```rust
+use std::fs;
+use std::path::PathBuf;
+
+pub fn get_token_linux() -> Result<String, CredentialError> {
+    // Check environment variable first
+    if let Ok(token) = std::env::var("CLAUDE_CODE_OAUTH_TOKEN") {
+        return Ok(token);
+    }
+
+    // Read from file
+    let path = get_credentials_path()?;
+    let content = fs::read_to_string(&path)
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => CredentialError::NotFound,
+            std::io::ErrorKind::PermissionDenied => {
+                CredentialError::Permission(path.display().to_string())
+            }
+            _ => CredentialError::Io(e.to_string()),
+        })?;
+
+    // Parse and extract token (same logic as macOS)
+    parse_credential_json(&content)
+}
+
+fn get_credentials_path() -> Result<PathBuf, CredentialError> {
+    let home = std::env::var("HOME")
+        .map_err(|_| CredentialError::NoHomeDir)?;
+    Ok(PathBuf::from(home).join(".claude/.credentials.json"))
+}
+```
+
+### Shared Parsing Logic
+
+The JSON parsing and expiration check logic should be shared between macOS and
+Linux implementations:
+
+```rust
+// In credentials/mod.rs
+pub(crate) fn parse_credential_json(content: &str) -> Result<String, CredentialError> {
+    let json: serde_json::Value = serde_json::from_str(content)
+        .map_err(|e| CredentialError::Parse(e.to_string()))?;
+
+    let oauth = json.get("claudeAiOauth")
+        .ok_or(CredentialError::MissingField("claudeAiOauth"))?;
+
+    // Check expiration
+    check_expiration(oauth)?;
+
+    let token = oauth.get("accessToken")
+        .and_then(|v| v.as_str())
+        .ok_or(CredentialError::MissingField("accessToken"))?;
+
+    Ok(token.to_string())
+}
+```
+
+### Security Note
+
+The Linux credential file is less secure than macOS Keychain (plain file on
+disk). Users should ensure proper file permissions (600). The crate should still
+follow strict security practices: read → use → discard immediately.
