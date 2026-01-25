@@ -1,0 +1,11 @@
+# Source files
+*.rs
+Cargo.toml
+Cargo.lock
+
+# Build artifacts
+target/
+*.node
+
+# Development files
+.cargo/

@@ -1,0 +1,42 @@
+{
+  "name": "claude-usage",
+  "version": "0.1.0",
+  "description": "Fetch Claude API usage data from Anthropic (Node.js native addon)",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "browser": false,
+  "os": ["darwin", "linux"],
+  "cpu": ["x64", "arm64"],
+  "napi": {
+    "name": "claude-usage",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "aarch64-apple-darwin"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "prepublishOnly": "napi prepublish -t npm"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PabloLION/agent-console-dashboard"
+  },
+  "keywords": [
+    "claude",
+    "anthropic",
+    "usage",
+    "api",
+    "oauth"
+  ],
+  "author": "Pablo LION <pablo.lion.music@gmail.com>",
+  "license": "MIT OR Apache-2.0",
+  "engines": {
+    "node": ">= 14"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.4"
+  }
+}

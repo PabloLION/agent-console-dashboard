@@ -41,6 +41,8 @@
 pub mod client;
 pub mod credentials;
 pub mod error;
+#[cfg(feature = "napi")]
+pub mod napi;
 pub mod types;
 
 #[cfg(feature = "blocking")]

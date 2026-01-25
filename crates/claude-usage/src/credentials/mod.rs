@@ -184,33 +184,31 @@ mod tests {
         assert_eq!(token, "sk-ant-oat01-no-expiry");
     }
 
+    // Env var tests are combined into one function to avoid parallel test interference
+    // since they modify the same environment variable (CLAUDE_CODE_OAUTH_TOKEN)
     #[test]
-    fn test_env_var_takes_precedence() {
-        // Use a unique env var name to avoid test interference
-        // Since we can't easily mock the env var check, test the logic directly
+    fn test_env_var_behavior() {
+        use std::sync::Mutex;
+        static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+        // Lock to prevent parallel test interference
+        let _guard = ENV_MUTEX.lock().expect("env mutex");
+
+        // First: test that setting env var works
         let token = "test-env-token-value";
         std::env::set_var(ENV_VAR_TOKEN, token);
-
-        // Verify the env var is set
         assert_eq!(std::env::var(ENV_VAR_TOKEN).ok(), Some(token.to_string()));
 
-        // The get_token function should return this value
+        // Test that get_token returns the env var value
         let result = get_token();
-        std::env::remove_var(ENV_VAR_TOKEN);
-
         assert_eq!(result.expect("should use env var"), token);
-    }
 
-    #[test]
-    fn test_empty_env_var_behavior() {
-        // Empty env var should fall through to platform-specific implementation
-        // We just verify the logic exists - actual behavior depends on platform state
+        // Second: test empty env var behavior
         std::env::set_var(ENV_VAR_TOKEN, "");
-
-        // Verify empty string is detected
         let env_value = std::env::var(ENV_VAR_TOKEN).ok();
         assert_eq!(env_value, Some(String::new()));
 
+        // Cleanup
         std::env::remove_var(ENV_VAR_TOKEN);
     }
 }
