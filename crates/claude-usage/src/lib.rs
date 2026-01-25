@@ -11,6 +11,13 @@
 //! - Typed response structures for usage data
 //! - Secure credential handling (read, use, discard immediately)
 //!
+//! ## Platform Support
+//!
+//! | Platform | Credential Source |
+//! |----------|-------------------|
+//! | macOS | Keychain ("Claude Code-credentials") |
+//! | Linux | `~/.claude/.credentials.json` |
+//!
 //! ## Example
 //!
 //! ```rust,ignore
@@ -20,5 +27,14 @@
 //! println!("5h utilization: {}%", usage.five_hour.utilization);
 //! println!("7d utilization: {}%", usage.seven_day.utilization);
 //! ```
+//!
+//! ## Environment Variable
+//!
+//! The `CLAUDE_CODE_OAUTH_TOKEN` environment variable can be set to override
+//! file-based credential retrieval on any platform.
 
-// Placeholder - functionality to be added in subsequent stories
+pub mod credentials;
+pub mod error;
+
+pub use credentials::get_token;
+pub use error::CredentialError;
