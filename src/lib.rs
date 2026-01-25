@@ -13,7 +13,9 @@
 //! - `fork()` for daemon process creation
 //! - Unix signal handling (SIGTERM, SIGINT)
 
+use std::fmt;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 /// Daemon module providing process lifecycle management and daemonization.
@@ -34,6 +36,44 @@ pub enum Status {
     Question,
     /// Session has been closed
     Closed,
+}
+
+impl fmt::Display for Status {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Status::Working => "working",
+            Status::Attention => "attention",
+            Status::Question => "question",
+            Status::Closed => "closed",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+/// Error type for parsing Status from string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseStatusError(pub String);
+
+impl fmt::Display for ParseStatusError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid status: {}", self.0)
+    }
+}
+
+impl std::error::Error for ParseStatusError {}
+
+impl FromStr for Status {
+    type Err = ParseStatusError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "working" => Ok(Status::Working),
+            "attention" => Ok(Status::Attention),
+            "question" => Ok(Status::Question),
+            "closed" => Ok(Status::Closed),
+            _ => Err(ParseStatusError(s.to_string())),
+        }
+    }
 }
 
 /// Agent type enumeration representing different AI coding agents.

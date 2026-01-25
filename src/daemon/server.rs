@@ -255,38 +255,17 @@ impl Drop for SocketServer {
         if path.exists() {
             tracing::debug!("Cleaning up socket file: {}", self.socket_path);
             if let Err(e) = fs::remove_file(path) {
-                tracing::warn!("Failed to remove socket file on drop: {}", e);
+                tracing::error!(
+                    "Failed to remove socket file '{}': {}. \
+                    Next daemon start may fail. Manually remove the file if needed.",
+                    self.socket_path,
+                    e
+                );
             }
         }
     }
 }
 
-/// Parses a status string into a Status enum.
-///
-/// Supported values (case-insensitive):
-/// - "working" -> Status::Working
-/// - "attention" -> Status::Attention
-/// - "question" -> Status::Question
-/// - "closed" -> Status::Closed
-fn parse_status(s: &str) -> Option<Status> {
-    match s.to_lowercase().as_str() {
-        "working" => Some(Status::Working),
-        "attention" => Some(Status::Attention),
-        "question" => Some(Status::Question),
-        "closed" => Some(Status::Closed),
-        _ => None,
-    }
-}
-
-/// Formats a Status enum as a lowercase string.
-fn format_status(status: Status) -> &'static str {
-    match status {
-        Status::Working => "working",
-        Status::Attention => "attention",
-        Status::Question => "question",
-        Status::Closed => "closed",
-    }
-}
 
 /// Handles a single client connection.
 ///
@@ -372,9 +351,9 @@ async fn handle_set_command(args: &[&str], store: &SessionStore) -> String {
         PathBuf::from("unknown")
     };
 
-    let status = match parse_status(status_str) {
-        Some(s) => s,
-        None => {
+    let status: Status = match status_str.parse() {
+        Ok(s) => s,
+        Err(_) => {
             return format!(
                 "ERR invalid status: {} (expected: working, attention, question, closed)\n",
                 status_str
@@ -395,14 +374,14 @@ async fn handle_set_command(args: &[&str], store: &SessionStore) -> String {
     // Update the session status (this will notify subscribers if status changed)
     match store.update_session(session_id, status).await {
         Some(session) => {
-            format!(
-                "OK {} {}\n",
-                session.id,
-                format_status(session.status)
-            )
+            format!("OK {} {}\n", session.id, session.status)
         }
         None => {
-            // This shouldn't happen since we just created/got the session, but handle it
+            // This should never happen - log as error for investigation
+            tracing::error!(
+                "BUG: session '{}' not found immediately after get_or_create_session",
+                session_id
+            );
             format!("ERR session not found: {}\n", session_id)
         }
     }
@@ -444,7 +423,7 @@ async fn handle_list_command(store: &SessionStore) -> String {
         response.push_str(&format!(
             "{} {} {}\n",
             session.id,
-            format_status(session.status),
+            session.status,
             elapsed
         ));
     }
@@ -468,7 +447,7 @@ async fn handle_get_command(args: &[&str], store: &SessionStore) -> String {
             format!(
                 "OK {} {} {} {}\n",
                 session.id,
-                format_status(session.status),
+                session.status,
                 elapsed,
                 session.working_dir.display()
             )
@@ -502,16 +481,15 @@ async fn handle_sub_command(
                 let message = format!(
                     "UPDATE {} {} {}\n",
                     update.session_id,
-                    format_status(update.status),
+                    update.status,
                     update.elapsed_seconds
                 );
-                if writer.write_all(message.as_bytes()).await.is_err() {
-                    // Client disconnected
-                    tracing::debug!("Subscriber disconnected (write failed)");
+                if let Err(e) = writer.write_all(message.as_bytes()).await {
+                    tracing::debug!("Subscriber disconnected (write failed): {}", e);
                     break;
                 }
-                if writer.flush().await.is_err() {
-                    tracing::debug!("Subscriber disconnected (flush failed)");
+                if let Err(e) = writer.flush().await {
+                    tracing::debug!("Subscriber disconnected (flush failed): {}", e);
                     break;
                 }
             }
@@ -521,8 +499,14 @@ async fn handle_sub_command(
                 break;
             }
             Err(broadcast::error::RecvError::Lagged(count)) => {
-                // Subscriber fell behind, skip missed messages
                 tracing::warn!("Subscriber lagged, missed {} messages", count);
+                // Notify client of missed messages so they can refresh if needed
+                let lag_message = format!("WARN lagged {}\n", count);
+                if let Err(e) = writer.write_all(lag_message.as_bytes()).await {
+                    tracing::debug!("Failed to notify client of lag: {}", e);
+                    break;
+                }
+                let _ = writer.flush().await;
             }
         }
     }
