@@ -2,7 +2,7 @@
 
 **Story ID:** S046 **Epic:**
 [E011 - Claude Usage Crate](../epic/E011-claude-usage-crate.md) **Status:**
-Draft **Priority:** P2 **Estimated Points:** 5
+Implemented **Priority:** P2 **Estimated Points:** 5
 
 ## Description
 

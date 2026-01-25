@@ -46,6 +46,8 @@ budget their AI assistant usage appropriately.
   system for api-usage widget
 - [E006 - Claude Code Integration](./E006-claude-code-integration.md) - Hooks
   may provide usage data from Claude Code
+- [E011 - Claude Usage Crate](./E011-claude-usage-crate.md) - Provides
+  account-level quota utilization data (5h/7d) via the `claude-usage` crate
 
 ## Acceptance Criteria
 
@@ -60,20 +62,45 @@ budget their AI assistant usage appropriately.
 
 ## Technical Notes
 
+### Relationship with E011 (Claude Usage Crate)
+
+This epic handles **per-session token tracking** (how many tokens each session
+consumed), while E011 provides **account-level quota data** (5-hour and 7-day
+utilization percentages from Anthropic's API).
+
+| Scope   | Epic | Data Source   | Example                               |
+| ------- | ---- | ------------- | ------------------------------------- |
+| Session | E009 | Hooks/logs    | "This session used 12,000 tokens"     |
+| Account | E011 | Anthropic API | "You've used 77% of your 7-day quota" |
+
+The daemon periodically fetches account-level quota data using the
+`claude-usage` crate:
+
+```rust
+use claude_usage::get_usage;
+
+fn refresh_quota(&self) -> Result<(), Error> {
+    let quota = get_usage()?;
+    // quota.five_hour.utilization, quota.seven_day.utilization, etc.
+    self.broadcast_quota_update(quota);
+    Ok(())
+}
+```
+
 ### API Usage Data Model
 
 Track usage at the session level with aggregation support:
 
-| Field                | Type              | Description                      |
-| -------------------- | ----------------- | -------------------------------- |
-| session_id           | String            | Claude Code session identifier   |
-| input_tokens         | u64               | Total input tokens consumed      |
-| output_tokens        | u64               | Total output tokens generated    |
-| total_tokens         | u64               | Sum of input and output tokens   |
-| estimated_cost       | f64               | Estimated cost in USD (optional) |
+| Field                | Type                | Description                      |
+| -------------------- | ------------------- | -------------------------------- |
+| session_id           | String              | Claude Code session identifier   |
+| input_tokens         | u64                 | Total input tokens consumed      |
+| output_tokens        | u64                 | Total output tokens generated    |
+| total_tokens         | u64                 | Sum of input and output tokens   |
+| estimated_cost       | f64                 | Estimated cost in USD (optional) |
 | rate_limit_remaining | `Option<u32>`       | Remaining API calls if available |
 | rate_limit_reset     | `Option<Timestamp>` | When rate limit resets           |
-| updated_at           | Timestamp         | Last update time                 |
+| updated_at           | Timestamp           | Last update time                 |
 
 ### IPC Commands
 

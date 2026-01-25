@@ -938,6 +938,11 @@ const API_STALE_WARNING_SECS: u64 = 300;  // 5 minutes
 
 **Decision:** Reuse Claude Code's OAuth credentials (no separate key needed)
 
+**Implementation:** Completed in
+[E011 - Claude Usage Crate](../epic/E011-claude-usage-crate.md). The
+`claude-usage` crate (published to crates.io) handles all credential retrieval
+and API calls. Use `claude_usage::get_usage()` to fetch account quota data.
+
 **Verified API:**
 
 ```text
@@ -971,10 +976,10 @@ security find-generic-password -s "Claude Code-credentials" -w
 
 **Platform support:**
 
-| Platform | Credential Location                   | Access Method      |
-| -------- | ------------------------------------- | ------------------ |
-| macOS    | Keychain: `"Claude Code-credentials"` | `security` command |
-| Linux    | TBD (likely secret-service or file)   | Needs research     |
+| Platform | Credential Location                   | Access Method            |
+| -------- | ------------------------------------- | ------------------------ |
+| macOS    | Keychain: `"Claude Code-credentials"` | security-framework crate |
+| Linux    | `~/.claude/.credentials.json`         | File read + JSON parse   |
 
 **Error handling:**
 

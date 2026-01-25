@@ -1,6 +1,7 @@
 # Epic: Claude Usage Crate
 
-**Epic ID:** E011 **Status:** Draft **Priority:** High **Estimated Effort:** M
+**Epic ID:** E011 **Status:** Complete **Priority:** High **Estimated Effort:**
+M
 
 ## Summary
 
@@ -31,16 +32,16 @@ retrieval and API calls. This crate fills that gap, enabling:
 
 ## Stories
 
-| Story ID                                                | Title                           | Priority | Status |
-| ------------------------------------------------------- | ------------------------------- | -------- | ------ |
-| [S040](../stories/S040-workspace-restructure.md)        | Restructure as Cargo workspace  | P0       | Draft  |
-| [S041](../stories/S041-macos-credential-fetch.md)       | macOS Keychain credential fetch | P0       | Draft  |
-| [S042](../stories/S042-linux-credential-fetch.md)       | Linux credential file fetch     | P1       | Draft  |
-| [S043](../stories/S043-usage-api-client.md)             | Usage API client                | P0       | Draft  |
-| [S044](../stories/S044-typed-usage-response.md)         | Typed usage response structs    | P0       | Draft  |
-| [S045](../stories/S045-publish-crates-io.md)            | Publish to crates.io            | P0       | Draft  |
-| [S046](../stories/S046-napi-rs-bindings.md)             | napi-rs bindings for npm        | P2       | Draft  |
-| [S047](../stories/S047-update-e009-use-claude-usage.md) | Update E009 to use claude-usage | P2       | Draft  |
+| Story ID                                                | Title                           | Priority | Status      |
+| ------------------------------------------------------- | ------------------------------- | -------- | ----------- |
+| [S040](../stories/S040-workspace-restructure.md)        | Restructure as Cargo workspace  | P0       | Merged      |
+| [S041](../stories/S041-macos-credential-fetch.md)       | macOS Keychain credential fetch | P0       | Merged      |
+| [S042](../stories/S042-linux-credential-fetch.md)       | Linux credential file fetch     | P1       | Merged      |
+| [S043](../stories/S043-usage-api-client.md)             | Usage API client                | P0       | Merged      |
+| [S044](../stories/S044-typed-usage-response.md)         | Typed usage response structs    | P0       | Merged      |
+| [S045](../stories/S045-publish-crates-io.md)            | Publish to crates.io            | P0       | Merged      |
+| [S046](../stories/S046-napi-rs-bindings.md)             | napi-rs bindings for npm        | P2       | Implemented |
+| [S047](../stories/S047-update-e009-use-claude-usage.md) | Update E009 to use claude-usage | P2       | Implemented |
 
 ## Dependencies
 
