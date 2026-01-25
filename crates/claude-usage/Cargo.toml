@@ -27,7 +27,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 chrono = { version = "0.4", features = ["serde"] }
-napi = { version = "2", features = ["async"], optional = true }
+napi = { version = "2", optional = true }
 napi-derive = { version = "2", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]

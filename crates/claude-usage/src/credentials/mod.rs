@@ -90,14 +90,10 @@ pub(crate) fn parse_credential_json(content: &str) -> Result<String, CredentialE
         .get("claudeAiOauth")
         .ok_or(CredentialError::MissingField("claudeAiOauth"))?;
 
-    // Check expiration if expiresAt is present
-    if let Some(expires_at) = oauth.get("expiresAt").and_then(|v| v.as_i64()) {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time should be after Unix epoch")
-            .as_millis() as i64;
-
-        if now > expires_at {
+    // Check expiration if expiresAt is present (value is milliseconds since epoch)
+    if let Some(expires_at_ms) = oauth.get("expiresAt").and_then(|v| v.as_i64()) {
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        if now_ms > expires_at_ms {
             return Err(CredentialError::Expired);
         }
     }

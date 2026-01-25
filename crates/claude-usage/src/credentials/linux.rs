@@ -46,6 +46,26 @@ mod tests {
     use std::io::Write;
     use tempfile::TempDir;
 
+    /// RAII guard for HOME environment variable - ensures cleanup even on panic.
+    struct HomeGuard(Option<String>);
+
+    impl HomeGuard {
+        fn set(path: &std::path::Path) -> Self {
+            let original = std::env::var("HOME").ok();
+            std::env::set_var("HOME", path);
+            Self(original)
+        }
+    }
+
+    impl Drop for HomeGuard {
+        fn drop(&mut self) {
+            match &self.0 {
+                Some(home) => std::env::set_var("HOME", home),
+                None => std::env::remove_var("HOME"),
+            }
+        }
+    }
+
     #[test]
     fn test_credentials_path_format() {
         assert_eq!(LINUX_CREDENTIALS_PATH, ".claude/.credentials.json");
@@ -53,31 +73,36 @@ mod tests {
 
     #[test]
     fn test_get_credentials_path_uses_home() {
-        // Temporarily set HOME
-        let original_home = std::env::var("HOME").ok();
-        std::env::set_var("HOME", "/test/home");
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let _guard = HomeGuard::set(temp_dir.path());
 
         let path = get_credentials_path().expect("should get path");
-        assert_eq!(path, PathBuf::from("/test/home/.claude/.credentials.json"));
-
-        // Restore
-        if let Some(home) = original_home {
-            std::env::set_var("HOME", home);
-        }
+        let expected = temp_dir.path().join(".claude/.credentials.json");
+        assert_eq!(path, expected);
     }
 
     #[test]
     fn test_get_credentials_path_no_home() {
-        let original_home = std::env::var("HOME").ok();
-        std::env::remove_var("HOME");
+        // Use a special guard that removes HOME instead of setting it
+        struct NoHomeGuard(Option<String>);
+        impl NoHomeGuard {
+            fn new() -> Self {
+                let original = std::env::var("HOME").ok();
+                std::env::remove_var("HOME");
+                Self(original)
+            }
+        }
+        impl Drop for NoHomeGuard {
+            fn drop(&mut self) {
+                if let Some(home) = &self.0 {
+                    std::env::set_var("HOME", home);
+                }
+            }
+        }
 
+        let _guard = NoHomeGuard::new();
         let result = get_credentials_path();
         assert!(matches!(result, Err(CredentialError::NoHomeDir)));
-
-        // Restore
-        if let Some(home) = original_home {
-            std::env::set_var("HOME", home);
-        }
     }
 
     #[test]
@@ -99,16 +124,8 @@ mod tests {
         )
         .expect("write credentials");
 
-        // Set HOME to temp dir
-        let original_home = std::env::var("HOME").ok();
-        std::env::set_var("HOME", temp_dir.path());
-
+        let _guard = HomeGuard::set(temp_dir.path());
         let result = get_token_linux();
-
-        // Restore HOME
-        if let Some(home) = original_home {
-            std::env::set_var("HOME", home);
-        }
 
         assert_eq!(
             result.expect("should read token"),
@@ -119,16 +136,9 @@ mod tests {
     #[test]
     fn test_missing_credentials_file() {
         let temp_dir = TempDir::new().expect("create temp dir");
-
-        let original_home = std::env::var("HOME").ok();
-        std::env::set_var("HOME", temp_dir.path());
+        let _guard = HomeGuard::set(temp_dir.path());
 
         let result = get_token_linux();
-
-        if let Some(home) = original_home {
-            std::env::set_var("HOME", home);
-        }
-
         assert!(matches!(result, Err(CredentialError::NotFound)));
     }
 
@@ -142,14 +152,8 @@ mod tests {
         let mut file = File::create(&creds_path).expect("create credentials file");
         writeln!(file, "not valid json").expect("write invalid content");
 
-        let original_home = std::env::var("HOME").ok();
-        std::env::set_var("HOME", temp_dir.path());
-
+        let _guard = HomeGuard::set(temp_dir.path());
         let result = get_token_linux();
-
-        if let Some(home) = original_home {
-            std::env::set_var("HOME", home);
-        }
 
         assert!(matches!(result, Err(CredentialError::Parse(_))));
     }
@@ -173,14 +177,8 @@ mod tests {
         )
         .expect("write expired credentials");
 
-        let original_home = std::env::var("HOME").ok();
-        std::env::set_var("HOME", temp_dir.path());
-
+        let _guard = HomeGuard::set(temp_dir.path());
         let result = get_token_linux();
-
-        if let Some(home) = original_home {
-            std::env::set_var("HOME", home);
-        }
 
         assert!(matches!(result, Err(CredentialError::Expired)));
     }

@@ -41,7 +41,8 @@ pub fn fetch_usage_raw(token: &str) -> Result<String, ApiError> {
         .header("Authorization", format!("Bearer {}", token))
         .header("anthropic-beta", BETA_HEADER)
         .send()
-        .map_err(|e| ApiError::Network(e.to_string()))?;
+        // Use generic message to avoid any potential token exposure in error details
+        .map_err(|_| ApiError::Network("Failed to connect to Anthropic API".to_string()))?;
 
     map_response(response)
 }
@@ -54,7 +55,7 @@ fn map_response(response: reqwest::blocking::Response) -> Result<String, ApiErro
     match status {
         200 => response
             .text()
-            .map_err(|e| ApiError::Network(e.to_string())),
+            .map_err(|_| ApiError::Network("Failed to read response body".to_string())),
         401 => Err(ApiError::Unauthorized),
         429 => {
             let retry_after = response
