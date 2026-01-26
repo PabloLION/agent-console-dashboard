@@ -30,9 +30,6 @@ chrono = { version = "0.4", features = ["serde"] }
 napi = { version = "2", optional = true }
 napi-derive = { version = "2", optional = true }
 
-[target.'cfg(target_os = "macos")'.dependencies]
-security-framework = "2"
-
 [build-dependencies]
 napi-build = "2"
 
