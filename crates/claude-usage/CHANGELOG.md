@@ -8,8 +8,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-01-26
+
 ### Changed
 
+- **Breaking**: `time_until_reset()`, `time_elapsed_percent()`, `is_on_pace()`
+  now return `Option<T>` to handle cases where `resets_at` is unavailable
+- **Breaking**: `five_hour_on_pace()`, `seven_day_on_pace()` now return
+  `Option<bool>`
+- `UsagePeriod.resets_at` is now `Option<DateTime<Utc>>` to handle null API
+  responses
 - Improved error messages to use generic text instead of potentially exposing
   sensitive data
 - Use `chrono` for timestamp calculations instead of manual UNIX epoch math
@@ -18,7 +26,14 @@ and this project adheres to
 
 ### Fixed
 
+- macOS Keychain lookup now uses current username instead of empty string
+- API response parsing no longer fails when `resets_at` is null
 - Test cleanup now uses RAII pattern to prevent environment pollution on panic
+
+### Added
+
+- `examples/fetch_usage.rs` for end-to-end testing and usage demonstration
+- Documentation for 8-hour OAuth token lifecycle and refresh behavior
 
 ## [0.1.0] - 2026-01-22
 
@@ -42,6 +57,8 @@ and this project adheres to
 - Uses platform-native secure storage
 
 [Unreleased]:
-  https://github.com/PabloLION/agent-console-dashboard/compare/claude-usage-v0.1.0...HEAD
+  https://github.com/PabloLION/agent-console-dashboard/compare/claude-usage-v0.2.0...HEAD
+[0.2.0]:
+  https://github.com/PabloLION/agent-console-dashboard/compare/claude-usage-v0.1.0...claude-usage-v0.2.0
 [0.1.0]:
   https://github.com/PabloLION/agent-console-dashboard/releases/tag/claude-usage-v0.1.0
