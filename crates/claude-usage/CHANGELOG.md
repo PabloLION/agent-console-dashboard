@@ -8,6 +8,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-01-26
+
+### Changed
+
+- Example: Replace "on-pace" indicator with direct percentage comparison
+  (`Quota used: 41%  |  Time elapsed: 75%`) for easier interpretation
+
 ## [0.2.1] - 2026-01-26
 
 ### Changed
@@ -70,7 +77,9 @@ and this project adheres to
 - Uses platform-native secure storage
 
 [Unreleased]:
-  https://github.com/PabloLION/agent-console-dashboard/compare/claude-usage-v0.2.1...HEAD
+  https://github.com/PabloLION/agent-console-dashboard/compare/claude-usage-v0.2.2...HEAD
+[0.2.2]:
+  https://github.com/PabloLION/agent-console-dashboard/compare/claude-usage-v0.2.1...claude-usage-v0.2.2
 [0.2.1]:
   https://github.com/PabloLION/agent-console-dashboard/compare/claude-usage-v0.2.0...claude-usage-v0.2.1
 [0.2.0]:
