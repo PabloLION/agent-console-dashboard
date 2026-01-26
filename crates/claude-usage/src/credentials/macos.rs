@@ -19,9 +19,10 @@ use crate::error::CredentialError;
 /// - Token is expired
 pub fn get_token_macos() -> Result<String, CredentialError> {
     // Query Keychain for the Claude Code credentials
-    // Account name is empty string as used by Claude Code
-    let password =
-        get_generic_password(KEYCHAIN_SERVICE, "").map_err(|_| CredentialError::NotFound)?;
+    // Claude Code stores credentials under the current user's username
+    let username = get_current_username()?;
+    let password = get_generic_password(KEYCHAIN_SERVICE, &username)
+        .map_err(|_| CredentialError::NotFound)?;
 
     // Convert bytes to string - use generic message to avoid exposing credential bytes
     let content = String::from_utf8(password)
@@ -29,6 +30,13 @@ pub fn get_token_macos() -> Result<String, CredentialError> {
 
     // Parse and extract token
     parse_credential_json(&content)
+}
+
+/// Get the current system username for Keychain lookup.
+fn get_current_username() -> Result<String, CredentialError> {
+    std::env::var("USER")
+        .or_else(|_| std::env::var("LOGNAME"))
+        .map_err(|_| CredentialError::NotFound)
 }
 
 #[cfg(test)]
