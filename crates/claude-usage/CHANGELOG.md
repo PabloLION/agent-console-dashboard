@@ -8,6 +8,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-01-26
+
+### Changed
+
+- macOS: Use `/usr/bin/security` CLI instead of `security-framework` crate for
+  Keychain access. This eliminates password prompts since the CLI is already
+  authorized in Claude Code's Keychain ACL.
+
+### Removed
+
+- Removed `security-framework` dependency (macOS-only). Now uses standard
+  library `std::process::Command` to call the system `security` binary.
+
 ## [0.2.0] - 2026-01-26
 
 ### Changed
@@ -57,7 +70,9 @@ and this project adheres to
 - Uses platform-native secure storage
 
 [Unreleased]:
-  https://github.com/PabloLION/agent-console-dashboard/compare/claude-usage-v0.2.0...HEAD
+  https://github.com/PabloLION/agent-console-dashboard/compare/claude-usage-v0.2.1...HEAD
+[0.2.1]:
+  https://github.com/PabloLION/agent-console-dashboard/compare/claude-usage-v0.2.0...claude-usage-v0.2.1
 [0.2.0]:
   https://github.com/PabloLION/agent-console-dashboard/compare/claude-usage-v0.1.0...claude-usage-v0.2.0
 [0.1.0]:
