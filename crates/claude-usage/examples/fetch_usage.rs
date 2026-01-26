@@ -22,35 +22,29 @@ fn main() {
     match get_usage() {
         Ok(usage) => {
             // 5-hour usage
-            println!("5-Hour Usage:");
-            println!("  Utilization: {:.1}%", usage.five_hour.utilization);
-            if let Some(resets_at) = usage.five_hour.resets_at {
-                println!("  Resets at: {}", resets_at);
+            println!("5-Hour Window:");
+            print!("  Quota used: {:.1}%", usage.five_hour.utilization);
+            if let Some(elapsed) = usage.five_hour.time_elapsed_percent(5) {
+                println!("  |  Time elapsed: {:.1}%", elapsed);
+            } else {
+                println!();
             }
             if let Some(time_left) = usage.five_hour.time_until_reset() {
-                println!("  Time until reset: {} minutes", time_left.num_minutes());
-            }
-            match usage.five_hour_on_pace() {
-                Some(true) => println!("  On pace: ✅ Yes"),
-                Some(false) => println!("  On pace: ⚠️  No"),
-                None => println!("  On pace: (unknown - no reset time)"),
+                println!("  Resets in: {} minutes", time_left.num_minutes());
             }
 
             println!();
 
             // 7-day usage
-            println!("7-Day Usage:");
-            println!("  Utilization: {:.1}%", usage.seven_day.utilization);
-            if let Some(resets_at) = usage.seven_day.resets_at {
-                println!("  Resets at: {}", resets_at);
+            println!("7-Day Window:");
+            print!("  Quota used: {:.1}%", usage.seven_day.utilization);
+            if let Some(elapsed) = usage.seven_day.time_elapsed_percent(7 * 24) {
+                println!("  |  Time elapsed: {:.1}%", elapsed);
+            } else {
+                println!();
             }
             if let Some(time_left) = usage.seven_day.time_until_reset() {
-                println!("  Time until reset: {} hours", time_left.num_hours());
-            }
-            match usage.seven_day_on_pace() {
-                Some(true) => println!("  On pace: ✅ Yes"),
-                Some(false) => println!("  On pace: ⚠️  No"),
-                None => println!("  On pace: (unknown - no reset time)"),
+                println!("  Resets in: {} hours", time_left.num_hours());
             }
 
             // Extra usage if available
