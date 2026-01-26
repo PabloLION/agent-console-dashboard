@@ -4,6 +4,59 @@
 //! - macOS: Reads from Keychain
 //! - Linux: Reads from `~/.claude/.credentials.json`
 //!
+//! # Token Lifecycle
+//!
+//! Claude Code OAuth tokens have a limited validity period:
+//!
+//! | Property | Value |
+//! |----------|-------|
+//! | Token type | OAuth access token |
+//! | Validity | **8 hours** from issuance |
+//! | Refresh | Automatic by Claude Code CLI |
+//! | Storage | Platform keychain / credential file |
+//!
+//! ## Token Rotation
+//!
+//! Tokens are rotated approximately every 8 hours. When a token expires:
+//!
+//! 1. **If Claude Code is running**: It automatically refreshes the token using
+//!    the refresh token stored alongside the access token.
+//!
+//! 2. **If Claude Code is not running**: The token will be expired when you
+//!    next try to use it. Running `claude` will trigger a refresh.
+//!
+//! ## Error Handling for Expired Tokens
+//!
+//! This crate returns [`CredentialError::Expired`] when:
+//! - The `expiresAt` timestamp in the credential JSON is in the past
+//!
+//! The API returns [`ApiError::Unauthorized`](crate::ApiError::Unauthorized) when:
+//! - The token was valid locally but rejected by the server
+//! - This can happen if the token was revoked or if clocks are out of sync
+//!
+//! ## Recommended Error Handling
+//!
+//! ```rust,ignore
+//! use claude_usage::{get_usage, Error, CredentialError, ApiError};
+//!
+//! match get_usage() {
+//!     Ok(usage) => { /* success */ }
+//!     Err(Error::Credential(CredentialError::NotFound)) => {
+//!         // User hasn't logged in with Claude Code
+//!         eprintln!("Run `claude` to login first");
+//!     }
+//!     Err(Error::Credential(CredentialError::Expired)) => {
+//!         // Token expired locally - needs refresh
+//!         eprintln!("Token expired. Run `claude` to refresh");
+//!     }
+//!     Err(Error::Api(ApiError::Unauthorized)) => {
+//!         // Token rejected by server - may be revoked or clock skew
+//!         eprintln!("Token invalid. Run `claude` to re-authenticate");
+//!     }
+//!     Err(e) => eprintln!("Error: {}", e),
+//! }
+//! ```
+//!
 //! # Security
 //!
 //! Tokens are retrieved, used immediately, and discarded. They are never:
