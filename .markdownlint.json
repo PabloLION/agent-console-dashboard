@@ -30,7 +30,9 @@
     "lines_above": 1,
     "lines_below": 1
   },
-  "no-duplicate-heading": true,
+  "no-duplicate-heading": {
+    "siblings_only": true
+  },
   "single-title": {
     "front_matter_title": ""
   },

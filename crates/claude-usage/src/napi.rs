@@ -98,15 +98,15 @@ pub fn get_usage() -> napi::Result<JsUsageData> {
 /// @param resets_at - ISO 8601 timestamp when the period resets
 /// @param period_hours - Total duration of the period in hours (5 for 5-hour, 168 for 7-day)
 /// @returns true if current utilization is sustainable
+/// @throws Error if resets_at cannot be parsed as RFC3339 timestamp
 #[napi]
-pub fn is_on_pace(utilization: f64, resets_at: String, period_hours: u32) -> bool {
-    if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&resets_at) {
-        let period = crate::types::UsagePeriod {
-            utilization,
-            resets_at: parsed.with_timezone(&chrono::Utc),
-        };
-        period.is_on_pace(period_hours)
-    } else {
-        false
-    }
+pub fn is_on_pace(utilization: f64, resets_at: String, period_hours: u32) -> napi::Result<bool> {
+    let parsed = chrono::DateTime::parse_from_rfc3339(&resets_at)
+        .map_err(|_| napi::Error::from_reason("Invalid RFC3339 timestamp for resets_at"))?;
+
+    let period = crate::types::UsagePeriod {
+        utilization,
+        resets_at: parsed.with_timezone(&chrono::Utc),
+    };
+    Ok(period.is_on_pace(period_hours))
 }
