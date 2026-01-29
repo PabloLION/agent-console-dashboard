@@ -30,10 +30,10 @@ mandatory configuration.
 
 | Story ID                                              | Title                             | Priority | Status |
 | ----------------------------------------------------- | --------------------------------- | -------- | ------ |
-| [S027](../stories/S027-toml-configuration-schema.md)  | Define TOML configuration schema  | P1       | Draft  |
-| [S028](../stories/S028-configuration-loading.md)      | Implement configuration loading   | P1       | Draft  |
-| [S029](../stories/S029-xdg-path-support.md)           | Add XDG path support              | P2       | Draft  |
-| [S030](../stories/S030-default-configuration-file.md) | Create default configuration file | P2       | Draft  |
+| [S7.1](../stories/S7.1-toml-configuration-schema.md)  | Define TOML configuration schema  | P1       | Draft  |
+| [S7.2](../stories/S7.2-configuration-loading.md)      | Implement configuration loading   | P1       | Draft  |
+| [S7.3](../stories/S7.3-xdg-path-support.md)           | Add XDG path support              | P2       | Draft  |
+| [S7.4](../stories/S7.4-default-configuration-file.md) | Create default configuration file | P2       | Draft  |
 
 ## Dependencies
 

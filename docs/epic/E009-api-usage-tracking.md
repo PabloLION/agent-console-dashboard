@@ -30,9 +30,9 @@ budget their AI assistant usage appropriately.
 
 | Story ID                                         | Title                       | Priority | Status |
 | ------------------------------------------------ | --------------------------- | -------- | ------ |
-| [S034](../stories/S034-api-usage-data-model.md)  | Define API usage data model | P1       | Draft  |
-| [S035](../stories/S035-api-usage-command.md)     | Implement API_USAGE command | P1       | Draft  |
-| [S036](../stories/S036-api-usage-tui-display.md) | Display usage in TUI        | P2       | Draft  |
+| [S9.1](../stories/S9.1-api-usage-data-model.md)  | Define API usage data model | P1       | Draft  |
+| [S9.2](../stories/S9.2-api-usage-command.md)     | Implement API_USAGE command | P1       | Draft  |
+| [S9.3](../stories/S9.3-api-usage-tui-display.md) | Display usage in TUI        | P2       | Draft  |
 
 ## Dependencies
 

@@ -29,11 +29,11 @@ and manual testing straightforward.
 
 | Story ID                                        | Title                       | Priority | Status |
 | ----------------------------------------------- | --------------------------- | -------- | ------ |
-| [S009](../stories/S009-ipc-message-protocol.md) | Define IPC message protocol | P1       | Draft  |
-| [S010](../stories/S010-set-command.md)          | Implement SET command       | P1       | Draft  |
-| [S011](../stories/S011-list-command.md)         | Implement LIST command      | P1       | Draft  |
-| [S012](../stories/S012-subscribe-command.md)    | Implement SUBSCRIBE command | P1       | Draft  |
-| [S013](../stories/S013-cli-client-commands.md)  | Create CLI client commands  | P1       | Draft  |
+| [S3.1](../stories/S3.1-ipc-message-protocol.md) | Define IPC message protocol | P1       | Draft  |
+| [S3.2](../stories/S3.2-set-command.md)          | Implement SET command       | P1       | Draft  |
+| [S3.3](../stories/S3.3-list-command.md)         | Implement LIST command      | P1       | Draft  |
+| [S3.4](../stories/S3.4-subscribe-command.md)    | Implement SUBSCRIBE command | P1       | Draft  |
+| [S3.5](../stories/S3.5-cli-client-commands.md)  | Create CLI client commands  | P1       | Draft  |
 
 ## Dependencies
 
