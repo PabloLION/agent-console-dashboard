@@ -27,13 +27,14 @@ and manual testing straightforward.
 
 ## Stories
 
-| Story ID                                        | Title                       | Priority | Status |
-| ----------------------------------------------- | --------------------------- | -------- | ------ |
-| [S3.1](../stories/S3.1-ipc-message-protocol.md) | Define IPC message protocol | P1       | Draft  |
-| [S3.2](../stories/S3.2-set-command.md)          | Implement SET command       | P1       | Draft  |
-| [S3.3](../stories/S3.3-list-command.md)         | Implement LIST command      | P1       | Draft  |
-| [S3.4](../stories/S3.4-subscribe-command.md)    | Implement SUBSCRIBE command | P1       | Draft  |
-| [S3.5](../stories/S3.5-cli-client-commands.md)  | Create CLI client commands  | P1       | Draft  |
+| Story ID                                               | Title                                 | Priority | Status |
+| ------------------------------------------------------ | ------------------------------------- | -------- | ------ |
+| [S3.1](../stories/S3.1-ipc-message-protocol.md)        | Define IPC message protocol           | P1       | Draft  |
+| [S3.2](../stories/S3.2-set-command.md)                 | Implement SET command                 | P1       | Draft  |
+| [S3.3](../stories/S3.3-list-command.md)                | Implement LIST command                | P1       | Draft  |
+| [S3.4](../stories/S3.4-subscribe-command.md)           | Implement SUBSCRIBE command           | P1       | Draft  |
+| [S3.5](../stories/S3.5-cli-client-commands.md)         | Create CLI client commands            | P1       | Draft  |
+| [S3.6](../stories/S3.6-client-module-internal-only.md) | Ensure client module remains internal | P3       | Draft  |
 
 ## Dependencies
 
