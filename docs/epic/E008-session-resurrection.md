@@ -29,9 +29,9 @@ friction when switching between tasks or recovering from accidental closures.
 
 | Story ID                                             | Title                                      | Priority | Status |
 | ---------------------------------------------------- | ------------------------------------------ | -------- | ------ |
-| [S031](../stories/S031-closed-session-metadata.md)   | Store session metadata for closed sessions | P1       | Draft  |
-| [S032](../stories/S032-resurrect-command.md)         | Implement RESURRECT command                | P1       | Draft  |
-| [S033](../stories/S033-claude-resume-integration.md) | Integrate with claude --resume             | P2       | Draft  |
+| [S8.1](../stories/S8.1-closed-session-metadata.md)   | Store session metadata for closed sessions | P1       | Draft  |
+| [S8.2](../stories/S8.2-resurrect-command.md)         | Implement RESURRECT command                | P1       | Draft  |
+| [S8.3](../stories/S8.3-claude-resume-integration.md) | Integrate with claude --resume             | P2       | Draft  |
 
 ## Dependencies
 

@@ -30,10 +30,10 @@ have been waiting too long.
 
 | Story ID                                              | Title                                | Priority | Status |
 | ----------------------------------------------------- | ------------------------------------ | -------- | ------ |
-| [S005](../stories/S005-session-data-model.md)         | Define session data model            | P1       | Draft  |
-| [S006](../stories/S006-session-status-transitions.md) | Implement session status transitions | P1       | Draft  |
-| [S007](../stories/S007-session-state-history.md)      | Track session state history          | P2       | Draft  |
-| [S008](../stories/S008-session-lifecycle-events.md)   | Handle session lifecycle events      | P1       | Draft  |
+| [S2.1](../stories/S2.1-session-data-model.md)         | Define session data model            | P1       | Draft  |
+| [S2.2](../stories/S2.2-session-status-transitions.md) | Implement session status transitions | P1       | Draft  |
+| [S2.3](../stories/S2.3-session-state-history.md)      | Track session state history          | P2       | Draft  |
+| [S2.4](../stories/S2.4-session-lifecycle-events.md)   | Handle session lifecycle events      | P1       | Draft  |
 
 ## Dependencies
 

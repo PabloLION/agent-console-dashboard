@@ -32,16 +32,16 @@ retrieval and API calls. This crate fills that gap, enabling:
 
 ## Stories
 
-| Story ID                                                | Title                           | Priority | Status      |
-| ------------------------------------------------------- | ------------------------------- | -------- | ----------- |
-| [S040](../stories/S040-workspace-restructure.md)        | Restructure as Cargo workspace  | P0       | Merged      |
-| [S041](../stories/S041-macos-credential-fetch.md)       | macOS Keychain credential fetch | P0       | Merged      |
-| [S042](../stories/S042-linux-credential-fetch.md)       | Linux credential file fetch     | P1       | Merged      |
-| [S043](../stories/S043-usage-api-client.md)             | Usage API client                | P0       | Merged      |
-| [S044](../stories/S044-typed-usage-response.md)         | Typed usage response structs    | P0       | Merged      |
-| [S045](../stories/S045-publish-crates-io.md)            | Publish to crates.io            | P0       | Merged      |
-| [S046](../stories/S046-napi-rs-bindings.md)             | napi-rs bindings for npm        | P2       | Implemented |
-| [S047](../stories/S047-update-e009-use-claude-usage.md) | Update E009 to use claude-usage | P2       | Implemented |
+| Story ID                                                  | Title                           | Priority | Status      |
+| --------------------------------------------------------- | ------------------------------- | -------- | ----------- |
+| [S11.1](../stories/S11.1-workspace-restructure.md)        | Restructure as Cargo workspace  | P0       | Merged      |
+| [S11.2](../stories/S11.2-macos-credential-fetch.md)       | macOS Keychain credential fetch | P0       | Merged      |
+| [S11.3](../stories/S11.3-linux-credential-fetch.md)       | Linux credential file fetch     | P1       | Merged      |
+| [S11.4](../stories/S11.4-usage-api-client.md)             | Usage API client                | P0       | Merged      |
+| [S11.5](../stories/S11.5-typed-usage-response.md)         | Typed usage response structs    | P0       | Merged      |
+| [S11.6](../stories/S11.6-publish-crates-io.md)            | Publish to crates.io            | P0       | Merged      |
+| [S11.7](../stories/S11.7-napi-rs-bindings.md)             | napi-rs bindings for npm        | P2       | Implemented |
+| [S11.8](../stories/S11.8-update-e009-use-claude-usage.md) | Update E009 to use claude-usage | P2       | Implemented |
 
 ## Dependencies
 

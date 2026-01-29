@@ -29,10 +29,10 @@ friction.
 
 ## Stories
 
-| Story ID                                                | Title                                    | Priority | Status |
-| ------------------------------------------------------- | ---------------------------------------- | -------- | ------ |
-| [S037](../stories/S037-zellij-layout-dashboard.md)      | Create zellij layout with dashboard pane | P1       | Draft  |
-| [S038](../stories/S038-zellij-resurrection-workflow.md) | Document Zellij resurrection workflow    | P2       | Draft  |
+| Story ID                                                  | Title                                    | Priority | Status |
+| --------------------------------------------------------- | ---------------------------------------- | -------- | ------ |
+| [S10.1](../stories/S10.1-zellij-layout-dashboard.md)      | Create zellij layout with dashboard pane | P1       | Draft  |
+| [S10.2](../stories/S10.2-zellij-resurrection-workflow.md) | Document Zellij resurrection workflow    | P2       | Draft  |
 
 ## Dependencies
 

@@ -31,11 +31,11 @@ to adapt to different workflows.
 
 | Story ID                                          | Title                                             | Priority | Status |
 | ------------------------------------------------- | ------------------------------------------------- | -------- | ------ |
-| [S018](../stories/S018-widget-trait-interface.md) | Create widget trait/interface                     | P1       | Draft  |
-| [S019](../stories/S019-session-status-widget.md)  | Implement session-status widget                   | P1       | Draft  |
-| [S020](../stories/S020-working-dir-widget.md)     | Implement working-dir widget                      | P2       | Draft  |
-| [S021](../stories/S021-api-usage-widget.md)       | Implement api-usage widget                        | P2       | Draft  |
-| [S022](../stories/S022-layout-presets.md)         | Add layout presets (one-line, two-line, detailed) | P1       | Draft  |
+| [S5.1](../stories/S5.1-widget-trait-interface.md) | Create widget trait/interface                     | P1       | Draft  |
+| [S5.2](../stories/S5.2-session-status-widget.md)  | Implement session-status widget                   | P1       | Draft  |
+| [S5.3](../stories/S5.3-working-dir-widget.md)     | Implement working-dir widget                      | P2       | Draft  |
+| [S5.4](../stories/S5.4-api-usage-widget.md)       | Implement api-usage widget                        | P2       | Draft  |
+| [S5.5](../stories/S5.5-layout-presets.md)         | Add layout presets (one-line, two-line, detailed) | P1       | Draft  |
 
 ## Dependencies
 

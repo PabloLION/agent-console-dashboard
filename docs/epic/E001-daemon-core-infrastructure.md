@@ -29,10 +29,10 @@ continuously without impacting system performance.
 
 | Story ID                                           | Title                                    | Priority | Status |
 | -------------------------------------------------- | ---------------------------------------- | -------- | ------ |
-| [S001](../stories/S001-create-daemon-process.md)   | Create daemon process with CLI interface | P1       | Draft  |
-| [S002](../stories/S002-unix-socket-server.md)      | Implement Unix socket server             | P1       | Draft  |
-| [S003](../stories/S003-in-memory-session-store.md) | Implement in-memory session store        | P1       | Draft  |
-| [S004](../stories/S004-daemon-auto-start.md)       | Add daemon auto-start capability         | P2       | Draft  |
+| [S1.1](../stories/S1.1-create-daemon-process.md)   | Create daemon process with CLI interface | P1       | Draft  |
+| [S1.2](../stories/S1.2-unix-socket-server.md)      | Implement Unix socket server             | P1       | Draft  |
+| [S1.3](../stories/S1.3-in-memory-session-store.md) | Implement in-memory session store        | P1       | Draft  |
+| [S1.4](../stories/S1.4-daemon-auto-start.md)       | Add daemon auto-start capability         | P2       | Draft  |
 
 ## Dependencies
 

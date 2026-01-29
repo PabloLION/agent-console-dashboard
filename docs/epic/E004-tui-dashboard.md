@@ -30,10 +30,10 @@ perfectly in a Zellij/tmux pane without consuming excessive screen space.
 
 | Story ID                                                 | Title                                       | Priority | Status |
 | -------------------------------------------------------- | ------------------------------------------- | -------- | ------ |
-| [S014](../stories/S014-ratatui-application-scaffold.md)  | Create Ratatui application scaffold         | P1       | Draft  |
-| [S015](../stories/S015-main-dashboard-layout.md)         | Implement main dashboard layout             | P1       | Draft  |
-| [S016](../stories/S016-keyboard-navigation.md)           | Add keyboard navigation                     | P1       | Draft  |
-| [S017](../stories/S017-session-selection-detail-view.md) | Implement session selection and detail view | P2       | Draft  |
+| [S4.1](../stories/S4.1-ratatui-application-scaffold.md)  | Create Ratatui application scaffold         | P1       | Draft  |
+| [S4.2](../stories/S4.2-main-dashboard-layout.md)         | Implement main dashboard layout             | P1       | Draft  |
+| [S4.3](../stories/S4.3-keyboard-navigation.md)           | Add keyboard navigation                     | P1       | Draft  |
+| [S4.4](../stories/S4.4-session-selection-detail-view.md) | Implement session selection and detail view | P2       | Draft  |
 
 ## Dependencies
 
