@@ -53,6 +53,8 @@ multi-agent workflows.
 - [ ] Hook scripts correctly derive project name from current working directory
 - [ ] Documentation covers complete hook registration in Claude Code settings
 - [ ] All hooks are portable bash scripts with minimal dependencies
+- [ ] Manual test plan for each hook type documented per
+      [testing strategy](../decisions/testing-strategy.md)
 
 ## Technical Notes
 
@@ -60,11 +62,12 @@ multi-agent workflows.
 
 Claude Code hooks are shell scripts invoked at specific lifecycle events:
 
-| Hook               | When Fired                | Dashboard Action      |
-| ------------------ | ------------------------- | --------------------- |
-| `Stop`             | Session stops/completes   | Set status: Attention |
-| `Notification`     | Claude sends notification | Set status: Attention |
-| `UserPromptSubmit` | User sends message        | Set status: Working   |
+| Hook               | When Fired                   | Dashboard Action      |
+| ------------------ | ---------------------------- | --------------------- |
+| `Stop`             | Session stops/completes      | Set status: Attention |
+| `Notification`     | Claude sends notification    | Set status: Attention |
+| `UserPromptSubmit` | User sends message           | Set status: Working   |
+| `PreToolUse`       | AskUserQuestion tool invoked | Set status: Question  |
 
 ### Hook Script Location
 
@@ -101,15 +104,35 @@ PROJECT=$(basename "$PWD")
 agent-console set "$PROJECT" <status>
 ```
 
-### Known Limitations
+### AskUserQuestion Hook (Resolved)
 
-**AskQuestion Hook:** Currently not available or not working in Claude Code.
-Investigation needed to determine if this hook exists. If not available,
-consider:
+**AskUserQuestion IS detectable** via `PreToolUse` hook with `AskUserQuestion`
+matcher (since Claude Code v2.0.76, January 4, 2026). See
+[Q7 decision](../plans/7-decisions.md#q7-askuserquestion-hook-detection) for
+full details.
 
-1. Requesting the feature from Anthropic
-2. Implementing polling-based alternative
-3. Parsing Claude Code logs for question detection
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-console set $CC_SESSION_ID question"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Minimum version:** Claude Code v2.0.76+
+
+**Known bug:** [#15400](https://github.com/anthropics/claude-code/issues/15400)
+— PermissionRequest hook incorrectly interferes with AskUserQuestion.
 
 ### Configuration Integration
 

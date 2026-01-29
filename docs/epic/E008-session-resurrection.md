@@ -53,6 +53,10 @@ friction when switching between tasks or recovering from accidental closures.
 - [ ] RESURRECT command successfully invokes `claude --resume <session-id>`
 - [ ] Sessions that have exceeded context limits are marked as not resumable
 - [ ] Resurrection workflow handles terminal pane creation appropriately
+- [ ] Multiple closed sessions per directory are listed individually
+- [ ] Resurrection validates working directory still exists before proceeding
+- [ ] Unit tests for metadata storage; integration tests for RESURRECT command
+      per [testing strategy](../decisions/testing-strategy.md)
 
 ## Technical Notes
 
@@ -92,6 +96,15 @@ When a session closes, retain:
 
 - Resurrected session should open in the original working directory
 - Validate directory still exists before resurrection
+
+**Multiple Sessions Per Directory:**
+
+- Multiple Claude Code sessions may share the same working directory
+- Per [Q19 decision](../plans/7-decisions.md#q19-resurrection-mechanism), v0/v1
+  relies on Claude Code's built-in session picker when multiple sessions exist
+- Display session count per directory so users know disambiguation will be
+  needed
+- v2+ may use `claude --resume <session-id>` for precise resurrection
 
 ### IPC Commands
 

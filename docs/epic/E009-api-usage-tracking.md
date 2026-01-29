@@ -59,6 +59,11 @@ budget their AI assistant usage appropriately.
 - [ ] TUI displays usage metrics in a clear, readable format
 - [ ] Usage data persists during daemon runtime (not across reboots per
       non-goals)
+- [ ] Account-level quota (5h/7d utilization) fetched via `claude-usage` crate
+      (E011) and displayed alongside per-session data
+- [ ] Clear distinction in UI between per-session tokens and account-level quota
+- [ ] Unit tests for data model and aggregation; widget rendering tests per
+      [testing strategy](../decisions/testing-strategy.md)
 
 ## Technical Notes
 

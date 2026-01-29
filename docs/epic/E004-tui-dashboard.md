@@ -54,6 +54,8 @@ perfectly in a Zellij/tmux pane without consuming excessive screen space.
 - [ ] Quick actions (r for resurrect, d for remove) work from main view
 - [ ] Application handles terminal resize events gracefully
 - [ ] Clean exit with 'q' key restores terminal state
+- [ ] Unit tests for event handling and app state per
+      [testing strategy](../decisions/testing-strategy.md)
 
 ## Technical Notes
 

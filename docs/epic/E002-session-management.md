@@ -48,6 +48,8 @@ have been waiting too long.
 - [ ] State history records all transitions with timestamps and durations
 - [ ] Session lifecycle events (create, update, close) are handled correctly
 - [ ] Closed sessions retain metadata for potential resurrection
+- [ ] Unit tests for status transitions and state history per
+      [testing strategy](../decisions/testing-strategy.md)
 
 ## Technical Notes
 
@@ -95,3 +97,16 @@ struct StateTransition {
 - History depth configurable via configuration
 - Durations calculated automatically on state change
 - Hook-based approach for receiving status updates is acceptable and practical
+
+### Complexity Review Notes
+
+The [complexity review](../decisions/complexity-review.md) identified types in
+the current codebase that appear unused. These types ARE needed by this epic:
+
+- `SessionMetadata` — used by E008 (session resurrection)
+- `ApiUsage` — used by E009 (API usage tracking)
+- `StateTransition` — used by S2.3 (state history)
+- `history_depth_limit` — used by S2.3 configuration
+
+These types were added in anticipation of this epic. They should remain but be
+validated during implementation to ensure they match the actual data model.

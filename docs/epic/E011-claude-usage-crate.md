@@ -45,7 +45,15 @@ retrieval and API calls. This crate fills that gap, enabling:
 
 ## Dependencies
 
-- None (standalone crate, but will be consumed by E009)
+- None (standalone crate)
+
+## Integration Status
+
+The `claude-usage` crate is complete and published. E009 consumes this crate for
+account-level quota data. See S11.8 for the integration story.
+
+**Credential handling:** macOS Keychain access requires special ACL
+considerations — see [macOS Keychain ACL](../macos-keychain-acl.md) for details.
 
 ## Acceptance Criteria
 

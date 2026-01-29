@@ -54,6 +54,8 @@ to adapt to different workflows.
 - [ ] Users can switch between layouts via keyboard shortcuts (1-4)
 - [ ] Custom layouts can be defined in user configuration
 - [ ] Widgets support both horizontal and vertical orientation modes
+- [ ] Unit tests for widget rendering at various widths per
+      [testing strategy](../decisions/testing-strategy.md)
 
 ## Technical Notes
 

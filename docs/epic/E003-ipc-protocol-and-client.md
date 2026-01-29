@@ -51,6 +51,8 @@ and manual testing straightforward.
 - [ ] SUBSCRIBE command streams real-time session updates to clients
 - [ ] CLI commands provide intuitive interface for all daemon operations
 - [ ] Update latency is under 1ms target
+- [ ] Unit tests for protocol parsing; integration tests for IPC commands per
+      [testing strategy](../decisions/testing-strategy.md)
 
 ## Technical Notes
 
@@ -125,3 +127,13 @@ src/
   JSON
 - **Push model for subscriptions** - Server pushes updates, clients don't poll
 - **Newline-delimited messages** - Simple framing for streaming
+
+### Complexity Review Notes
+
+The [complexity review](../decisions/complexity-review.md) identified:
+
+- `remove()` vs `remove_session()` — duplicate methods to consolidate
+- `get_or_create_session()` — consider simplifying
+- Full serde serialization may be premature for the current text protocol
+
+Address these during implementation of S3.1 (protocol definition).

@@ -1,6 +1,6 @@
 # Epic: Zellij Integration
 
-**Epic ID:** E010 **Status:** Draft **Priority:** Low **Estimated Effort:** M
+**Epic ID:** E010 **Status:** Draft **Priority:** Medium **Estimated Effort:** M
 
 ## Summary
 
@@ -27,6 +27,14 @@ eliminating manual terminal management. This tight integration makes multi-agent
 workflows feel native to the Zellij environment and reduces context switching
 friction.
 
+## Priority Rationale
+
+Upgraded from Low to Medium. Zellij is the primary terminal multiplexer for this
+project's target audience. Basic layout integration (S10.1) provides significant
+value by making the dashboard a natural part of the Zellij workflow. Native
+plugin (WASM) remains deferred to v2+ per
+[Q8 decision](../plans/7-decisions.md#q8-zellij-plugin).
+
 ## Stories
 
 | Story ID                                                  | Title                                    | Priority | Status |
@@ -51,6 +59,8 @@ friction.
 - [ ] Commands can be sent to existing Zellij panes for resurrection
 - [ ] Integration works without Zellij (graceful fallback to current terminal)
 - [ ] Configuration allows enabling/disabling Zellij integration
+- [ ] Manual test plan for Zellij and non-Zellij environments per
+      [testing strategy](../decisions/testing-strategy.md)
 
 ## Technical Notes
 

@@ -46,6 +46,8 @@ continuously without impacting system performance.
 - [ ] Daemon auto-starts when first client attempts to connect
 - [ ] RAM usage stays under 5MB target
 - [ ] Startup time is under 100ms
+- [ ] Unit tests for session store; integration tests for socket server per
+      [testing strategy](../decisions/testing-strategy.md)
 
 ## Technical Notes
 

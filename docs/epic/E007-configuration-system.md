@@ -51,6 +51,8 @@ mandatory configuration.
 - [ ] Missing configuration file creates sensible defaults automatically
 - [ ] Invalid configuration produces helpful error messages with line numbers
 - [ ] All configurable options are documented in the default config file
+- [ ] Hot-reload via SIGHUP updates reloadable settings without restart
+- [ ] Invalid config on reload keeps previous config and logs error
 
 ## Technical Notes
 
@@ -109,6 +111,23 @@ struct Config {
 2. Fall back to `~/.config/agent-console/config.toml`
 3. If no file exists, use built-in defaults
 4. Optionally create default config file on first run
+
+### Hot-Reload Scope
+
+Per [Q27 decision](../plans/7-decisions.md#q27-config-reload), the daemon
+supports hot-reload via `kill -HUP <pid>` or `acd reload`:
+
+| Setting              | Hot-reloadable?           |
+| -------------------- | ------------------------- |
+| Colors               | Yes                       |
+| Tick interval        | Yes                       |
+| Display mode         | Yes                       |
+| Auto-stop thresholds | Yes                       |
+| Socket path          | **No** (restart required) |
+| Log file location    | **No** (restart required) |
+
+If the new config is invalid, the daemon keeps the old config and logs the
+error.
 
 ### Error Handling
 
