@@ -1,5 +1,6 @@
 {
   "enabledPlugins": {
-    "feature-dev@claude-plugins-official": true
+    "feature-dev@claude-plugins-official": true,
+    "bmad@bmad-method": true
   }
 }
