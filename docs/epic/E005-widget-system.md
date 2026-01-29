@@ -29,13 +29,13 @@ to adapt to different workflows.
 
 ## Stories
 
-| Story ID                                          | Title                                             | Priority | Status |
-| ------------------------------------------------- | ------------------------------------------------- | -------- | ------ |
-| [S5.1](../stories/S5.1-widget-trait-interface.md) | Create widget trait/interface                     | P1       | Draft  |
-| [S5.2](../stories/S5.2-session-status-widget.md)  | Implement session-status widget                   | P1       | Draft  |
-| [S5.3](../stories/S5.3-working-dir-widget.md)     | Implement working-dir widget                      | P2       | Draft  |
-| [S5.4](../stories/S5.4-api-usage-widget.md)       | Implement api-usage widget                        | P2       | Draft  |
-| [S5.5](../stories/S5.5-layout-presets.md)         | Add layout presets (one-line, two-line, detailed) | P1       | Draft  |
+| Story ID                                                | Title                                             | Priority | Status |
+| ------------------------------------------------------- | ------------------------------------------------- | -------- | ------ |
+| [S005.01](../stories/S005.01-widget-trait-interface.md) | Create widget trait/interface                     | P1       | Draft  |
+| [S005.02](../stories/S005.02-session-status-widget.md)  | Implement session-status widget                   | P1       | Draft  |
+| [S005.03](../stories/S005.03-working-dir-widget.md)     | Implement working-dir widget                      | P2       | Draft  |
+| [S005.04](../stories/S005.04-api-usage-widget.md)       | Implement api-usage widget                        | P2       | Draft  |
+| [S005.05](../stories/S005.05-layout-presets.md)         | Add layout presets (one-line, two-line, detailed) | P1       | Draft  |
 
 ## Dependencies
 

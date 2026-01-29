@@ -29,10 +29,10 @@ was deferred from v0 — this epic delivers that capability.
 
 | Story ID | Title                           | Priority | Status |
 | -------- | ------------------------------- | -------- | ------ |
-| S13.1    | Create macOS launchd plist      | P1       | Draft  |
-| S13.2    | Create Linux systemd unit file  | P1       | Draft  |
-| S13.3    | Implement install/uninstall CLI | P2       | Draft  |
-| S13.4    | Document manual service setup   | P3       | Draft  |
+| S013.01  | Create macOS launchd plist      | P1       | Draft  |
+| S013.02  | Create Linux systemd unit file  | P1       | Draft  |
+| S013.03  | Implement install/uninstall CLI | P2       | Draft  |
+| S013.04  | Document manual service setup   | P3       | Draft  |
 
 ## Dependencies
 
@@ -125,7 +125,8 @@ fn install_service() { /* systemd */ }
 
 ### Interaction with Auto-Start (Q2)
 
-The auto-start mechanism (E001 S1.4) and service management are complementary:
+The auto-start mechanism (E001 S001.04) and service management are
+complementary:
 
 - **Without service:** Auto-start on first hook/dashboard connection
 - **With service:** Daemon always running, auto-start becomes a no-op

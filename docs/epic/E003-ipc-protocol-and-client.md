@@ -27,14 +27,14 @@ and manual testing straightforward.
 
 ## Stories
 
-| Story ID                                               | Title                                 | Priority | Status |
-| ------------------------------------------------------ | ------------------------------------- | -------- | ------ |
-| [S3.1](../stories/S3.1-ipc-message-protocol.md)        | Define IPC message protocol           | P1       | Draft  |
-| [S3.2](../stories/S3.2-set-command.md)                 | Implement SET command                 | P1       | Draft  |
-| [S3.3](../stories/S3.3-list-command.md)                | Implement LIST command                | P1       | Draft  |
-| [S3.4](../stories/S3.4-subscribe-command.md)           | Implement SUBSCRIBE command           | P1       | Draft  |
-| [S3.5](../stories/S3.5-cli-client-commands.md)         | Create CLI client commands            | P1       | Draft  |
-| [S3.6](../stories/S3.6-client-module-internal-only.md) | Ensure client module remains internal | P3       | Draft  |
+| Story ID                                                     | Title                                 | Priority | Status |
+| ------------------------------------------------------------ | ------------------------------------- | -------- | ------ |
+| [S003.01](../stories/S003.01-ipc-message-protocol.md)        | Define IPC message protocol           | P1       | Draft  |
+| [S003.02](../stories/S003.02-set-command.md)                 | Implement SET command                 | P1       | Draft  |
+| [S003.03](../stories/S003.03-list-command.md)                | Implement LIST command                | P1       | Draft  |
+| [S003.04](../stories/S003.04-subscribe-command.md)           | Implement SUBSCRIBE command           | P1       | Draft  |
+| [S003.05](../stories/S003.05-cli-client-commands.md)         | Create CLI client commands            | P1       | Draft  |
+| [S003.06](../stories/S003.06-client-module-internal-only.md) | Ensure client module remains internal | P3       | Draft  |
 
 ## Dependencies
 
@@ -136,4 +136,4 @@ The [complexity review](../decisions/complexity-review.md) identified:
 - `get_or_create_session()` — consider simplifying
 - Full serde serialization may be premature for the current text protocol
 
-Address these during implementation of S3.1 (protocol definition).
+Address these during implementation of S003.01 (protocol definition).

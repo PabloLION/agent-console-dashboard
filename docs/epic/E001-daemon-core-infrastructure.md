@@ -27,12 +27,12 @@ continuously without impacting system performance.
 
 ## Stories
 
-| Story ID                                           | Title                                    | Priority | Status |
-| -------------------------------------------------- | ---------------------------------------- | -------- | ------ |
-| [S1.1](../stories/S1.1-create-daemon-process.md)   | Create daemon process with CLI interface | P1       | Draft  |
-| [S1.2](../stories/S1.2-unix-socket-server.md)      | Implement Unix socket server             | P1       | Draft  |
-| [S1.3](../stories/S1.3-in-memory-session-store.md) | Implement in-memory session store        | P1       | Draft  |
-| [S1.4](../stories/S1.4-daemon-auto-start.md)       | Add daemon auto-start capability         | P2       | Draft  |
+| Story ID                                                 | Title                                    | Priority | Status |
+| -------------------------------------------------------- | ---------------------------------------- | -------- | ------ |
+| [S001.01](../stories/S001.01-create-daemon-process.md)   | Create daemon process with CLI interface | P1       | Draft  |
+| [S001.02](../stories/S001.02-unix-socket-server.md)      | Implement Unix socket server             | P1       | Draft  |
+| [S001.03](../stories/S001.03-in-memory-session-store.md) | Implement in-memory session store        | P1       | Draft  |
+| [S001.04](../stories/S001.04-daemon-auto-start.md)       | Add daemon auto-start capability         | P2       | Draft  |
 
 ## Dependencies
 

@@ -28,12 +28,12 @@ have been waiting too long.
 
 ## Stories
 
-| Story ID                                              | Title                                | Priority | Status |
-| ----------------------------------------------------- | ------------------------------------ | -------- | ------ |
-| [S2.1](../stories/S2.1-session-data-model.md)         | Define session data model            | P1       | Draft  |
-| [S2.2](../stories/S2.2-session-status-transitions.md) | Implement session status transitions | P1       | Draft  |
-| [S2.3](../stories/S2.3-session-state-history.md)      | Track session state history          | P2       | Draft  |
-| [S2.4](../stories/S2.4-session-lifecycle-events.md)   | Handle session lifecycle events      | P1       | Draft  |
+| Story ID                                                    | Title                                | Priority | Status |
+| ----------------------------------------------------------- | ------------------------------------ | -------- | ------ |
+| [S002.01](../stories/S002.01-session-data-model.md)         | Define session data model            | P1       | Draft  |
+| [S002.02](../stories/S002.02-session-status-transitions.md) | Implement session status transitions | P1       | Draft  |
+| [S002.03](../stories/S002.03-session-state-history.md)      | Track session state history          | P2       | Draft  |
+| [S002.04](../stories/S002.04-session-lifecycle-events.md)   | Handle session lifecycle events      | P1       | Draft  |
 
 ## Dependencies
 
@@ -105,8 +105,8 @@ the current codebase that appear unused. These types ARE needed by this epic:
 
 - `SessionMetadata` — used by E008 (session resurrection)
 - `ApiUsage` — used by E009 (API usage tracking)
-- `StateTransition` — used by S2.3 (state history)
-- `history_depth_limit` — used by S2.3 configuration
+- `StateTransition` — used by S002.03 (state history)
+- `history_depth_limit` — used by S002.03 configuration
 
 These types were added in anticipation of this epic. They should remain but be
 validated during implementation to ensure they match the actual data model.

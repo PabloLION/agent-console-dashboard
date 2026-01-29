@@ -28,12 +28,12 @@ perfectly in a Zellij/tmux pane without consuming excessive screen space.
 
 ## Stories
 
-| Story ID                                                 | Title                                       | Priority | Status |
-| -------------------------------------------------------- | ------------------------------------------- | -------- | ------ |
-| [S4.1](../stories/S4.1-ratatui-application-scaffold.md)  | Create Ratatui application scaffold         | P1       | Draft  |
-| [S4.2](../stories/S4.2-main-dashboard-layout.md)         | Implement main dashboard layout             | P1       | Draft  |
-| [S4.3](../stories/S4.3-keyboard-navigation.md)           | Add keyboard navigation                     | P1       | Draft  |
-| [S4.4](../stories/S4.4-session-selection-detail-view.md) | Implement session selection and detail view | P2       | Draft  |
+| Story ID                                                       | Title                                       | Priority | Status |
+| -------------------------------------------------------------- | ------------------------------------------- | -------- | ------ |
+| [S004.01](../stories/S004.01-ratatui-application-scaffold.md)  | Create Ratatui application scaffold         | P1       | Draft  |
+| [S004.02](../stories/S004.02-main-dashboard-layout.md)         | Implement main dashboard layout             | P1       | Draft  |
+| [S004.03](../stories/S004.03-keyboard-navigation.md)           | Add keyboard navigation                     | P1       | Draft  |
+| [S004.04](../stories/S004.04-session-selection-detail-view.md) | Implement session selection and detail view | P2       | Draft  |
 
 ## Dependencies
 

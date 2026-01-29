@@ -28,11 +28,11 @@ budget their AI assistant usage appropriately.
 
 ## Stories
 
-| Story ID                                         | Title                       | Priority | Status |
-| ------------------------------------------------ | --------------------------- | -------- | ------ |
-| [S9.1](../stories/S9.1-api-usage-data-model.md)  | Define API usage data model | P1       | Draft  |
-| [S9.2](../stories/S9.2-api-usage-command.md)     | Implement API_USAGE command | P1       | Draft  |
-| [S9.3](../stories/S9.3-api-usage-tui-display.md) | Display usage in TUI        | P2       | Draft  |
+| Story ID                                               | Title                       | Priority | Status |
+| ------------------------------------------------------ | --------------------------- | -------- | ------ |
+| [S009.01](../stories/S009.01-api-usage-data-model.md)  | Define API usage data model | P1       | Draft  |
+| [S009.02](../stories/S009.02-api-usage-command.md)     | Implement API_USAGE command | P1       | Draft  |
+| [S009.03](../stories/S009.03-api-usage-tui-display.md) | Display usage in TUI        | P2       | Draft  |
 
 ## Dependencies
 

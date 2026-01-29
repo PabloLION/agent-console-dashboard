@@ -30,17 +30,17 @@ friction.
 ## Priority Rationale
 
 Upgraded from Low to Medium. Zellij is the primary terminal multiplexer for this
-project's target audience. Basic layout integration (S10.1) provides significant
-value by making the dashboard a natural part of the Zellij workflow. Native
-plugin (WASM) remains deferred to v2+ per
+project's target audience. Basic layout integration (S010.01) provides
+significant value by making the dashboard a natural part of the Zellij workflow.
+Native plugin (WASM) remains deferred to v2+ per
 [Q8 decision](../plans/7-decisions.md#q8-zellij-plugin).
 
 ## Stories
 
-| Story ID                                                  | Title                                    | Priority | Status |
-| --------------------------------------------------------- | ---------------------------------------- | -------- | ------ |
-| [S10.1](../stories/S10.1-zellij-layout-dashboard.md)      | Create zellij layout with dashboard pane | P1       | Draft  |
-| [S10.2](../stories/S10.2-zellij-resurrection-workflow.md) | Document Zellij resurrection workflow    | P2       | Draft  |
+| Story ID                                                      | Title                                    | Priority | Status |
+| ------------------------------------------------------------- | ---------------------------------------- | -------- | ------ |
+| [S010.01](../stories/S010.01-zellij-layout-dashboard.md)      | Create zellij layout with dashboard pane | P1       | Draft  |
+| [S010.02](../stories/S010.02-zellij-resurrection-workflow.md) | Document Zellij resurrection workflow    | P2       | Draft  |
 
 ## Dependencies
 

@@ -27,9 +27,9 @@ troubleshooting.
 
 | Story ID | Title                            | Priority | Status |
 | -------- | -------------------------------- | -------- | ------ |
-| S12.1    | Add structured logging to daemon | P1       | Draft  |
-| S12.2    | Implement health check command   | P2       | Draft  |
-| S12.3    | Add diagnostic dump command      | P3       | Draft  |
+| S012.01  | Add structured logging to daemon | P1       | Draft  |
+| S012.02  | Implement health check command   | P2       | Draft  |
+| S012.03  | Add diagnostic dump command      | P3       | Draft  |
 
 ## Dependencies
 

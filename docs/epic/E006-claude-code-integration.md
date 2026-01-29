@@ -29,12 +29,12 @@ multi-agent workflows.
 
 ## Stories
 
-| Story ID                                            | Title                                       | Priority | Status |
-| --------------------------------------------------- | ------------------------------------------- | -------- | ------ |
-| [S6.1](../stories/S6.1-stop-hook-script.md)         | Create stop hook script                     | P1       | Draft  |
-| [S6.2](../stories/S6.2-user-prompt-submit-hook.md)  | Create user-prompt-submit hook script       | P1       | Draft  |
-| [S6.3](../stories/S6.3-notification-hook-script.md) | Create notification hook script             | P1       | Draft  |
-| [S6.4](../stories/S6.4-hook-registration-docs.md)   | Document hook registration in settings.json | P2       | Draft  |
+| Story ID                                                  | Title                                       | Priority | Status |
+| --------------------------------------------------------- | ------------------------------------------- | -------- | ------ |
+| [S006.01](../stories/S006.01-stop-hook-script.md)         | Create stop hook script                     | P1       | Draft  |
+| [S006.02](../stories/S006.02-user-prompt-submit-hook.md)  | Create user-prompt-submit hook script       | P1       | Draft  |
+| [S006.03](../stories/S006.03-notification-hook-script.md) | Create notification hook script             | P1       | Draft  |
+| [S006.04](../stories/S006.04-hook-registration-docs.md)   | Document hook registration in settings.json | P2       | Draft  |
 
 ## Dependencies
 

@@ -27,11 +27,11 @@ friction when switching between tasks or recovering from accidental closures.
 
 ## Stories
 
-| Story ID                                             | Title                                      | Priority | Status |
-| ---------------------------------------------------- | ------------------------------------------ | -------- | ------ |
-| [S8.1](../stories/S8.1-closed-session-metadata.md)   | Store session metadata for closed sessions | P1       | Draft  |
-| [S8.2](../stories/S8.2-resurrect-command.md)         | Implement RESURRECT command                | P1       | Draft  |
-| [S8.3](../stories/S8.3-claude-resume-integration.md) | Integrate with claude --resume             | P2       | Draft  |
+| Story ID                                                   | Title                                      | Priority | Status |
+| ---------------------------------------------------------- | ------------------------------------------ | -------- | ------ |
+| [S008.01](../stories/S008.01-closed-session-metadata.md)   | Store session metadata for closed sessions | P1       | Draft  |
+| [S008.02](../stories/S008.02-resurrect-command.md)         | Implement RESURRECT command                | P1       | Draft  |
+| [S008.03](../stories/S008.03-claude-resume-integration.md) | Integrate with claude --resume             | P2       | Draft  |
 
 ## Dependencies
 
