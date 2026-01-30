@@ -3,6 +3,7 @@
 //! This module provides process lifecycle management, daemonization, and the
 //! main entry point for running the daemon.
 
+pub mod logging;
 pub mod server;
 pub mod store;
 
@@ -16,6 +17,7 @@ use std::error::Error;
 use tokio::runtime::Runtime;
 use tokio::signal;
 use tokio::signal::unix::{signal as unix_signal, SignalKind};
+use tracing::{error, info, warn};
 
 /// Result type alias for daemon operations.
 pub type DaemonResult<T> = Result<T, Box<dyn Error>>;
@@ -32,22 +34,19 @@ async fn wait_for_shutdown() {
         Ok(mut sigterm) => {
             tokio::select! {
                 _ = signal::ctrl_c() => {
-                    eprintln!("Received SIGINT (Ctrl+C), shutting down...");
+                    info!("received SIGINT (Ctrl+C), shutting down");
                 },
                 _ = sigterm.recv() => {
-                    eprintln!("Received SIGTERM, shutting down...");
+                    info!("received SIGTERM, shutting down");
                 },
             }
         }
         Err(e) => {
-            eprintln!(
-                "Warning: Could not register SIGTERM handler: {}. Using SIGINT only.",
-                e
-            );
+            warn!(error = %e, "could not register SIGTERM handler, using SIGINT only");
             if let Err(e) = signal::ctrl_c().await {
-                eprintln!("Error waiting for SIGINT: {}", e);
+                error!(error = %e, "failed waiting for SIGINT");
             } else {
-                eprintln!("Received SIGINT (Ctrl+C), shutting down...");
+                info!("received SIGINT (Ctrl+C), shutting down");
             }
         }
     }
@@ -127,12 +126,14 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
         daemonize_process(false, false)?;
     }
 
-    // Log startup information
-    // Note: In daemonized mode with noclose=false, these won't be visible
-    // but they're useful for foreground mode debugging
-    eprintln!("Agent Console daemon starting...");
-    eprintln!("  Socket path: {}", config.socket_path.display());
-    eprintln!("  Daemonize: {}", config.daemonize);
+    // Initialize logging after daemonize (stderr may be redirected)
+    logging::init();
+
+    info!(
+        socket_path = %config.socket_path.display(),
+        daemonize = config.daemonize,
+        "agent console daemon starting"
+    );
 
     // Create Tokio runtime AFTER daemonization
     // Using current_thread runtime for simpler daemon workloads
@@ -143,7 +144,7 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
         ))) as Box<dyn Error>
     })?;
 
-    eprintln!("Daemon running. Press Ctrl+C or send SIGTERM to stop.");
+    info!("daemon running, press Ctrl+C or send SIGTERM to stop");
 
     // Run the main event loop
     runtime.block_on(async {
@@ -151,7 +152,7 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
         wait_for_shutdown().await;
     });
 
-    eprintln!("Daemon stopped.");
+    info!("daemon stopped");
     Ok(())
 }
 
