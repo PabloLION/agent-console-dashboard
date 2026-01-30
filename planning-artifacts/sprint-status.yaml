@@ -119,16 +119,16 @@ development_status:
   010-02-zellij-resurrection-workflow: ready-for-dev
   epic-10-retrospective: optional
 
-  # Epic 11: Claude Usage Crate (High priority - COMPLETE)
-  epic-11: done
+  # Epic 11: Claude Usage Crate (High priority - S011.06 pending publish)
+  epic-11: in-progress
   011-01-workspace-restructure: done
   011-02-macos-credential-fetch: done
   011-03-linux-credential-fetch: done
   011-04-usage-api-client: done
   011-05-typed-usage-response: done
-  011-06-publish-crates-io: done
-  011-07-napi-rs-bindings: review
-  011-08-update-e009-use-claude-usage: review
+  011-06-publish-crates-io: in-progress
+  011-07-napi-rs-bindings: deferred
+  011-08-update-e009-use-claude-usage: done
   epic-11-retrospective: optional
 
   # Epic 12: Logging & Diagnostics (Medium priority)
