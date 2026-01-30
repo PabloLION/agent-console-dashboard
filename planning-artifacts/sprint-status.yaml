@@ -1,0 +1,147 @@
+# generated: 2026-01-30
+# project: Agent Console Dashboard
+# project_key: acd
+# tracking_system: bmad
+# story_location: docs/stories
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: "2026-01-30"
+project: Agent Console Dashboard
+project_key: acd
+tracking_system: bmad
+story_location: docs/stories
+
+development_status:
+  # Epic 1: Daemon Core Infrastructure (High priority, foundational)
+  epic-1: backlog
+  001-01-create-daemon-process: ready-for-dev
+  001-02-unix-socket-server: ready-for-dev
+  001-03-in-memory-session-store: ready-for-dev
+  001-04-daemon-auto-start: ready-for-dev
+  epic-1-retrospective: optional
+
+  # Epic 2: Session Management (High priority)
+  epic-2: backlog
+  002-01-session-data-model: ready-for-dev
+  002-02-session-status-transitions: ready-for-dev
+  002-03-session-state-history: ready-for-dev
+  002-04-session-lifecycle-events: ready-for-dev
+  epic-2-retrospective: optional
+
+  # Epic 3: IPC Protocol & Client (High priority)
+  epic-3: backlog
+  003-01-ipc-message-protocol: ready-for-dev
+  003-02-set-command: ready-for-dev
+  003-03-list-command: ready-for-dev
+  003-04-subscribe-command: ready-for-dev
+  003-05-cli-client-commands: ready-for-dev
+  003-06-client-module-internal-only: ready-for-dev
+  epic-3-retrospective: optional
+
+  # Epic 4: TUI Dashboard (High priority)
+  epic-4: backlog
+  004-01-ratatui-application-scaffold: ready-for-dev
+  004-02-main-dashboard-layout: ready-for-dev
+  004-03-keyboard-navigation: ready-for-dev
+  004-04-session-selection-detail-view: ready-for-dev
+  epic-4-retrospective: optional
+
+  # Epic 5: Widget System (High priority)
+  epic-5: backlog
+  005-01-widget-trait-interface: ready-for-dev
+  005-02-session-status-widget: ready-for-dev
+  005-03-working-dir-widget: ready-for-dev
+  005-04-api-usage-widget: ready-for-dev
+  005-05-layout-presets: ready-for-dev
+  epic-5-retrospective: optional
+
+  # Epic 6: Claude Code Integration (High priority)
+  epic-6: backlog
+  006-01-stop-hook-script: ready-for-dev
+  006-02-user-prompt-submit-hook: ready-for-dev
+  006-03-notification-hook-script: ready-for-dev
+  006-04-hook-registration-docs: ready-for-dev
+  epic-6-retrospective: optional
+
+  # Epic 7: Configuration System (Medium priority)
+  epic-7: backlog
+  007-01-toml-configuration-schema: ready-for-dev
+  007-02-configuration-loading: ready-for-dev
+  007-03-xdg-path-support: ready-for-dev
+  007-04-default-configuration-file: ready-for-dev
+  epic-7-retrospective: optional
+
+  # Epic 8: Session Resurrection (Medium priority)
+  epic-8: backlog
+  008-01-closed-session-metadata: ready-for-dev
+  008-02-resurrect-command: ready-for-dev
+  008-03-claude-resume-integration: ready-for-dev
+  epic-8-retrospective: optional
+
+  # Epic 9: API Usage Tracking (Medium priority)
+  epic-9: backlog
+  009-01-api-usage-data-model: ready-for-dev
+  009-02-api-usage-command: ready-for-dev
+  009-03-api-usage-tui-display: ready-for-dev
+  epic-9-retrospective: optional
+
+  # Epic 10: Zellij Integration (Medium priority)
+  epic-10: backlog
+  010-01-zellij-layout-dashboard: ready-for-dev
+  010-02-zellij-resurrection-workflow: ready-for-dev
+  epic-10-retrospective: optional
+
+  # Epic 11: Claude Usage Crate (High priority - COMPLETE)
+  epic-11: done
+  011-01-workspace-restructure: done
+  011-02-macos-credential-fetch: done
+  011-03-linux-credential-fetch: done
+  011-04-usage-api-client: done
+  011-05-typed-usage-response: done
+  011-06-publish-crates-io: done
+  011-07-napi-rs-bindings: review
+  011-08-update-e009-use-claude-usage: review
+  epic-11-retrospective: optional
+
+  # Epic 12: Logging & Diagnostics (Medium priority)
+  epic-12: backlog
+  012-01-structured-logging: backlog
+  012-02-health-check-command: backlog
+  012-03-diagnostic-dump-command: backlog
+  epic-12-retrospective: optional
+
+  # Epic 13: Deployment Infrastructure (Low priority)
+  epic-13: backlog
+  013-01-macos-launchd-plist: backlog
+  013-02-linux-systemd-unit-file: backlog
+  013-03-install-uninstall-cli: backlog
+  013-04-manual-service-setup-docs: backlog
+  epic-13-retrospective: optional

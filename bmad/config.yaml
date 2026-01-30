@@ -1,0 +1,10 @@
+project_name: Agent Console Dashboard
+project_type: library # Rust CLI daemon + TUI dashboard
+project_level: 3 # Complex integration (47 stories, 13 epics)
+user_name: Pablo
+user_skill_level: intermediate
+communication_language: English
+document_output_language: English
+planning_artifacts: ./planning-artifacts
+implementation_artifacts: ./implementation-artifacts
+project_knowledge: ./docs
