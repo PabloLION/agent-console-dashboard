@@ -72,7 +72,6 @@ struct Session {
     working_dir: PathBuf,
     since: Instant,              // When status last changed
     history: Vec<StateTransition>,
-    api_usage: Option<ApiUsage>,
     closed: bool,                // For resurrection feature
     session_id: Option<String>,  // Claude Code session ID for resume
 }
@@ -104,7 +103,8 @@ The [complexity review](../decisions/complexity-review.md) identified types in
 the current codebase that appear unused. These types ARE needed by this epic:
 
 - `SessionMetadata` — used by E008 (session resurrection)
-- `ApiUsage` — used by E009 (API usage tracking)
+- Account-level API usage is handled separately by E011 (`claude-usage` crate),
+  not stored per-session
 - `StateTransition` — used by S002.03 (state history)
 - `history_depth_limit` — used by S002.03 configuration
 

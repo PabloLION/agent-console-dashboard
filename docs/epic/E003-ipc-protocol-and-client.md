@@ -67,7 +67,6 @@ RM <session>
 LIST
 SUBSCRIBE
 RESURRECT <session>
-API_USAGE <session> <tokens_json>
 
 # Responses (daemon → client)
 OK
@@ -96,9 +95,6 @@ agent-console watch
 
 # Resurrect closed session
 agent-console resurrect <session>
-
-# Report API usage
-agent-console api-usage <session> --input 1000 --output 500
 ```
 
 ### Project Structure
