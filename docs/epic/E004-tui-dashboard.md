@@ -127,7 +127,7 @@ The TUI adapts to terminal width:
 │  ? proj-c      Question     ~/projects/proj-c              │
 │  × old-proj    Closed       ~/old/project                  │
 │                                                            │
-│  API Usage: 45.2k tokens today | ~$1.80                    │
+│  Quota: 5h 8% | 7d 77% | resets 2h 15m                    │
 │                                                            │
 │  [j/k] Navigate  [Enter] Details  [r] Resurrect  [q] Quit  │
 └────────────────────────────────────────────────────────────┘

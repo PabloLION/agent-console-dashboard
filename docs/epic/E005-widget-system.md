@@ -81,7 +81,7 @@ pub trait Widget {
 | `working-dir`    | Current working directory                 | 20        |
 | `session-status` | All sessions with status and elapsed time | 30        |
 | `session-detail` | Expanded view of selected session         | 40        |
-| `api-usage`      | Token counts and cost estimate            | 25        |
+| `api-usage`      | Account-level 5h/7d quota utilization     | 18        |
 | `state-history`  | Recent state transitions                  | 30        |
 | `clock`          | Current time                              | 8         |
 | `spacer`         | Empty line for visual separation          | 0         |
@@ -155,7 +155,7 @@ proj-a: - | proj-b: 2m34s | proj-c: ?
 **API Usage Widget:**
 
 ```text
-Tokens: 12.3k in / 8.1k out | $0.42 est
+Quota: 5h 8% | 7d 77% | resets 2h 15m
 ```
 
 ### Source Files
