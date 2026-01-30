@@ -337,6 +337,12 @@ mod tests {
     /// Atomic counter for generating unique socket paths across parallel tests.
     static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
+    /// Creates a TempDir in /tmp, bypassing the TMPDIR env var which may be
+    /// set to a relative path by Claude Code (causing "No such file or directory").
+    fn create_temp_dir() -> TempDir {
+        TempDir::new_in("/tmp").expect("Failed to create temp directory in /tmp")
+    }
+
     /// Generates a unique socket path within a temporary directory.
     fn unique_socket_path(temp_dir: &TempDir, prefix: &str) -> PathBuf {
         let count = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
@@ -502,7 +508,7 @@ mod tests {
     /// Tests that a client can connect to an already-running daemon without spawning.
     #[tokio::test]
     async fn test_client_connects_to_existing_daemon() {
-        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let temp_dir = create_temp_dir();
         let socket_path = unique_socket_path(&temp_dir, "existing_daemon");
 
         // Start a mock daemon server
@@ -542,7 +548,7 @@ mod tests {
     /// Tests that multiple clients can connect to the same daemon concurrently.
     #[tokio::test]
     async fn test_concurrent_clients_connect_to_existing_daemon() {
-        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let temp_dir = create_temp_dir();
         let socket_path = unique_socket_path(&temp_dir, "concurrent");
 
         let listener = UnixListener::bind(&socket_path).expect("Failed to bind socket");
@@ -595,7 +601,7 @@ mod tests {
     /// Tests that timeout error is returned when daemon cannot be started.
     #[tokio::test]
     async fn test_timeout_error_when_daemon_fails_to_start() {
-        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let temp_dir = create_temp_dir();
         let socket_path = unique_socket_path(&temp_dir, "timeout_test");
 
         let start = std::time::Instant::now();
@@ -626,7 +632,7 @@ mod tests {
     /// Tests that connection succeeds after a brief startup delay.
     #[tokio::test]
     async fn test_connection_succeeds_after_startup_delay() {
-        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let temp_dir = create_temp_dir();
         let socket_path = unique_socket_path(&temp_dir, "delayed_start");
         let socket_path_for_listener = socket_path.clone();
 
@@ -663,7 +669,7 @@ mod tests {
     /// Tests that the Client struct properly wraps the UnixStream.
     #[tokio::test]
     async fn test_client_stream_access() {
-        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let temp_dir = create_temp_dir();
         let socket_path = unique_socket_path(&temp_dir, "stream_access");
 
         let listener = UnixListener::bind(&socket_path).expect("Failed to bind socket");
@@ -689,7 +695,7 @@ mod tests {
     /// Tests that connecting to a non-existent socket triggers auto-start flow.
     #[tokio::test]
     async fn test_auto_start_triggered_on_missing_socket() {
-        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let temp_dir = create_temp_dir();
         let socket_path = unique_socket_path(&temp_dir, "auto_start");
 
         assert!(!socket_path.exists(), "Socket should not exist before test");
