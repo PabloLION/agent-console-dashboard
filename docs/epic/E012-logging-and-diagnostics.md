@@ -1,6 +1,6 @@
 # Epic: Logging and Diagnostics
 
-**Epic ID:** E012 **Status:** Draft **Priority:** Medium **Estimated Effort:** S
+**Epic ID:** E012 **Status:** Draft **Priority:** High **Estimated Effort:** S
 
 ## Summary
 
