@@ -1,6 +1,7 @@
 # Epic: Logging and Diagnostics
 
-**Epic ID:** E012 **Status:** Draft **Priority:** High **Estimated Effort:** S
+**Epic ID:** E012 **Status:** In Progress **Priority:** High **Estimated
+Effort:** S
 
 ## Summary
 
@@ -25,11 +26,11 @@ troubleshooting.
 
 ## Stories
 
-| Story ID | Title                            | Priority | Status |
-| -------- | -------------------------------- | -------- | ------ |
-| S012.01  | Add structured logging to daemon | P1       | Draft  |
-| S012.02  | Implement health check command   | P2       | Draft  |
-| S012.03  | Add diagnostic dump command      | P3       | Draft  |
+| Story ID                                                 | Title                            | Priority | Status |
+| -------------------------------------------------------- | -------------------------------- | -------- | ------ |
+| [S012.01](../stories/S012.01-structured-logging.md)      | Add structured logging to daemon | P1       | Done   |
+| [S012.02](../stories/S012.02-health-check-command.md)    | Implement health check command   | P2       | Draft  |
+| [S012.03](../stories/S012.03-diagnostic-dump-command.md) | Add diagnostic dump command      | P3       | Draft  |
 
 ## Dependencies
 

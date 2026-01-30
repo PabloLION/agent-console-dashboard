@@ -141,8 +141,8 @@ development_status:
 
   # Epic 13: Deployment Infrastructure (Low priority)
   epic-13: backlog
-  013-01-macos-launchd-plist: backlog
-  013-02-linux-systemd-unit-file: backlog
-  013-03-install-uninstall-cli: backlog
-  013-04-manual-service-setup-docs: backlog
+  013-01-macos-launchd-plist: ready-for-dev
+  013-02-linux-systemd-unit-file: ready-for-dev
+  013-03-install-uninstall-cli: ready-for-dev
+  013-04-manual-service-setup-docs: ready-for-dev
   epic-13-retrospective: optional

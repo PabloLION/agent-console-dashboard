@@ -27,12 +27,12 @@ was deferred from v0 — this epic delivers that capability.
 
 ## Stories
 
-| Story ID | Title                           | Priority | Status |
-| -------- | ------------------------------- | -------- | ------ |
-| S013.01  | Create macOS launchd plist      | P1       | Draft  |
-| S013.02  | Create Linux systemd unit file  | P1       | Draft  |
-| S013.03  | Implement install/uninstall CLI | P2       | Draft  |
-| S013.04  | Document manual service setup   | P3       | Draft  |
+| Story ID                                                   | Title                           | Priority | Status |
+| ---------------------------------------------------------- | ------------------------------- | -------- | ------ |
+| [S013.01](../stories/S013.01-macos-launchd-plist.md)       | Create macOS launchd plist      | P1       | Draft  |
+| [S013.02](../stories/S013.02-linux-systemd-unit-file.md)   | Create Linux systemd unit file  | P1       | Draft  |
+| [S013.03](../stories/S013.03-install-uninstall-cli.md)     | Implement install/uninstall CLI | P2       | Draft  |
+| [S013.04](../stories/S013.04-manual-service-setup-docs.md) | Document manual service setup   | P3       | Draft  |
 
 ## Dependencies
 

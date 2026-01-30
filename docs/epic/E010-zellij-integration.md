@@ -41,7 +41,7 @@ Native plugin (WASM) remains deferred to v2+ per
 | ------------------------------------------------------------- | ---------------------------------------- | -------- | ------ |
 | [S010.01](../stories/S010.01-zellij-layout-dashboard.md)      | Create zellij layout with dashboard pane | P1       | Draft  |
 | [S010.02](../stories/S010.02-zellij-resurrection-workflow.md) | Zellij resurrection workflow             | P2       | Draft  |
-| S010.03                                                       | Invoke claude --resume in terminal/pane  | P2       | Draft  |
+| [S010.03](../stories/S010.03-claude-resume-in-terminal.md)    | Invoke claude --resume in terminal/pane  | P2       | Draft  |
 
 S010.03 was moved from E008 S008.03 — handles the actual terminal creation and
 `claude --resume` invocation that E008's protocol enables.
