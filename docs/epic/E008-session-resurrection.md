@@ -1,21 +1,20 @@
 # Epic: Session Resurrection
 
-**Epic ID:** E008 **Status:** Draft **Priority:** Medium **Estimated Effort:** M
+**Epic ID:** E008 **Status:** Draft **Priority:** Medium **Estimated Effort:** S
 
 ## Summary
 
-Implement the ability to reopen and resume closed Claude Code sessions from the
-dashboard. This feature tracks session metadata when sessions close, retains it
-for later resurrection, and provides a command to invoke
-`claude --resume <session-id>` in the appropriate context.
+Define the IPC protocol and metadata storage for session resurrection. This epic
+handles the daemon-side interface (commands, metadata retention) so that
+frontends (TUI, Zellij via E010) can implement the actual terminal creation.
 
 ## Goals
 
 - Retain session metadata when Claude Code sessions close (working directory,
   session ID)
-- Enable users to view and select from previously closed sessions
-- Provide seamless session resurrection through the dashboard interface
-- Integrate with Claude Code's `--resume` flag for session continuation
+- Define RESURRECT and LIST_CLOSED IPC commands
+- Provide metadata storage for closed sessions
+- Leave terminal/pane creation to E010 (Zellij) or TUI
 
 ## User Value
 
@@ -27,11 +26,11 @@ friction when switching between tasks or recovering from accidental closures.
 
 ## Stories
 
-| Story ID                                                   | Title                                      | Priority | Status |
-| ---------------------------------------------------------- | ------------------------------------------ | -------- | ------ |
-| [S008.01](../stories/S008.01-closed-session-metadata.md)   | Store session metadata for closed sessions | P1       | Draft  |
-| [S008.02](../stories/S008.02-resurrect-command.md)         | Implement RESURRECT command                | P1       | Draft  |
-| [S008.03](../stories/S008.03-claude-resume-integration.md) | Integrate with claude --resume             | P2       | Draft  |
+| Story ID                                                   | Title                                           | Priority | Status |
+| ---------------------------------------------------------- | ----------------------------------------------- | -------- | ------ |
+| [S008.01](../stories/S008.01-closed-session-metadata.md)   | Store session metadata for closed sessions      | P1       | Draft  |
+| [S008.02](../stories/S008.02-resurrect-command.md)         | Implement RESURRECT command                     | P1       | Draft  |
+| [S008.03](../stories/S008.03-claude-resume-integration.md) | ~~claude --resume integration~~ (moved to E010) | —        | Moved  |
 
 ## Dependencies
 
@@ -50,9 +49,8 @@ friction when switching between tasks or recovering from accidental closures.
       after session closes
 - [ ] Users can list previously closed sessions that are eligible for
       resurrection
-- [ ] RESURRECT command successfully invokes `claude --resume <session-id>`
+- [ ] RESURRECT command returns session metadata for frontends to act on
 - [ ] Sessions that have exceeded context limits are marked as not resumable
-- [ ] Resurrection workflow handles terminal pane creation appropriately
 - [ ] Multiple closed sessions per directory are listed individually
 - [ ] Resurrection validates working directory still exists before proceeding
 - [ ] Unit tests for metadata storage; integration tests for RESURRECT command
@@ -82,9 +80,8 @@ When a session closes, retain:
 
 **Terminal Context:**
 
-- Need to determine where to open the resurrected session
-- May require Zellij integration to create new pane
-- Consider opening in current terminal if no multiplexer available
+- Terminal/pane creation is out of scope for this epic (handled by E010)
+- This epic provides the protocol; frontends decide how to open sessions
 
 **Context Limits:**
 
@@ -120,13 +117,11 @@ LIST_CLOSED
   Returns: JSON array of closed session metadata
 ```
 
-### Integration with Zellij
+### Scope Boundary with E010
 
-If Zellij integration (E010) is available:
-
-- Optionally create a new pane for the resurrected session
-- Position pane according to user preferences
-- Fall back to current terminal if Zellij not available
+This epic defines the **protocol and metadata**. E010 (Zellij Integration)
+handles the **terminal/pane creation** — invoking `claude --resume <session-id>`
+in the appropriate context.
 
 ### Testing Strategy
 

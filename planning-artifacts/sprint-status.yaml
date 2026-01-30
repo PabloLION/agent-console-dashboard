@@ -99,17 +99,17 @@ development_status:
   007-04-default-configuration-file: ready-for-dev
   epic-7-retrospective: optional
 
-  # Epic 8: Session Resurrection (Medium priority)
+  # Epic 8: Session Resurrection (Medium priority, protocol/metadata only)
   epic-8: backlog
   008-01-closed-session-metadata: ready-for-dev
   008-02-resurrect-command: ready-for-dev
-  008-03-claude-resume-integration: ready-for-dev
+  008-03-claude-resume-integration: moved-to-e010
   epic-8-retrospective: optional
 
-  # Epic 9: API Usage Tracking (Medium priority)
+  # Epic 9: API Usage Tracking (Medium priority, simplified via E011)
   epic-9: backlog
   009-01-api-usage-data-model: ready-for-dev
-  009-02-api-usage-command: ready-for-dev
+  009-02-api-usage-command: cut
   009-03-api-usage-tui-display: ready-for-dev
   epic-9-retrospective: optional
 
@@ -117,6 +117,7 @@ development_status:
   epic-10: backlog
   010-01-zellij-layout-dashboard: ready-for-dev
   010-02-zellij-resurrection-workflow: ready-for-dev
+  010-03-claude-resume-in-terminal: ready-for-dev
   epic-10-retrospective: optional
 
   # Epic 11: Claude Usage Crate (High priority - DONE, S011.07 deferred)
@@ -131,11 +132,11 @@ development_status:
   011-08-update-e009-use-claude-usage: done
   epic-11-retrospective: optional
 
-  # Epic 12: Logging & Diagnostics (Medium priority)
+  # Epic 12: Logging & Diagnostics (High priority)
   epic-12: backlog
-  012-01-structured-logging: backlog
-  012-02-health-check-command: backlog
-  012-03-diagnostic-dump-command: backlog
+  012-01-structured-logging: ready-for-dev
+  012-02-health-check-command: ready-for-dev
+  012-03-diagnostic-dump-command: ready-for-dev
   epic-12-retrospective: optional
 
   # Epic 13: Deployment Infrastructure (Low priority)

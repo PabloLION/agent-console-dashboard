@@ -1,165 +1,92 @@
 # Epic: API Usage Tracking
 
-**Epic ID:** E009 **Status:** Draft **Priority:** Medium **Estimated Effort:** M
+**Epic ID:** E009 **Status:** Draft **Priority:** Medium **Estimated Effort:** S
 
 ## Summary
 
-Track and display API consumption metrics to provide users with visibility into
-their Claude Code usage costs and limits. This epic covers the data model for
-API usage, daemon commands for reporting usage, and TUI widgets for displaying
-this information in real-time.
+Display API usage metrics in the TUI dashboard by consuming the `claude-usage`
+crate (E011). The TUI fetches account-level quota data (5h/7d utilization)
+directly — no daemon-side tracking or custom IPC commands needed.
 
 ## Goals
 
-- Define a data model for tracking API usage per session and cumulatively
-- Implement IPC commands to report and query API usage metrics
-- Display current session token usage in the dashboard
-- Show cumulative usage across all sessions
-- Surface rate limit status when available
+- Display account-level 5h and 7d quota utilization in the dashboard
+- Fetch data via `claude_usage::get_usage()` on a periodic interval
+- Show rate limit reset times
 
 ## User Value
 
-Users need visibility into their API consumption to manage costs effectively and
-avoid unexpected billing. By showing real-time token usage for the current
-session and cumulative usage across sessions, users can make informed decisions
-about when to start new sessions, how to optimize their prompts, and whether
-they are approaching rate limits. This transparency builds trust and helps users
-budget their AI assistant usage appropriately.
+Users need visibility into their API quota to know when they're approaching
+limits. By showing 5-hour and 7-day utilization percentages directly in the
+dashboard, users can pace their usage and avoid hitting rate limits.
 
 ## Stories
 
-| Story ID                                               | Title                       | Priority | Status |
-| ------------------------------------------------------ | --------------------------- | -------- | ------ |
-| [S009.01](../stories/S009.01-api-usage-data-model.md)  | Define API usage data model | P1       | Draft  |
-| [S009.02](../stories/S009.02-api-usage-command.md)     | Implement API_USAGE command | P1       | Draft  |
-| [S009.03](../stories/S009.03-api-usage-tui-display.md) | Display usage in TUI        | P2       | Draft  |
+| Story ID                                               | Title                        | Priority | Status |
+| ------------------------------------------------------ | ---------------------------- | -------- | ------ |
+| [S009.01](../stories/S009.01-api-usage-data-model.md)  | Integrate claude-usage crate | P1       | Draft  |
+| [S009.02](../stories/S009.02-api-usage-command.md)     | ~~IPC command~~ (removed)    | —        | Cut    |
+| [S009.03](../stories/S009.03-api-usage-tui-display.md) | Display usage in TUI         | P1       | Draft  |
 
 ## Dependencies
 
-- [E001 - Daemon Core Infrastructure](./E001-daemon-core-infrastructure.md) -
-  Daemon must be running to store and aggregate usage data
-- [E002 - Session Management](./E002-session-management.md) - Usage must be
-  associated with specific sessions
-- [E003 - IPC Protocol & Client](./E003-ipc-protocol-and-client.md) - API_USAGE
-  command requires IPC protocol support
-- [E005 - Widget System](./E005-widget-system.md) - TUI display uses the widget
-  system for api-usage widget
-- [E006 - Claude Code Integration](./E006-claude-code-integration.md) - Hooks
-  may provide usage data from Claude Code
+- [E004 - TUI Dashboard](./E004-tui-dashboard.md) - TUI must exist to display
+  usage data
 - [E011 - Claude Usage Crate](./E011-claude-usage-crate.md) - Provides
-  account-level quota utilization data (5h/7d) via the `claude-usage` crate
+  `get_usage()` API for account-level quota
 
 ## Acceptance Criteria
 
-- [ ] API usage data model captures tokens (input/output), cost estimates, and
-      timestamps
-- [ ] Per-session usage is tracked and queryable via IPC command
-- [ ] Cumulative usage across all sessions is calculated and available
-- [ ] Rate limit status is displayed when information is available
-- [ ] TUI displays usage metrics in a clear, readable format
-- [ ] Usage data persists during daemon runtime (not across reboots per
-      non-goals)
-- [ ] Account-level quota (5h/7d utilization) fetched via `claude-usage` crate
-      (E011) and displayed alongside per-session data
-- [ ] Clear distinction in UI between per-session tokens and account-level quota
-- [ ] Unit tests for data model and aggregation; widget rendering tests per
+- [ ] TUI calls `claude_usage::get_usage()` periodically (e.g., every 5 minutes)
+- [ ] Displays 5h and 7d utilization percentages
+- [ ] Shows time until rate limit reset
+- [ ] Handles credential/network errors gracefully (shows "unavailable")
+- [ ] Unit tests for display formatting per
       [testing strategy](../decisions/testing-strategy.md)
 
 ## Technical Notes
 
-### Relationship with E011 (Claude Usage Crate)
+### Simplified Architecture
 
-This epic handles **per-session token tracking** (how many tokens each session
-consumed), while E011 provides **account-level quota data** (5-hour and 7-day
-utilization percentages from Anthropic's API).
-
-| Scope   | Epic | Data Source   | Example                               |
-| ------- | ---- | ------------- | ------------------------------------- |
-| Session | E009 | Hooks/logs    | "This session used 12,000 tokens"     |
-| Account | E011 | Anthropic API | "You've used 77% of your 7-day quota" |
-
-The daemon periodically fetches account-level quota data using the
-`claude-usage` crate:
+The TUI calls the `claude-usage` crate directly, bypassing the daemon entirely:
 
 ```rust
 use claude_usage::get_usage;
 
-fn refresh_quota(&self) -> Result<(), Error> {
-    let quota = get_usage()?;
-    // quota.five_hour.utilization, quota.seven_day.utilization, etc.
-    self.broadcast_quota_update(quota);
-    Ok(())
+// In TUI tick handler (every 5 min)
+match get_usage() {
+    Ok(data) => {
+        // data.five_hour.utilization, data.seven_day.utilization
+        update_usage_widget(data);
+    }
+    Err(_) => show_unavailable(),
 }
 ```
 
-### API Usage Data Model
-
-Track usage at the session level with aggregation support:
-
-| Field                | Type                | Description                      |
-| -------------------- | ------------------- | -------------------------------- |
-| session_id           | String              | Claude Code session identifier   |
-| input_tokens         | u64                 | Total input tokens consumed      |
-| output_tokens        | u64                 | Total output tokens generated    |
-| total_tokens         | u64                 | Sum of input and output tokens   |
-| estimated_cost       | f64                 | Estimated cost in USD (optional) |
-| rate_limit_remaining | `Option<u32>`       | Remaining API calls if available |
-| rate_limit_reset     | `Option<Timestamp>` | When rate limit resets           |
-| updated_at           | Timestamp           | Last update time                 |
-
-### IPC Commands
-
-New commands to support API usage tracking:
-
-```text
-API_USAGE <session-id>
-  Get API usage for a specific session
-  Returns: JSON object with usage metrics
-
-API_USAGE_ALL
-  Get aggregated API usage across all sessions
-  Returns: JSON object with cumulative metrics
-
-SET_USAGE <session-id> <usage-json>
-  Update usage metrics for a session (called by hooks)
-  Returns: OK | ERROR <reason>
-```
-
-### Data Sources
-
-API usage data may come from:
-
-1. **Claude Code hooks** - If hooks provide usage information in their payload
-2. **External log parsing** - Parsing Claude Code output logs (if available)
-3. **Manual reporting** - User/script-provided usage data
-
 ### Display Format
 
-The api-usage widget should show:
-
 ```text
-Tokens: 1.2k / 5.3k (session/total)
-Cost: ~$0.02
-Rate: 98/100 remaining
+Quota: 5h 8% | 7d 77% | resets 2h 15m
 ```
 
-Compact format for one-line layout:
+Compact:
 
 ```text
-[1.2k/5.3k tok | $0.02 | 98 left]
+[5h:8% 7d:77%]
 ```
 
-### Limitations
+### What Was Removed
 
-- Token counts depend on Claude Code exposing this information
-- Cost estimates are approximate based on published pricing
-- Rate limit information may not be available from all sources
-- Usage data is ephemeral (resets on daemon restart per project non-goals)
+Per-session token tracking (input/output tokens, cost estimates) was removed
+from scope. Claude Code does not currently expose per-session token counts via
+hooks. Account-level quota from E011 provides the most actionable information.
 
-### Testing Strategy
+Per-session tracking may be revisited if Claude Code adds token reporting to
+hook payloads.
 
-- Unit tests for usage data model serialization/deserialization
-- Unit tests for aggregation calculations
-- Integration tests for API_USAGE commands
-- Widget rendering tests with various usage scenarios
-- Mock data for development and testing when Claude Code data is unavailable
+## Out of Scope
+
+- Per-session token tracking (no data source available)
+- Daemon-side usage aggregation
+- Cost estimates
+- IPC commands for usage data
