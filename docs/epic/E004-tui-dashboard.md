@@ -71,16 +71,17 @@ perfectly in a Zellij/tmux pane without consuming excessive screen space.
 ### Application Architecture
 
 ```text
-src/
-├── tui/
-│   ├── mod.rs           # TUI module entry
-│   ├── app.rs           # Application state and event loop
-│   ├── ui.rs            # UI rendering logic
-│   ├── event.rs         # Event handling (keyboard, resize)
-│   └── views/
-│       ├── mod.rs
-│       ├── dashboard.rs # Main dashboard view
-│       └── detail.rs    # Session detail view
+crates/agent-console-dashboard/
+├── src/
+│   └── tui/
+│       ├── mod.rs           # TUI module entry
+│       ├── app.rs           # Application state and event loop
+│       ├── ui.rs            # UI rendering logic
+│       ├── event.rs         # Event handling (keyboard, resize)
+│       └── views/
+│           ├── mod.rs
+│           ├── dashboard.rs # Main dashboard view
+│           └── detail.rs    # Session detail view
 ```
 
 ### Keyboard Shortcuts

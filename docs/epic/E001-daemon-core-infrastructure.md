@@ -63,13 +63,14 @@ The daemon approach was chosen over shared memory and SQLite alternatives:
 ### Project Structure
 
 ```text
-src/
-├── main.rs           # CLI entry, argument parsing
-├── daemon/
-│   ├── mod.rs
-│   ├── server.rs     # Socket server
-│   ├── store.rs      # State management
-│   └── protocol.rs   # IPC message parsing
+crates/agent-console-dashboard/
+├── src/
+│   ├── main.rs           # CLI entry, argument parsing
+│   └── daemon/
+│       ├── mod.rs
+│       ├── server.rs     # Socket server
+│       ├── store.rs      # State management
+│       └── protocol.rs   # IPC message parsing
 ```
 
 ### Key Dependencies

@@ -104,12 +104,13 @@ agent-console api-usage <session> --input 1000 --output 500
 ### Project Structure
 
 ```text
-src/
-├── daemon/
-│   └── protocol.rs   # IPC message parsing
-├── client/
-│   ├── mod.rs
-│   └── commands.rs   # CLI client commands
+crates/agent-console-dashboard/
+├── src/
+│   ├── daemon/
+│   │   └── protocol.rs   # IPC message parsing
+│   └── client/
+│       ├── mod.rs
+│       └── commands.rs   # CLI client commands
 ```
 
 ### Key Dependencies

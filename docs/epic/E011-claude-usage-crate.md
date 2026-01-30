@@ -48,8 +48,9 @@ retrieval and API calls. This crate fills that gap, enabling:
 
 ## Integration Status
 
-The `claude-usage` crate is complete and published. E009 consumes this crate for
-account-level quota data. See S011.08 for the integration story.
+The core Rust crate is complete and published to crates.io. E009 consumes this
+crate for account-level quota data. See S011.08 for the integration story.
+napi-rs bindings (S011.07) are deferred to v2 per project priorities.
 
 **Credential handling:** macOS Keychain access requires special ACL
 considerations — see [macOS Keychain ACL](../macos-keychain-acl.md) for details.

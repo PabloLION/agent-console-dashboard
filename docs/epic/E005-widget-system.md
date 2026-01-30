@@ -161,17 +161,29 @@ Tokens: 12.3k in / 8.1k out | $0.42 est
 ### Source Files
 
 ```text
-src/
-├── widgets/
-│   ├── mod.rs           # Widget trait and registry
-│   ├── session_status.rs
-│   ├── working_dir.rs
-│   ├── api_usage.rs
-│   ├── state_history.rs
-│   ├── clock.rs
-│   └── spacer.rs
-├── layout/
-│   ├── mod.rs           # Layout manager
-│   ├── presets.rs       # Built-in layouts
-│   └── config.rs        # Layout configuration
+crates/agent-console-dashboard/
+├── src/
+│   ├── widgets/
+│   │   ├── mod.rs           # Widget trait and registry
+│   │   ├── session_status.rs
+│   │   ├── working_dir.rs
+│   │   ├── api_usage.rs
+│   │   ├── state_history.rs
+│   │   ├── clock.rs
+│   │   └── spacer.rs
+│   └── layout/
+│       ├── mod.rs           # Layout manager
+│       ├── presets.rs       # Built-in layouts
+│       └── config.rs        # Layout configuration
 ```
+
+### Widget Data Sources
+
+Widgets receive data via the `WidgetContext` parameter. Data sources vary by
+widget:
+
+- **session-status, working-dir, state-history**: Data from daemon via IPC
+  subscription (SUBSCRIBE command)
+- **api-usage**: Calls `claude_usage::get_usage()` directly (E011 crate), not
+  routed through daemon
+- **clock, spacer**: No external data needed
