@@ -133,6 +133,24 @@ The TUI adapts to terminal width:
 └────────────────────────────────────────────────────────────┘
 ```
 
+### Event Loop Architecture
+
+The TUI uses `tokio::select!` to multiplex terminal events and daemon updates:
+
+- Terminal input events (keyboard, resize) via crossterm
+- Daemon subscription updates (sessions, usage) via socket
+- UI refresh tick (250ms default, configurable via `[ui] tick_rate`)
+
+### Connection Behavior
+
+- **Auto-reconnect:** If daemon disconnects, show "disconnected" in status area
+  and auto-reconnect with exponential backoff (100ms → 5s max)
+- **Terminal restoration:** Panic hook restores terminal on crash (crossterm
+  cleanup)
+- **Data source:** TUI receives ALL data from daemon (sessions + usage). No
+  direct API calls. See [widget data flow](../architecture/widget-data-flow.md).
+- **E009 fallback:** If usage data unavailable, widget shows "N/A"
+
 ### Integration with Zellij
 
 The TUI is designed to run in a dedicated Zellij pane, receiving resize events

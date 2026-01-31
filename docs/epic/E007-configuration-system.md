@@ -67,10 +67,14 @@ Default: ~/.config/agent-console/config.toml
 
 ### Configuration Schema
 
+The consolidated config schema includes ALL configurable values from across
+epics:
+
 ```toml
 [ui]
 layout = "two-line"  # or "one-line", "custom"
 widgets = ["working-dir", "status", "api-usage"]
+tick_rate = "250ms"  # TUI refresh rate
 
 [agents.claude-code]
 enabled = true
@@ -78,6 +82,12 @@ hooks_path = "~/.claude/hooks"
 
 [integrations.zellij]
 enabled = true
+
+[daemon]
+idle_timeout = "60m"          # Auto-stop after idle (from Q25 amendment)
+usage_fetch_interval = "3m"   # API usage fetch interval (from D4)
+log_level = "info"            # Hot-reloadable
+log_file = ""                 # Empty = stderr, path = file
 ```
 
 ### Configuration Sections
@@ -112,6 +122,13 @@ struct Config {
 3. If no file exists, use built-in defaults
 4. Optionally create default config file on first run
 
+### Validation Strategy
+
+- Validate configuration on load
+- Reject invalid config with error message indicating specific field and
+  expected values
+- Fall back to defaults for missing fields (partial config + hardcoded defaults)
+
 ### Hot-Reload Scope
 
 Per [Q27 decision](../plans/7-decisions.md#q27-config-reload), the daemon
@@ -119,6 +136,7 @@ supports hot-reload via `kill -HUP <pid>` or `acd reload`:
 
 | Setting              | Hot-reloadable?           |
 | -------------------- | ------------------------- |
+| Log level            | Yes                       |
 | Colors               | Yes                       |
 | Tick interval        | Yes                       |
 | Display mode         | Yes                       |

@@ -74,7 +74,7 @@ was deferred from v0 — this epic delivers that capability.
     <key>KeepAlive</key>
     <true/>
     <key>StandardErrorPath</key>
-    <string>/tmp/acd.log</string>
+    <string>~/.local/state/agent-console/acd.log</string>
 </dict>
 </plist>
 ```
@@ -122,6 +122,27 @@ fn install_service() { /* launchd */ }
 #[cfg(target_os = "linux")]
 fn install_service() { /* systemd */ }
 ```
+
+### Install Validation
+
+After `acd service install`, verify the service registered correctly:
+
+- **macOS:** Check `launchctl list | grep com.agent-console`
+- **Linux:** Check `systemctl --user is-enabled acd.service`
+
+Report success/failure to the user with next steps if registration failed.
+
+### Uninstall Behavior
+
+`acd service uninstall` stops the running daemon before removing the service
+file. Sequence: stop service → remove plist/unit file → confirm removal.
+
+### Log File Location
+
+Service log files use XDG State Directory:
+`$XDG_STATE_HOME/agent-console/acd.log` (default:
+`~/.local/state/agent-console/acd.log`). The directory is created on first
+daemon startup if it doesn't exist.
 
 ### Interaction with Auto-Start (Q2)
 

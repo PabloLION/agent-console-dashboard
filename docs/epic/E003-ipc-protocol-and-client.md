@@ -119,11 +119,17 @@ crates/agent-console-dashboard/
 
 ### Design Decisions
 
-- **Text-based protocol** - Human-readable for easy debugging
-- **JSON for complex data** - Status updates use simple text, complex data uses
-  JSON
-- **Push model for subscriptions** - Server pushes updates, clients don't poll
-- **Newline-delimited messages** - Simple framing for streaming
+- **JSON Lines format** — One JSON object per `\n`-delimited line. JSON
+  serializers escape `\n` inside strings, so no framing ambiguity. See
+  [D2](../architecture/2026-01-31-discussion-decisions.md).
+- **Transport-independent** — JSON Lines is the wire format. Unix socket is the
+  transport (Linux/macOS). Future Windows: named pipes. Future v1+: could swap
+  to TCP or SQLite without changing wire format.
+- **Push model for subscriptions** — Server pushes updates, clients don't poll
+- **SUBSCRIBE semantics** — Sends full state snapshot first, then deltas on
+  change
+- **Protocol version** — Include `"version": 1` in messages for forward
+  compatibility
 
 ### Complexity Review Notes
 

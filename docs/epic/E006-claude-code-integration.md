@@ -50,7 +50,7 @@ multi-agent workflows.
       sends a message
 - [ ] Notification hook script sets session status to "Attention" when Claude
       sends a notification
-- [ ] Hook scripts correctly derive project name from current working directory
+- [ ] Hook scripts correctly extract session_id from JSON stdin
 - [ ] Documentation covers complete hook registration in Claude Code settings
 - [ ] All hooks are portable bash scripts with minimal dependencies
 - [ ] Manual test plan for each hook type documented per
@@ -94,14 +94,32 @@ Hooks are registered in `~/.claude/settings.json`:
 }
 ```
 
+### Hook JSON Stdin
+
+Claude Code passes JSON data via stdin to ALL hook types. Every hook receives:
+
+| Field             | Type   | Description                     |
+| ----------------- | ------ | ------------------------------- |
+| `session_id`      | string | Unique session identifier       |
+| `cwd`             | string | Current working directory       |
+| `transcript_path` | string | Path to conversation transcript |
+| `permission_mode` | string | Current permission mode         |
+| `hook_event_name` | string | Which hook fired (Stop, etc.)   |
+
+Plus event-specific fields (e.g., `prompt` for UserPromptSubmit, `message` for
+Notification).
+
+See [D8](../architecture/2026-01-31-discussion-decisions.md) for full details.
+
 ### Hook Script Pattern
 
-Each hook script follows this pattern:
+Each hook script parses JSON stdin to extract `session_id`:
 
 ```bash
 #!/bin/bash
-PROJECT=$(basename "$PWD")
-agent-console set "$PROJECT" <status>
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id')
+agent-console set "$SESSION_ID" <status>
 ```
 
 ### AskUserQuestion Hook (Resolved)

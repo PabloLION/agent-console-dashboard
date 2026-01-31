@@ -87,11 +87,23 @@ Recommended pane configuration:
 
 ### Session Resurrection in Zellij
 
+**Pane selection strategy:** Create new pane in current tab (default). This is
+the simplest and most predictable behavior. Configurable in future versions.
+
 When resurrecting a session within Zellij context:
 
-1. Determine which Zellij pane/tab to use (or create new)
+1. Create new pane in current tab via `zellij action new-pane`
 2. Run `claude --resume <session-id>` in that pane
 3. Update dashboard to show session as Working
+
+**Non-Zellij fallback:** Display the command for user to copy/paste:
+`claude --resume <session-id> --cwd /path/to/dir`
+
+**Zellij version compatibility:** Tested with Zellij 0.39.x+. CLI commands may
+vary in older versions.
+
+**Error handling:** Wrap Zellij CLI commands in a helper module that handles
+`new-pane` failures gracefully (fall back to displaying command).
 
 ### Zellij CLI Commands
 

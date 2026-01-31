@@ -62,18 +62,58 @@ have been waiting too long.
 | Question  | Agent asked a question          | AskQuestion hook             |
 | Closed    | Session ended                   | Session termination          |
 
+### Session Identification
+
+Sessions are identified by `session_id` from Claude Code's JSON stdin, available
+in ALL hook types (Stop, UserPromptSubmit, Notification, PreToolUse,
+SessionStart, SessionEnd). See [Q16](../plans/7-decisions.md) and
+[D8](../architecture/2026-01-31-discussion-decisions.md).
+
+Hook scripts extract session_id from stdin:
+
+```bash
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id')
+agent-console set "$SESSION_ID" working
+```
+
+Available fields in hook JSON stdin: `session_id`, `cwd`, `transcript_path`,
+`permission_mode`, `hook_event_name` (plus event-specific fields).
+
+**Session auto-creation:** First SET for an unknown session_id creates the
+session automatically (Q17). No explicit registration step needed.
+
+### State Transition Rules
+
+| From      | To        | Valid? | Trigger                                   |
+| --------- | --------- | ------ | ----------------------------------------- |
+| Working   | Attention | Yes    | Stop hook, Notification hook              |
+| Working   | Question  | Yes    | PreToolUse AskUserQuestion hook           |
+| Working   | Closed    | Yes    | SessionEnd hook                           |
+| Attention | Working   | Yes    | UserPromptSubmit hook                     |
+| Attention | Question  | Yes    | PreToolUse AskUserQuestion hook           |
+| Attention | Closed    | Yes    | SessionEnd hook                           |
+| Question  | Working   | Yes    | UserPromptSubmit hook                     |
+| Question  | Attention | Yes    | Stop hook, Notification hook              |
+| Question  | Closed    | Yes    | SessionEnd hook                           |
+| Closed    | Working   | Yes    | Resurrection only (via RESURRECT command) |
+| Closed    | \*        | No     | Cannot transition except via resurrection |
+
+Same-status transitions (e.g., Working → Working) update `since` timestamp but
+do not record a new history entry.
+
 ### Data Model
 
 ```rust
 struct Session {
-    id: String,
-    agent_type: AgentType,       // ClaudeCode, Future agents
+    id: String,              // From session_id in JSON stdin
+    agent_type: AgentType,   // ClaudeCode, Future agents
     status: Status,
-    working_dir: PathBuf,
-    since: Instant,              // When status last changed
+    working_dir: PathBuf,    // From cwd in JSON stdin
+    display_name: String,    // Derived from basename of cwd
+    since: Instant,          // When status last changed
     history: Vec<StateTransition>,
-    closed: bool,                // For resurrection feature
-    session_id: Option<String>,  // Claude Code session ID for resume
+    closed: bool,            // For resurrection feature
 }
 
 struct StateTransition {
@@ -83,6 +123,14 @@ struct StateTransition {
     duration: Duration,
 }
 ```
+
+**Metadata persistence:** Session state is in-memory only, lost on daemon
+restart. This is intentional — sessions are volatile and re-register via hooks.
+See [D1](../architecture/2026-01-31-discussion-decisions.md).
+
+**Concurrency:** Single-threaded actor model processes one message at a time. No
+race conditions on store access. See
+[concurrency model](../architecture/concurrency.md).
 
 ### State History Display
 

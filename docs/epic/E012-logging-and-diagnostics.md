@@ -99,6 +99,29 @@ Agent Console Daemon
   Socket:      /tmp/acd.sock
 ```
 
+### Log Format
+
+Two output formats depending on target:
+
+| Target              | Format          | Example                                                                                             |
+| ------------------- | --------------- | --------------------------------------------------------------------------------------------------- |
+| stderr (foreground) | Human-readable  | `2026-01-31T12:00:00 INFO session status updated session_id=abc123`                                 |
+| file (background)   | JSON structured | `{"ts":"2026-01-31T12:00:00Z","level":"info","msg":"session status updated","session_id":"abc123"}` |
+
+Use `tracing-subscriber` with `fmt::Layer` for stderr and `json::Layer` for file
+output. Both layers can be active simultaneously.
+
+### Log File Permissions
+
+Log files created with mode `0600` (owner read/write only) since they may
+contain session IDs and working directory paths.
+
+### Memory Measurement
+
+The `acd status` health check reports memory usage. Use the `sysinfo` crate to
+query resident set size of the daemon process. This is a best-effort metric — if
+`sysinfo` fails, report "N/A".
+
 ### Log Rotation
 
 Out of scope for v0. Users can use standard tools (`logrotate`, `newsyslog`) for

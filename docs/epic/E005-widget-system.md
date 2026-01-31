@@ -179,11 +179,15 @@ crates/agent-console-dashboard/
 
 ### Widget Data Sources
 
-Widgets receive data via the `WidgetContext` parameter. Data sources vary by
-widget:
+**Fully centralized architecture.** All widgets receive data exclusively via
+`WidgetContext`. No widget makes external API calls or accesses the daemon
+socket directly. See [widget data flow](../architecture/widget-data-flow.md).
 
-- **session-status, working-dir, state-history**: Data from daemon via IPC
-  subscription (SUBSCRIBE command)
-- **api-usage**: Calls `claude_usage::get_usage()` directly (E011 crate), not
-  routed through daemon
-- **clock, spacer**: No external data needed
+- **session-status, working-dir, state-history**: Session data from daemon
+  (received via TUI's SUBSCRIBE connection)
+- **api-usage**: Usage data from daemon (daemon fetches from claude-usage crate
+  every 3 minutes, broadcasts to subscribers)
+- **clock, spacer**: Local data (system clock, no daemon involvement)
+
+Widgets are **stateless renderers**: `(WidgetContext, width) → Line`. They must
+not cache data, maintain timers, or depend on other widgets.

@@ -50,7 +50,8 @@ friction when switching between tasks or recovering from accidental closures.
 - [ ] Users can list previously closed sessions that are eligible for
       resurrection
 - [ ] RESURRECT command returns session metadata for frontends to act on
-- [ ] Sessions that have exceeded context limits are marked as not resumable
+- [ ] Session metadata is in-memory only, lost on daemon restart
+- [ ] Resumability is a user-settable flag (auto-detection not available)
 - [ ] Multiple closed sessions per directory are listed individually
 - [ ] Resurrection validates working directory still exists before proceeding
 - [ ] Unit tests for metadata storage; integration tests for RESURRECT command
