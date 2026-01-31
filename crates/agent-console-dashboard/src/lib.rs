@@ -39,6 +39,9 @@ pub mod service;
 /// Terminal execution module for running commands in panes/terminals.
 pub mod terminal;
 
+/// Integration modules for external tools (Zellij, tmux, etc.).
+pub mod integrations;
+
 /// Internal client module for daemon communication with auto-start capability.
 /// This module is not part of the public API - external tools should use CLI commands.
 pub(crate) mod client;

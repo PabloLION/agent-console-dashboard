@@ -60,23 +60,23 @@ dependencies in previous layers are complete.
 | S005.05 | Layout presets                | ✅     | `src/layout/presets.rs`           |
 | S008.02 | Resurrect command             | ✅     | `src/main.rs`, `daemon/server.rs` |
 
-### Layer 4 — Depends on Layer 3 (1 story) ⏳ NEXT
+### Layer 4 — Depends on Layer 3 (1 story) ✅ DONE
 
-| Story   | Title                   | Status | Blocking deps        |
-| ------- | ----------------------- | ------ | -------------------- |
-| S010.01 | Zellij layout dashboard | ⏳     | S004.01✅, S005.05✅ |
+| Story   | Title                   | Status | Location          |
+| ------- | ----------------------- | ------ | ----------------- |
+| S010.01 | Zellij layout dashboard | ✅     | `scripts/zellij/` |
 
-### Layer 5 — Depends on Layer 4 (1 story)
+### Layer 5 — Depends on Layer 4 (1 story) ✅ DONE
 
-| Story   | Title                     | Status | Blocking deps      |
-| ------- | ------------------------- | ------ | ------------------ |
-| S010.03 | Claude resume in terminal | ⏳     | S008.02✅, S010.01 |
+| Story   | Title                     | Status | Location        |
+| ------- | ------------------------- | ------ | --------------- |
+| S010.03 | Claude resume in terminal | ✅     | `src/terminal/` |
 
-### Layer 6 — Depends on Layer 5 (1 story)
+### Layer 6 — Depends on Layer 5 (1 story) ✅ DONE
 
-| Story   | Title                        | Status | Blocking deps |
-| ------- | ---------------------------- | ------ | ------------- |
-| S010.02 | Zellij resurrection workflow | ⏳     | S010.03       |
+| Story   | Title                        | Status | Location                     |
+| ------- | ---------------------------- | ------ | ---------------------------- |
+| S010.02 | Zellij resurrection workflow | ✅     | `src/integrations/zellij.rs` |
 
 ## Already Done (16 stories)
 
