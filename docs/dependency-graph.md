@@ -52,25 +52,25 @@ dependencies in previous layers are complete.
 | S007.04 | Default configuration file | ✅     | `src/config/default.rs`                      |
 | S009.03 | API usage TUI display      | ✅     | `src/widgets/api_usage.rs` (same as S005.04) |
 
-### Layer 3 — Depends on Layer 2 (3 stories) ⏳ NEXT
+### Layer 3 — Depends on Layer 2 (3 stories) ✅ DONE
 
-| Story   | Title                         | Status | Blocking deps        |
-| ------- | ----------------------------- | ------ | -------------------- |
-| S004.04 | Session selection detail view | ⏳     | S004.03✅            |
-| S005.05 | Layout presets                | ⏳     | S005.01✅, S004.03✅ |
-| S008.02 | Resurrect command             | ⏳     | S008.01✅, S004.03✅ |
+| Story   | Title                         | Status | Location                          |
+| ------- | ----------------------------- | ------ | --------------------------------- |
+| S004.04 | Session selection detail view | ✅     | `src/tui/views/detail.rs`         |
+| S005.05 | Layout presets                | ✅     | `src/layout/presets.rs`           |
+| S008.02 | Resurrect command             | ✅     | `src/main.rs`, `daemon/server.rs` |
 
-### Layer 4 — Depends on Layer 3 (1 story)
+### Layer 4 — Depends on Layer 3 (1 story) ⏳ NEXT
 
-| Story   | Title                   | Status | Blocking deps      |
-| ------- | ----------------------- | ------ | ------------------ |
-| S010.01 | Zellij layout dashboard | ⏳     | S004.01✅, S005.05 |
+| Story   | Title                   | Status | Blocking deps        |
+| ------- | ----------------------- | ------ | -------------------- |
+| S010.01 | Zellij layout dashboard | ⏳     | S004.01✅, S005.05✅ |
 
 ### Layer 5 — Depends on Layer 4 (1 story)
 
-| Story   | Title                     | Status | Blocking deps    |
-| ------- | ------------------------- | ------ | ---------------- |
-| S010.03 | Claude resume in terminal | ⏳     | S008.02, S010.01 |
+| Story   | Title                     | Status | Blocking deps      |
+| ------- | ------------------------- | ------ | ------------------ |
+| S010.03 | Claude resume in terminal | ⏳     | S008.02✅, S010.01 |
 
 ### Layer 6 — Depends on Layer 5 (1 story)
 
