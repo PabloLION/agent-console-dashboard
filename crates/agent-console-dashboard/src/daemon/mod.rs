@@ -150,8 +150,27 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
 
     // Run the main event loop
     runtime.block_on(async {
+        let mut server = SocketServer::new(config.socket_path.display().to_string());
+        if let Err(e) = server.start().await {
+            error!("failed to start socket server: {}", e);
+            return;
+        }
+
+        let (shutdown_tx, shutdown_rx) = tokio::sync::broadcast::channel(1);
+
+        // Spawn the accept loop
+        let server_handle = tokio::spawn(async move {
+            if let Err(e) = server.run_with_shutdown(shutdown_rx).await {
+                error!("socket server error: {}", e);
+            }
+        });
+
         // Wait for shutdown signal
         wait_for_shutdown().await;
+
+        // Signal server to stop
+        let _ = shutdown_tx.send(());
+        let _ = server_handle.await;
     });
 
     info!("daemon stopped");

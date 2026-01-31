@@ -71,6 +71,20 @@ enum Commands {
         quiet: bool,
     },
 
+    /// Set session status (used by hooks)
+    Set {
+        /// Session ID
+        session_id: String,
+        /// Status (working, attention, question, closed)
+        status: String,
+        /// Working directory
+        #[arg(long)]
+        working_dir: Option<PathBuf>,
+        /// Socket path for IPC communication
+        #[arg(long, default_value = "/tmp/agent-console.sock")]
+        socket: PathBuf,
+    },
+
     /// Start the daemon process
     Daemon {
         /// Run as a background daemon (detached from terminal)
@@ -189,6 +203,14 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
+        Commands::Set {
+            session_id,
+            status,
+            working_dir,
+            socket,
+        } => {
+            return run_set_command(&socket, &session_id, &status, working_dir.as_deref());
+        }
         Commands::Daemon { daemonize, socket } => {
             // Create DaemonConfig from CLI args
             let config = DaemonConfig::new(socket, daemonize);
@@ -205,6 +227,52 @@ fn main() -> ExitCode {
     }
 
     ExitCode::SUCCESS
+}
+
+/// Connects to daemon, sends SET command to create/update a session.
+fn run_set_command(
+    socket: &PathBuf,
+    session_id: &str,
+    status: &str,
+    working_dir: Option<&std::path::Path>,
+) -> ExitCode {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixStream;
+
+    let stream = match UnixStream::connect(socket) {
+        Ok(s) => s,
+        Err(_) => {
+            eprintln!("Error: daemon not running (cannot connect to {:?})", socket);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut writer = stream.try_clone().expect("failed to clone unix stream");
+    let mut reader = BufReader::new(stream);
+
+    let wd = working_dir
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| ".".to_string());
+    let cmd = format!("SET {} {} {}\n", session_id, status, wd);
+
+    if writer.write_all(cmd.as_bytes()).is_err() || writer.flush().is_err() {
+        eprintln!("Error: failed to send SET command");
+        return ExitCode::FAILURE;
+    }
+
+    let mut response = String::new();
+    if reader.read_line(&mut response).is_err() {
+        eprintln!("Error: failed to read daemon response");
+        return ExitCode::FAILURE;
+    }
+
+    let trimmed = response.trim();
+    if trimmed.starts_with("OK") {
+        ExitCode::SUCCESS
+    } else {
+        eprintln!("{}", trimmed);
+        ExitCode::FAILURE
+    }
 }
 
 /// Connects to the daemon socket, sends STATUS, and displays health info.
