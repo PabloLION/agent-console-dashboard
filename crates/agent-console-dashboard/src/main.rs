@@ -59,6 +59,18 @@ enum Commands {
         action: ConfigAction,
     },
 
+    /// Resurrect a previously closed session
+    Resurrect {
+        /// Session ID to resurrect
+        session_id: String,
+        /// Socket path for IPC communication
+        #[arg(long, default_value = "/tmp/agent-console.sock")]
+        socket: PathBuf,
+        /// Print command without explanation (for scripting)
+        #[arg(long)]
+        quiet: bool,
+    },
+
     /// Start the daemon process
     Daemon {
         /// Run as a background daemon (detached from terminal)
@@ -126,6 +138,13 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
             return run_dump_command(&socket);
+        }
+        Commands::Resurrect {
+            session_id,
+            socket,
+            quiet,
+        } => {
+            return run_resurrect_command(&socket, &session_id, quiet);
         }
         Commands::Config { action } => {
             use agent_console::config::{default, loader::ConfigLoader, xdg};
@@ -296,6 +315,65 @@ fn run_dump_command(socket: &PathBuf) -> ExitCode {
     }
 
     eprintln!("Unexpected daemon response: {}", trimmed);
+    ExitCode::FAILURE
+}
+
+/// Connects to daemon, sends RESURRECT, and displays resurrection metadata.
+fn run_resurrect_command(socket: &PathBuf, session_id: &str, quiet: bool) -> ExitCode {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixStream;
+
+    let stream = match UnixStream::connect(socket) {
+        Ok(s) => s,
+        Err(_) => {
+            eprintln!("Error: daemon not running (cannot connect to {:?})", socket);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut writer = stream.try_clone().expect("failed to clone unix stream");
+    let mut reader = BufReader::new(stream);
+
+    let cmd = format!("RESURRECT {}\n", session_id);
+    if writer.write_all(cmd.as_bytes()).is_err() || writer.flush().is_err() {
+        eprintln!("Error: failed to send RESURRECT command");
+        return ExitCode::FAILURE;
+    }
+
+    let mut response = String::new();
+    if reader.read_line(&mut response).is_err() {
+        eprintln!("Error: failed to read daemon response");
+        return ExitCode::FAILURE;
+    }
+
+    let trimmed = response.trim();
+    if let Some(json_str) = trimmed.strip_prefix("OK ") {
+        match serde_json::from_str::<serde_json::Value>(json_str) {
+            Ok(info) => {
+                let sid = info["session_id"].as_str().unwrap_or(session_id);
+                let wd = info["working_dir"].as_str().unwrap_or(".");
+                let cmd = info["command"].as_str().unwrap_or("claude --resume");
+                if quiet {
+                    println!("cd {} && {}", wd, cmd);
+                } else {
+                    println!("To resurrect session {}:", sid);
+                    println!("  cd {}", wd);
+                    println!("  {}", cmd);
+                }
+                return ExitCode::SUCCESS;
+            }
+            Err(e) => {
+                eprintln!("Failed to parse daemon response: {}", e);
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+
+    if let Some(err_msg) = trimmed.strip_prefix("ERR ") {
+        eprintln!("Error: {}", err_msg);
+    } else {
+        eprintln!("Unexpected daemon response: {}", trimmed);
+    }
     ExitCode::FAILURE
 }
 
@@ -574,6 +652,40 @@ mod tests {
             },
             _ => panic!("expected Service command"),
         }
+    }
+
+    #[test]
+    fn test_resurrect_subcommand_parses() {
+        let cli = Cli::try_parse_from(["agent-console", "resurrect", "session-abc"])
+            .expect("resurrect should parse");
+        match cli.command {
+            Commands::Resurrect {
+                session_id, quiet, ..
+            } => {
+                assert_eq!(session_id, "session-abc");
+                assert!(!quiet);
+            }
+            _ => panic!("expected Resurrect command"),
+        }
+    }
+
+    #[test]
+    fn test_resurrect_quiet_flag() {
+        let cli =
+            Cli::try_parse_from(["agent-console", "resurrect", "session-abc", "--quiet"])
+                .expect("resurrect --quiet should parse");
+        match cli.command {
+            Commands::Resurrect { quiet, .. } => {
+                assert!(quiet);
+            }
+            _ => panic!("expected Resurrect command"),
+        }
+    }
+
+    #[test]
+    fn test_resurrect_requires_session_id() {
+        let result = Cli::try_parse_from(["agent-console", "resurrect"]);
+        assert!(result.is_err());
     }
 
     #[test]

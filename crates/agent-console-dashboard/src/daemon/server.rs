@@ -325,6 +325,7 @@ struct DaemonState {
 /// - LIST - List all sessions
 /// - GET <session_id> - Get a single session
 /// - SUB - Subscribe to session updates
+/// - RESURRECT <session_id> - Resurrect a closed session
 /// - STATUS - Return daemon health information as JSON
 ///
 /// # Arguments
@@ -370,6 +371,7 @@ async fn handle_client(
             "RM" => handle_rm_command(&parts[1..], &state.store).await,
             "LIST" => handle_list_command(&state.store).await,
             "GET" => handle_get_command(&parts[1..], &state.store).await,
+            "RESURRECT" => handle_resurrect_command(&parts[1..], &state.store).await,
             "STATUS" => handle_status_command(state).await,
             "DUMP" => handle_dump_command(state).await,
             "SUB" => {
@@ -558,6 +560,61 @@ async fn handle_sub_command(
     }
 
     Ok(())
+}
+
+/// Handles the RESURRECT command: RESURRECT <session-id>
+///
+/// Validates that the session exists, is resumable, and its working directory
+/// still exists. On success, returns resurrection metadata and removes the
+/// session from the closed queue. On failure, returns an error with reason.
+///
+/// Format: OK <json>\n or ERR <message>\n
+async fn handle_resurrect_command(args: &[&str], store: &SessionStore) -> String {
+    if args.is_empty() {
+        return "ERR RESURRECT requires: <session-id>\n".to_string();
+    }
+
+    let session_id = args[0];
+
+    // Look up the closed session
+    let closed = match store.get_closed(session_id).await {
+        Some(c) => c,
+        None => {
+            return format!(
+                "ERR SESSION_NOT_FOUND No closed session with ID: {}\n",
+                session_id
+            );
+        }
+    };
+
+    // Check if resumable
+    if !closed.resumable {
+        let reason = closed
+            .not_resumable_reason
+            .as_deref()
+            .unwrap_or("session cannot be resumed");
+        return format!("ERR NOT_RESUMABLE {}\n", reason);
+    }
+
+    // Validate working directory exists
+    if !closed.working_dir.exists() {
+        return format!(
+            "ERR WORKING_DIR_MISSING Working directory no longer exists: {}\n",
+            closed.working_dir.display()
+        );
+    }
+
+    // Build resurrection metadata
+    let info = serde_json::json!({
+        "session_id": closed.session_id,
+        "working_dir": closed.working_dir,
+        "command": format!("claude --resume {}", closed.session_id),
+    });
+
+    // Remove from closed sessions
+    store.remove_closed(session_id).await;
+
+    format!("OK {}\n", info)
 }
 
 /// Handles the STATUS command: STATUS

@@ -523,6 +523,19 @@ impl SessionStore {
         closed.iter().find(|c| c.session_id == session_id).cloned()
     }
 
+    /// Removes a closed session by its session ID.
+    ///
+    /// Used during resurrection to remove the session from the closed queue.
+    /// Returns `Some(ClosedSession)` if found and removed, `None` otherwise.
+    pub async fn remove_closed(&self, session_id: &str) -> Option<ClosedSession> {
+        let mut closed = self.closed.write().await;
+        if let Some(pos) = closed.iter().position(|c| c.session_id == session_id) {
+            closed.remove(pos)
+        } else {
+            None
+        }
+    }
+
     /// Permanently removes a session from the store.
     ///
     /// Unlike `close_session()`, which marks a session as closed but keeps it
