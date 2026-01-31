@@ -79,13 +79,35 @@ pub enum Action {
     SwitchLayout(u8),
     /// Close overlay / go back from detail view.
     Back,
+    /// Scroll history down in detail view.
+    ScrollHistoryDown,
+    /// Scroll history up in detail view.
+    ScrollHistoryUp,
 }
 
 /// Handles a key event by dispatching to the appropriate app method or action.
+///
+/// When the detail view is active, keys are routed to detail-specific handlers
+/// (scroll, resurrect, close, escape). Otherwise, dashboard navigation applies.
 pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
+    use crate::tui::app::View;
+
+    // Global: quit always works
     match key.code {
-        KeyCode::Char('q') => Action::Quit,
-        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => Action::Quit,
+        KeyCode::Char('q') => return Action::Quit,
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            return Action::Quit
+        }
+        _ => {}
+    }
+
+    // Detail view key handling
+    if let View::Detail { session_index, .. } = app.view {
+        return handle_detail_key(app, key, session_index);
+    }
+
+    // Dashboard view key handling
+    match key.code {
         KeyCode::Char('j') | KeyCode::Down => {
             app.select_next();
             Action::None
@@ -119,10 +141,36 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
                 Action::None
             }
         }
-        KeyCode::Char(c @ '1'..='4') => {
-            Action::SwitchLayout(c as u8 - b'0')
-        }
+        KeyCode::Char(c @ '1'..='4') => Action::SwitchLayout(c as u8 - b'0'),
         KeyCode::Esc => Action::Back,
+        _ => Action::None,
+    }
+}
+
+/// Handles key events when the detail view is active.
+fn handle_detail_key(app: &App, key: KeyEvent, session_index: usize) -> Action {
+    match key.code {
+        KeyCode::Esc => Action::Back,
+        KeyCode::Char('r') | KeyCode::Char('R') => {
+            if let Some(session) = app.sessions.get(session_index) {
+                if session.status == crate::Status::Closed {
+                    Action::Resurrect(session.id.clone())
+                } else {
+                    Action::None
+                }
+            } else {
+                Action::None
+            }
+        }
+        KeyCode::Char('c') | KeyCode::Char('C') => {
+            if let Some(session) = app.sessions.get(session_index) {
+                Action::Remove(session.id.clone())
+            } else {
+                Action::None
+            }
+        }
+        KeyCode::Char('j') | KeyCode::Down => Action::ScrollHistoryDown,
+        KeyCode::Char('k') | KeyCode::Up => Action::ScrollHistoryUp,
         _ => Action::None,
     }
 }
@@ -355,5 +403,97 @@ mod tests {
         assert_ne!(Action::None, Action::Quit);
         let debug = format!("{:?}", Action::Quit);
         assert!(debug.contains("Quit"));
+    }
+
+    // --- Detail view key handling tests ---
+
+    #[test]
+    fn test_detail_view_esc_returns_back() {
+        let mut app = make_app_with_sessions(3);
+        app.view = crate::tui::app::View::Detail {
+            session_index: 0,
+            history_scroll: 0,
+        };
+        let action = handle_key_event(&mut app, make_key(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(action, Action::Back);
+    }
+
+    #[test]
+    fn test_detail_view_q_quits() {
+        let mut app = make_app_with_sessions(1);
+        app.view = crate::tui::app::View::Detail {
+            session_index: 0,
+            history_scroll: 0,
+        };
+        let action = handle_key_event(&mut app, make_key(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert_eq!(action, Action::Quit);
+    }
+
+    #[test]
+    fn test_detail_view_r_resurrects_closed() {
+        let mut app = make_app_with_sessions(1);
+        app.sessions[0].status = crate::Status::Closed;
+        app.view = crate::tui::app::View::Detail {
+            session_index: 0,
+            history_scroll: 0,
+        };
+        let action = handle_key_event(&mut app, make_key(KeyCode::Char('r'), KeyModifiers::NONE));
+        assert_eq!(action, Action::Resurrect("session-0".to_string()));
+    }
+
+    #[test]
+    fn test_detail_view_r_on_working_returns_none() {
+        let mut app = make_app_with_sessions(1);
+        app.view = crate::tui::app::View::Detail {
+            session_index: 0,
+            history_scroll: 0,
+        };
+        let action = handle_key_event(&mut app, make_key(KeyCode::Char('r'), KeyModifiers::NONE));
+        assert_eq!(action, Action::None);
+    }
+
+    #[test]
+    fn test_detail_view_c_removes() {
+        let mut app = make_app_with_sessions(1);
+        app.view = crate::tui::app::View::Detail {
+            session_index: 0,
+            history_scroll: 0,
+        };
+        let action = handle_key_event(&mut app, make_key(KeyCode::Char('c'), KeyModifiers::NONE));
+        assert_eq!(action, Action::Remove("session-0".to_string()));
+    }
+
+    #[test]
+    fn test_detail_view_j_scrolls_down() {
+        let mut app = make_app_with_sessions(1);
+        app.view = crate::tui::app::View::Detail {
+            session_index: 0,
+            history_scroll: 0,
+        };
+        let action = handle_key_event(&mut app, make_key(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(action, Action::ScrollHistoryDown);
+    }
+
+    #[test]
+    fn test_detail_view_k_scrolls_up() {
+        let mut app = make_app_with_sessions(1);
+        app.view = crate::tui::app::View::Detail {
+            session_index: 0,
+            history_scroll: 0,
+        };
+        let action = handle_key_event(&mut app, make_key(KeyCode::Char('k'), KeyModifiers::NONE));
+        assert_eq!(action, Action::ScrollHistoryUp);
+    }
+
+    #[test]
+    fn test_detail_view_layout_keys_ignored() {
+        let mut app = make_app_with_sessions(1);
+        app.view = crate::tui::app::View::Detail {
+            session_index: 0,
+            history_scroll: 0,
+        };
+        // '1' should not switch layout in detail view
+        let action = handle_key_event(&mut app, make_key(KeyCode::Char('1'), KeyModifiers::NONE));
+        assert_eq!(action, Action::None);
     }
 }

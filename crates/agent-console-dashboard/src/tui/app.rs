@@ -4,6 +4,7 @@
 
 use crate::tui::event::{handle_key_event, Action, Event, EventHandler};
 use crate::tui::ui::render_dashboard;
+use crate::tui::views::detail::render_detail;
 use crate::Session;
 use crossterm::{
     event::EventStream,
@@ -13,7 +14,21 @@ use crossterm::{
 use ratatui::prelude::{CrosstermBackend, Terminal};
 use std::io::{self, stdout};
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// Active view state for the TUI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum View {
+    /// Main dashboard showing session list.
+    Dashboard,
+    /// Detail modal overlay for a specific session.
+    Detail {
+        /// Index of the session being viewed.
+        session_index: usize,
+        /// Scroll offset for history entries.
+        history_scroll: usize,
+    },
+}
 
 /// Core application state for the TUI.
 #[derive(Debug)]
@@ -28,6 +43,10 @@ pub struct App {
     pub sessions: Vec<Session>,
     /// Currently selected session index in the list.
     pub selected_index: Option<usize>,
+    /// Current active view.
+    pub view: View,
+    /// Active layout preset index (1=default, 2=compact).
+    pub layout_preset: u8,
 }
 
 impl App {
@@ -39,6 +58,8 @@ impl App {
             tick_count: 0,
             sessions: Vec::new(),
             selected_index: None,
+            view: View::Dashboard,
+            layout_preset: 1,
         }
     }
 
@@ -73,6 +94,48 @@ impl App {
         self.selected_index.and_then(|i| self.sessions.get(i))
     }
 
+    /// Opens the detail view for the session at `index`.
+    pub fn open_detail(&mut self, index: usize) {
+        if index < self.sessions.len() {
+            self.view = View::Detail {
+                session_index: index,
+                history_scroll: 0,
+            };
+        }
+    }
+
+    /// Closes any overlay and returns to the dashboard view.
+    pub fn close_detail(&mut self) {
+        self.view = View::Dashboard;
+    }
+
+    /// Scrolls the detail history down by one entry.
+    pub fn scroll_history_down(&mut self) {
+        if let View::Detail {
+            session_index,
+            ref mut history_scroll,
+        } = self.view
+        {
+            if let Some(session) = self.sessions.get(session_index) {
+                let max_scroll = session.history.len().saturating_sub(5);
+                if *history_scroll < max_scroll {
+                    *history_scroll += 1;
+                }
+            }
+        }
+    }
+
+    /// Scrolls the detail history up by one entry.
+    pub fn scroll_history_up(&mut self) {
+        if let View::Detail {
+            ref mut history_scroll,
+            ..
+        } = self.view
+        {
+            *history_scroll = history_scroll.saturating_sub(1);
+        }
+    }
+
     /// Runs the TUI application: sets up terminal, enters event loop, restores on exit.
     pub async fn run(&mut self) -> io::Result<()> {
         // Install panic hook that restores terminal before printing panic info
@@ -100,8 +163,19 @@ impl App {
 
         loop {
             // Render
+            let now = Instant::now();
             terminal.draw(|frame| {
                 render_dashboard(frame, self);
+                // Render detail overlay on top if active
+                if let View::Detail {
+                    session_index,
+                    history_scroll,
+                } = self.view
+                {
+                    if let Some(session) = self.sessions.get(session_index) {
+                        render_detail(frame, session, frame.area(), history_scroll, now);
+                    }
+                }
             })?;
 
             // Handle events
@@ -115,11 +189,11 @@ impl App {
                         }
                         Action::OpenDetail(idx) => {
                             tracing::debug!("open detail view for session index {idx}");
-                            // TODO(S004.04): implement detail view overlay
+                            self.open_detail(idx);
                         }
                         Action::Resurrect(id) => {
                             tracing::debug!("resurrect session {id}");
-                            // TODO(S008.02): send RESURRECT IPC command
+                            // TODO: send RESURRECT IPC command to daemon
                         }
                         Action::Remove(id) => {
                             tracing::debug!("remove session {id}");
@@ -127,11 +201,18 @@ impl App {
                         }
                         Action::SwitchLayout(preset) => {
                             tracing::debug!("switch to layout preset {preset}");
-                            // TODO(S005.05): apply layout preset
+                            if (1..=2).contains(&preset) {
+                                self.layout_preset = preset;
+                            }
                         }
                         Action::Back => {
-                            tracing::debug!("back / close overlay");
-                            // TODO(S004.04): close detail view if open
+                            self.close_detail();
+                        }
+                        Action::ScrollHistoryDown => {
+                            self.scroll_history_down();
+                        }
+                        Action::ScrollHistoryUp => {
+                            self.scroll_history_up();
                         }
                         Action::None => {}
                     }
@@ -187,6 +268,8 @@ mod tests {
         assert_eq!(app.tick_count, 0);
         assert!(app.sessions.is_empty());
         assert!(app.selected_index.is_none());
+        assert_eq!(app.view, View::Dashboard);
+        assert_eq!(app.layout_preset, 1);
     }
 
     #[test]
@@ -196,6 +279,7 @@ mod tests {
         assert_eq!(app.tick_count, 0);
         assert!(app.sessions.is_empty());
         assert!(app.selected_index.is_none());
+        assert_eq!(app.view, View::Dashboard);
     }
 
     #[test]
@@ -231,6 +315,8 @@ mod tests {
         assert!(debug.contains("tick_count"));
         assert!(debug.contains("sessions"));
         assert!(debug.contains("selected_index"));
+        assert!(debug.contains("view"));
+        assert!(debug.contains("layout_preset"));
     }
 
     // --- init_selection tests ---
@@ -353,5 +439,103 @@ mod tests {
         assert_eq!(app.selected_index, Some(0));
         app.select_previous();
         assert_eq!(app.selected_index, Some(0));
+    }
+
+    // --- View state tests ---
+
+    #[test]
+    fn test_open_detail_sets_view() {
+        let mut app = make_app_with_sessions(3);
+        app.open_detail(1);
+        assert_eq!(
+            app.view,
+            View::Detail {
+                session_index: 1,
+                history_scroll: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn test_open_detail_out_of_bounds_no_change() {
+        let mut app = make_app_with_sessions(3);
+        app.open_detail(5);
+        assert_eq!(app.view, View::Dashboard);
+    }
+
+    #[test]
+    fn test_close_detail_returns_to_dashboard() {
+        let mut app = make_app_with_sessions(3);
+        app.open_detail(0);
+        app.close_detail();
+        assert_eq!(app.view, View::Dashboard);
+    }
+
+    #[test]
+    fn test_scroll_history_down() {
+        let mut app = make_app_with_sessions(1);
+        // Add enough history entries
+        for _ in 0..10 {
+            app.sessions[0].history.push(crate::StateTransition {
+                timestamp: std::time::Instant::now(),
+                from: crate::Status::Working,
+                to: crate::Status::Attention,
+                duration: std::time::Duration::from_secs(1),
+            });
+        }
+        app.open_detail(0);
+        app.scroll_history_down();
+        assert_eq!(
+            app.view,
+            View::Detail {
+                session_index: 0,
+                history_scroll: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn test_scroll_history_up() {
+        let mut app = make_app_with_sessions(1);
+        for _ in 0..10 {
+            app.sessions[0].history.push(crate::StateTransition {
+                timestamp: std::time::Instant::now(),
+                from: crate::Status::Working,
+                to: crate::Status::Attention,
+                duration: std::time::Duration::from_secs(1),
+            });
+        }
+        app.view = View::Detail {
+            session_index: 0,
+            history_scroll: 3,
+        };
+        app.scroll_history_up();
+        assert_eq!(
+            app.view,
+            View::Detail {
+                session_index: 0,
+                history_scroll: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn test_scroll_history_up_clamps_at_zero() {
+        let mut app = make_app_with_sessions(1);
+        app.open_detail(0);
+        app.scroll_history_up();
+        assert_eq!(
+            app.view,
+            View::Detail {
+                session_index: 0,
+                history_scroll: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn test_layout_preset_default() {
+        let app = App::new(PathBuf::from("/tmp/test.sock"));
+        assert_eq!(app.layout_preset, 1);
     }
 }
