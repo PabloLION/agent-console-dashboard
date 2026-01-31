@@ -24,6 +24,9 @@ pub mod config;
 /// Daemon module providing process lifecycle management and daemonization.
 pub mod daemon;
 
+/// Layout system for dashboard widget arrangement.
+pub mod layout;
+
 /// TUI module providing the terminal user interface for the dashboard.
 pub mod tui;
 
