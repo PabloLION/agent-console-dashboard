@@ -77,8 +77,7 @@ TUI receives all data → populates WidgetContext → passes to widgets
 ```
 
 **Fetch behavior:** Daemon only fetches usage when ≥1 TUI is subscribed. No
-audience = no API calls. (Temporary decision; revisit in P3 issue for edge
-cases.)
+audience = no API calls. Decision finalized for v0.
 
 ## D4: Usage Fetch Interval — 3 Minutes
 
@@ -95,8 +94,8 @@ cases.)
 
 **Known concern:** Timer alignment — the fetch interval and the API's tracking
 window may not align perfectly due to rounding. When we round displayed
-percentages, they may fall into an adjacent 3-minute bucket. Tracked as a
-separate P3 investigation issue.
+percentages, they may fall into an adjacent 3-minute bucket. Decision finalized
+for v0.
 
 ## D5: Auto-Stop Timeout — 60 Minutes (Configurable)
 

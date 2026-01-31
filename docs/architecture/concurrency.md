@@ -95,7 +95,9 @@ Each message is processed atomically before the next message begins.
 ## Bounded Channel for Broadcasts
 
 ```rust
-let (tx, rx) = mpsc::channel(100);  // bounded per subscriber
+// Per-subscriber message buffer (independent of max concurrent clients count).
+// This bounds backpressure per subscriber, not global connection capacity.
+let (tx, rx) = mpsc::channel(100);
 
 if tx.try_send(update).is_err() {
     // Subscriber cannot keep up, disconnect
@@ -120,4 +122,6 @@ For v0/v1, single-threaded is sufficient.
 ## References
 
 - [D1: Concurrency Model](./2026-01-31-discussion-decisions.md)
-- [Amendment 2](./2026-01-31-decision-amendments.md)
+- [Amendment 2: Bounded Channel for Broadcasts](./2026-01-31-decision-amendments.md)
+  — per-subscriber bounded channels with backpressure disconnection for slow
+  clients

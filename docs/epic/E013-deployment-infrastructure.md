@@ -46,7 +46,7 @@ was deferred from v0 — this epic delivers that capability.
 - [ ] `acd service install` registers the daemon as a user-level service
 - [ ] `acd service uninstall` removes the service registration
 - [ ] Daemon auto-starts on user login (macOS and Linux)
-- [ ] Daemon auto-restarts on crash with backoff delay
+- [ ] Daemon auto-restarts on crash with fixed 5-second restart delay
 - [ ] Service files use correct paths for binary, socket, and log file
 - [ ] Manual setup documented for users without install command
 - [ ] Manual test plan for install/uninstall on both platforms per
@@ -73,8 +73,13 @@ was deferred from v0 — this epic delivers that capability.
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>/Users/USERNAME</string>
+    </dict>
     <key>StandardErrorPath</key>
-    <string>~/.local/state/agent-console/acd.log</string>
+    <string>/Users/USERNAME/.local/state/agent-console/acd.log</string>
 </dict>
 </plist>
 ```

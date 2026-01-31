@@ -23,11 +23,14 @@ dashboard, users can pace their usage and avoid hitting rate limits.
 
 ## Stories
 
-| Story ID                                               | Title                        | Priority | Status |
-| ------------------------------------------------------ | ---------------------------- | -------- | ------ |
-| [S009.01](../stories/S009.01-api-usage-data-model.md)  | Integrate claude-usage crate | P1       | Draft  |
-| [S009.02](../stories/S009.02-api-usage-command.md)     | ~~IPC command~~ (removed)    | —        | Cut    |
-| [S009.03](../stories/S009.03-api-usage-tui-display.md) | Display usage in TUI         | P1       | Draft  |
+| Story ID                                                      | Title                        | Priority | Status |
+| ------------------------------------------------------------- | ---------------------------- | -------- | ------ |
+| [S009.01](../stories/S009.01-integrate-claude-usage-crate.md) | Integrate claude-usage crate | P1       | Draft  |
+| [S009.03](../stories/S009.03-api-usage-tui-display.md)        | Display usage in TUI         | P1       | Draft  |
+
+> **Cut Stories:** S009.02 (API usage IPC command) was cut. Usage data flows
+> through the daemon broadcast mechanism (D3), not through a dedicated IPC
+> command.
 
 ## Dependencies
 

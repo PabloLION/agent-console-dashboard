@@ -26,11 +26,13 @@ friction when switching between tasks or recovering from accidental closures.
 
 ## Stories
 
-| Story ID                                                   | Title                                           | Priority | Status |
-| ---------------------------------------------------------- | ----------------------------------------------- | -------- | ------ |
-| [S008.01](../stories/S008.01-closed-session-metadata.md)   | Store session metadata for closed sessions      | P1       | Draft  |
-| [S008.02](../stories/S008.02-resurrect-command.md)         | Implement RESURRECT command                     | P1       | Draft  |
-| [S008.03](../stories/S008.03-claude-resume-integration.md) | ~~claude --resume integration~~ (moved to E010) | —        | Moved  |
+| Story ID                                                 | Title                                      | Priority | Status |
+| -------------------------------------------------------- | ------------------------------------------ | -------- | ------ |
+| [S008.01](../stories/S008.01-closed-session-metadata.md) | Store session metadata for closed sessions | P1       | Draft  |
+| [S008.02](../stories/S008.02-resurrect-command.md)       | Implement RESURRECT command                | P1       | Draft  |
+
+> **Removed/Moved Stories:** S008.03 (claude --resume integration) was moved to
+> [E010 - Zellij Integration](./E010-zellij-integration.md) as S010.03.
 
 ## Dependencies
 

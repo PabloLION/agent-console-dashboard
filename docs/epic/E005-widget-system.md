@@ -12,11 +12,9 @@ one-line views to comprehensive multi-line displays.
 ## Goals
 
 - Create a widget trait/interface that defines the contract for all UI widgets
-- Implement core widgets: session-status, working-dir, api-usage, state-history,
-  clock, and spacer
-- Build a layout system with predefined presets (one-line, two-line, detailed,
-  history)
-- Support custom user-defined layouts via configuration
+- Implement core widgets: session-status, working-dir, api-usage
+- Build a layout system with two presets (default, compact)
+- Defer custom user-defined layouts to v2+
 
 ## User Value
 
@@ -51,8 +49,9 @@ to adapt to different workflows.
 - [ ] All core widgets implement the widget trait consistently
 - [ ] Widgets handle terminal width constraints (truncation, abbreviation)
 - [ ] Layout presets are configurable via TOML configuration
-- [ ] Users can switch between layouts via keyboard shortcuts (1-4)
-- [ ] Custom layouts can be defined in user configuration
+- [ ] Users can switch between layouts via keyboard shortcuts (`1` default, `2`
+      compact)
+- [ ] Custom layouts deferred to v2+
 - [ ] Widgets support both horizontal and vertical orientation modes
 - [ ] Unit tests for widget rendering at various widths per
       [testing strategy](../decisions/testing-strategy.md)
@@ -82,44 +81,35 @@ pub trait Widget {
 | `session-status` | All sessions with status and elapsed time | 30        |
 | `session-detail` | Expanded view of selected session         | 40        |
 | `api-usage`      | Account-level 5h/7d quota utilization     | 18        |
-| `state-history`  | Recent state transitions                  | 30        |
-| `clock`          | Current time                              | 8         |
-| `spacer`         | Empty line for visual separation          | 0         |
+
+### Future Widgets (v2+)
+
+The following widgets are deferred to v2+:
+
+- `state-history` - Recent state transitions
+- `clock` - Current time
+- `spacer` - Empty line for visual separation
 
 ### Layout Presets
 
-| Layout     | Widgets                                      | Use Case               |
-| ---------- | -------------------------------------------- | ---------------------- |
-| `one-line` | `session-status`                             | Minimal, v1 compatible |
-| `two-line` | `working-dir`, `session-status`              | Standard               |
-| `detailed` | `working-dir`, `session-status`, `api-usage` | Full monitoring        |
-| `history`  | `session-status`, `state-history`            | Debug/analysis         |
+| Layout    | Widgets                                | Use Case |
+| --------- | -------------------------------------- | -------- |
+| `default` | `session-status:two-line`, `api-usage` | Standard |
+| `compact` | `session-status:one-line`, `api-usage` | Minimal  |
+
+Custom layout configuration and additional presets are deferred to v2+.
 
 ### Configuration Examples
 
 ```toml
-# Simple widget list
-[ui]
-widgets = ["session-status", "api-usage"]
+[tui.layout]
+preset = "default"  # default | compact
 
-# Layout presets
-[ui.layouts.one-line]
-widgets = ["session-status"]
+[tui.layout.presets.default]
+widgets = ["session-status:two-line", "api-usage"]
 
-[ui.layouts.two-line]
-widgets = ["working-dir", "session-status"]
-
-[ui.layouts.detailed]
-widgets = ["working-dir", "session-status", "api-usage", "state-history"]
-
-# Custom layout
-[ui.layouts.my-layout]
-widgets = ["clock", "session-status", "spacer", "api-usage"]
-
-# Orientation and display mode
-[ui]
-orientation = "vertical"  # or "horizontal"
-display_mode = "full"     # or "compact"
+[tui.layout.presets.compact]
+widgets = ["session-status:one-line", "api-usage"]
 ```
 
 ### Display Modes
@@ -127,7 +117,7 @@ display_mode = "full"     # or "compact"
 **Horizontal (default):** Sessions inline separated by `|`
 
 ```text
-proj-a: - | proj-b: 2m34s | proj-c: ?
+proj-a: ● | proj-b: 2m34s | proj-c: ?
 ```
 
 **Vertical:** Each session on its own line
@@ -149,7 +139,7 @@ proj-c    question    -
 **Session Status Widget:**
 
 ```text
-proj-a: - | proj-b: 2m34s | proj-c: ?
+proj-a: ● | proj-b: 2m34s | proj-c: ?
 ```
 
 **API Usage Widget:**
@@ -167,10 +157,7 @@ crates/agent-console-dashboard/
 │   │   ├── mod.rs           # Widget trait and registry
 │   │   ├── session_status.rs
 │   │   ├── working_dir.rs
-│   │   ├── api_usage.rs
-│   │   ├── state_history.rs
-│   │   ├── clock.rs
-│   │   └── spacer.rs
+│   │   └── api_usage.rs
 │   └── layout/
 │       ├── mod.rs           # Layout manager
 │       ├── presets.rs       # Built-in layouts
@@ -183,11 +170,10 @@ crates/agent-console-dashboard/
 `WidgetContext`. No widget makes external API calls or accesses the daemon
 socket directly. See [widget data flow](../architecture/widget-data-flow.md).
 
-- **session-status, working-dir, state-history**: Session data from daemon
-  (received via TUI's SUBSCRIBE connection)
+- **session-status, working-dir**: Session data from daemon (received via TUI's
+  SUBSCRIBE connection)
 - **api-usage**: Usage data from daemon (daemon fetches from claude-usage crate
   every 3 minutes, broadcasts to subscribers)
-- **clock, spacer**: Local data (system clock, no daemon involvement)
 
 Widgets are **stateless renderers**: `(WidgetContext, width) → Line`. They must
 not cache data, maintain timers, or depend on other widgets.

@@ -56,6 +56,8 @@ S010.03 was moved from E008 S008.03 — handles the actual terminal creation and
   integration settings stored in config
 - [E008 - Session Resurrection](./E008-session-resurrection.md) - Provides
   RESURRECT protocol and metadata for S010.03
+- [E011 - Claude Usage Crate](./E011-claude-usage-crate.md) - Usage data
+  displayed in dashboard pane comes from E011 via daemon broadcasts
 
 ## Acceptance Criteria
 

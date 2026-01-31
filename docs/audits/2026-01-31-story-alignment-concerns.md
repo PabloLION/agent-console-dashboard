@@ -22,7 +22,7 @@
   text-based protocol (`SET <session> <status> [metadata_json]`, `RM <session>`,
   `RESURRECT <session>`)
 - **Fix:** Update E003 lines 63-77 to match JSON Lines format
-- [ ] Resolved
+- [x] Resolved
 
 ### C02 — Missing Story for RM Command
 
@@ -30,7 +30,7 @@
 - **Issue:** E003 lists `RM <session>` as a command but no S003.XX story
   implements it
 - **Fix:** Create S003.XX or clarify deferred
-- [ ] Resolved
+- [x] Resolved
 
 ### C03 — RESURRECT Command Not in S003.01 Enum
 
@@ -39,7 +39,7 @@
   E008, but S003.01 doesn't mention RESURRECT in Command enum
 - **Fix:** Add RESURRECT to S003.01's Command enum with note that execution is
   in E008
-- [ ] Resolved
+- [x] Resolved
 
 ### C04 — UsageUpdate Message Type Not Defined in Protocol
 
@@ -47,7 +47,7 @@
 - **Issue:** S004.02 references `Message::UsageUpdate(usage)` but E003 doesn't
   define this message type and S003.04 doesn't mention it
 - **Fix:** Add UsageUpdate to E003 protocol
-- [ ] Resolved
+- [x] Resolved
 
 ### C05 — Bounded Channel Size vs Max Clients Confusion
 
@@ -55,7 +55,7 @@
 - **Issue:** `mpsc::channel(100)` per subscriber vs "Max concurrent clients |
   100+". These are independent values but read as related
 - **Fix:** Clarify 100 is per-subscriber buffer, independent of max clients
-- [ ] Resolved
+- [x] Resolved
 
 ### C06 — Subscriber Removal Mechanism Unclear
 
@@ -63,7 +63,7 @@
 - **Issue:** S003.04 says failed send removes subscriber, but S001.02 doesn't
   explain subscriber management at all
 - **Fix:** Add subscriber management to S001.02 or create dependency note
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -78,7 +78,7 @@
   header says "This story was cut... TUI call claude_usage::get_usage()
   directly" but the body IMPLEMENTS daemon-centralized approach
 - **Fix:** Remove "Status: Cut" from S009.01; header contradicts body
-- [ ] Resolved
+- [x] Resolved
 
 ### C08 — S009.01 File Name vs Title Mismatch
 
@@ -86,28 +86,28 @@
   "Integrate claude-usage Crate"
 - **Issue:** Filename does not match story title
 - **Fix:** Rename file to match title
-- [ ] Resolved
+- [x] Resolved
 
 ### C09 — E011 Epic "Done" but Integration Unclear
 
 - **Files:** E011 line 3
 - **Issue:** E011 Status: Done, but daemon integration not verified
 - **Fix:** Verify or change status
-- [ ] Resolved
+- [x] Resolved
 
 ### C10 — S011.06 Unchecked Checklist but Status "Done"
 
 - **Files:** S011.06 lines 84-93
 - **Issue:** All checklist items unchecked but status is Done
 - **Fix:** Check items or change status
-- [ ] Resolved
+- [x] Resolved
 
 ### C11 — S011.08 Claims "Done" but Shows Unimplemented Code
 
 - **Files:** S011.08 lines 96-108
 - **Issue:** Shows daemon code examples, status: Done
 - **Fix:** Clarify scope or change status
-- [ ] Resolved
+- [x] Resolved
 
 ### C12 — S011.05 Copy-Paste Bug
 
@@ -115,7 +115,7 @@
 - **Issue:** `seven_day_on_pace()` calls `self.five_hour.is_on_pace()` instead
   of `self.seven_day`
 - **Fix:** Fix the bug
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -129,7 +129,7 @@
 - **Issue:** All mention auto-creation but no story defines WHAT metadata is
   captured
 - **Fix:** Add "Session Auto-Creation" section to S002.04
-- [ ] Resolved
+- [x] Resolved
 
 ### C14 — Same-Status Transition Behavior Missing from S002.03
 
@@ -137,7 +137,7 @@
 - **Issue:** S002.02 says same-status updates timestamp without history entry,
   but S002.03 doesn't mention this at all
 - **Fix:** Add same-status behavior to S002.03
-- [ ] Resolved
+- [x] Resolved
 
 ### C15 — Closed Session Cleanup Strategy Unclear
 
@@ -146,7 +146,7 @@
   part of auto-stop interval check" but no clear statement of WHEN closed
   sessions are removed
 - **Fix:** Add cleanup mechanism to S002.04 acceptance criteria
-- [ ] Resolved
+- [x] Resolved
 
 ### C16 — Resurrection Metadata Requirements Vague
 
@@ -156,7 +156,7 @@
   S008.01 but doesn't specify expected schema
 - **Fix:** Add "Resurrection Metadata" section to S002.04, reference specific
   E008 data structures
-- [ ] Resolved
+- [x] Resolved
 
 ### C17 — Resurrection TTL Config Missing
 
@@ -164,14 +164,14 @@
 - **Issue:** Q5 decides `[sessions] resurrection_ttl = "24h"` but E007 has no
   `[sessions]` section and E008 has no TTL
 - **Fix:** Clarify if replaced by max_closed_sessions
-- [ ] Resolved
+- [x] Resolved
 
 ### C18 — No Session ID Format Validation
 
 - **Files:** Stories reference session_id broadly
 - **Issue:** No format spec for session IDs anywhere
 - **Fix:** Document expected format
-- [ ] Resolved
+- [x] Resolved
 
 ### C19 — Display Name Derivation Edge Cases
 
@@ -179,7 +179,7 @@
 - **Issue:** basename derivation with fallback "unknown" but no handling for "/"
   or non-UTF8 characters
 - **Fix:** Add edge case handling to AC
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -193,7 +193,7 @@
 - **Issue:** S003.03: `"elapsed": 45` means "seconds in current status".
   S003.04: `"elapsed": 45` means "how long in previous status"
 - **Fix:** Rename to "current_elapsed" in LIST and "previous_elapsed" in UPDATE
-- [ ] Resolved
+- [x] Resolved
 
 ### C21 — StateTransition Timestamp Type Inconsistency
 
@@ -202,14 +202,14 @@
   without conversion, but S002.03 says "timestamp field serialized as ISO 8601
   or Unix timestamp"
 - **Fix:** Clarify internal=Instant, JSON=Unix timestamp
-- [ ] Resolved
+- [x] Resolved
 
 ### C22 — Elapsed Time Formatting: Seconds Dropped for Hour+
 
 - **Files:** S005.02 lines 207-219
 - **Issue:** Shows "2h5m" not "2h5m0s" — intentional?
 - **Fix:** Confirm intentional, document behavior
-- [ ] Resolved
+- [x] Resolved
 
 ### C23 — Timestamp Timezone Ambiguity
 
@@ -217,7 +217,7 @@
 - **Issue:** Shows "2026-01-31T10:00:00Z" but `pub created_at: String` with no
   timezone handling specified
 - **Fix:** Specify always UTC
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -231,7 +231,7 @@
 - **Issue:** E007 `[daemon]` has no `socket_path` but S007.04 shows
   `socket_path = "agent-console.sock"`
 - **Fix:** Add socket_path to E007 schema
-- [ ] Resolved
+- [x] Resolved
 
 ### C25 — max_closed_sessions Missing from E007
 
@@ -239,7 +239,7 @@
 - **Issue:** S008.01 defines `[daemon] max_closed_sessions = 20` but E007 schema
   doesn't include it
 - **Fix:** Add to E007
-- [ ] Resolved
+- [x] Resolved
 
 ### C26 — color_scheme Missing from E007
 
@@ -247,7 +247,7 @@
 - **Issue:** S007.04 shows `color_scheme = "dark"`, E007 hot-reload lists
   "Colors" but no field defined
 - **Fix:** Add to E007
-- [ ] Resolved
+- [x] Resolved
 
 ### C27 — Config File Integration Scattered Across Epics
 
@@ -255,7 +255,7 @@
 - **Issue:** Config snippets in multiple locations, no single story owns full
   config structure
 - **Fix:** E007 should own this, other stories reference
-- [ ] Resolved
+- [x] Resolved
 
 ### C28 — E007 idle_timeout Comment Not Self-Contained
 
@@ -263,7 +263,7 @@
 - **Issue:** References "Q25 amendment" without explaining what idle_timeout
   controls
 - **Fix:** Expand comment
-- [ ] Resolved
+- [x] Resolved
 
 ### C29 — History Depth Configuration Location Unclear
 
@@ -271,7 +271,7 @@
 - **Issue:** Config in `src/config.rs`, TOML under `[sessions]`, and
   `self.history_depth_limit` on Session struct — unclear where the value lives
 - **Fix:** Clarify global config value, Session references it
-- [ ] Resolved
+- [x] Resolved
 
 ### C30 — Hot-Reload Scope Documented in 3 Places
 
@@ -279,7 +279,7 @@
 - **Issue:** All three document hot-reload behavior; consistent now but
   maintenance risk
 - **Fix:** Consider single canonical location
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -293,7 +293,7 @@
 - **Issue:** E005 lists `state-history` widget and uses it in `history` layout,
   but no story implements it
 - **Fix:** Create S005.06 or mark future enhancement
-- [ ] Resolved
+- [x] Resolved
 
 ### C32 — Clock and Spacer Widgets Missing Stories
 
@@ -301,14 +301,14 @@
 - **Issue:** E005 lists `clock` and `spacer` widgets, registry registers them,
   but no stories implement them
 - **Fix:** Add stories or mark future
-- [ ] Resolved
+- [x] Resolved
 
 ### C33 — Widget Name Inconsistency: "session-status" vs "status"
 
 - **Files:** S007.04 line 119, E007 line 76, S007.01 line 243
 - **Issue:** S007.04 says `"session-status"`, E007 and S007.01 say `"status"`
 - **Fix:** Standardize
-- [ ] Resolved
+- [x] Resolved
 
 ### C34 — S007.04 References Undefined Widgets
 
@@ -316,7 +316,7 @@
 - **Issue:** Lists "state-history", "clock", "spacer" — none have implementation
   stories
 - **Fix:** Remove or mark as planned
-- [ ] Resolved
+- [x] Resolved
 
 ### C35 — Layout Preset Count Mismatch
 
@@ -324,14 +324,14 @@
 - **Issue:** S007.04 shows 4 presets (one-line, two-line, detailed, history) vs
   3 in S007.01/E007 (one-line, two-line, custom)
 - **Fix:** Align
-- [ ] Resolved
+- [x] Resolved
 
 ### C36 — Session Status Color/Symbol Mismatch
 
 - **Files:** E004 lines 100-107, S005.02 lines 111-119
 - **Issue:** E004: Working = `●` (filled circle). S005.02: Working = `-` (dash)
 - **Fix:** Standardize on one symbol
-- [ ] Resolved
+- [x] Resolved
 
 ### C37 — UsageData Type Location Creates Circular Dependency
 
@@ -339,21 +339,21 @@
 - **Issue:** `WidgetContext` has `pub usage: &'a UsageData`, depends on E009 for
   type. Circular if UsageData in E009 but WidgetContext in E005
 - **Fix:** Clarify UsageData location, recommend shared types
-- [ ] Resolved
+- [x] Resolved
 
 ### C38 — UsageData Default State Before First Broadcast
 
 - **Files:** WidgetContext.usage is `&UsageData` (not Optional)
 - **Issue:** No story specifies initial value before daemon broadcast
 - **Fix:** Document `UsageData::default()` with `DataStatus::Unavailable`
-- [ ] Resolved
+- [x] Resolved
 
 ### C39 — Responsive Width Breakpoints vs Widget min_width
 
 - **Files:** E004 lines 109-118
 - **Issue:** Unclear interaction between layout breakpoints and widget min_width
 - **Fix:** Clarify layout manager hides widgets below min_width
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -367,7 +367,7 @@
 - **Issue:** "Stop hook, Notification hook" trigger Attention status but no
   story explains WHY Notification hook triggers Attention
 - **Fix:** Add note explaining semantic meaning
-- [ ] Resolved
+- [x] Resolved
 
 ### C41 — Session Identification: JSON stdin vs Env Var
 
@@ -375,7 +375,7 @@
 - **Issue:** Hook uses `INPUT=$(cat)` and `jq .session_id` but PreToolUse hook
   uses `$CC_SESSION_ID` env var. Unclear which mechanism for which hook type
 - **Fix:** Clarify per hook type
-- [ ] Resolved
+- [x] Resolved
 
 ### C42 — AskUserQuestion: PreToolUse vs Notification Duplicate
 
@@ -383,7 +383,7 @@
 - **Issue:** PreToolUse + AskUserQuestion → "question" AND Notification hook
   also for "Question". Could cause duplicate status updates
 - **Fix:** Clarify hook firing order and precedence
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -397,7 +397,7 @@
 - **Issue:** S002.01 says "from cwd in JSON stdin", S002.04 shows it in SET
   command metadata, D8 lists cwd as available but no example
 - **Fix:** Add "Hook JSON stdin Example" section
-- [ ] Resolved
+- [x] Resolved
 
 ### C44 — Metadata Field Name: working_dir vs cwd
 
@@ -405,7 +405,7 @@
 - **Issue:** Internal uses `working_dir: PathBuf` but CLI uses `--cwd` and JSON
   uses `"cwd"`
 - **Fix:** Standardize on "working_dir" internally, accept "cwd" as CLI alias
-- [ ] Resolved
+- [x] Resolved
 
 ### C45 — `--cwd` Flag May Not Exist in Claude CLI
 
@@ -413,7 +413,7 @@
 - **Issue:** Stories reference `claude --resume <id> --cwd <dir>` but this is
   not verified
 - **Fix:** Verify or use `cd && claude`
-- [ ] Resolved
+- [x] Resolved
 
 ### C46 — Working Directory via Command::current_dir Won't Work for Zellij
 
@@ -421,14 +421,14 @@
 - **Issue:** `command.current_dir(dir)` won't work because Zellij CLI's spawned
   pane doesn't inherit parent's cwd
 - **Fix:** Use `--cwd` flag on claude command or `cd && claude`
-- [ ] Resolved
+- [x] Resolved
 
 ### C47 — Stale basename "$PWD" Pattern
 
 - **Files:** S008.01 line 198, D8 line 167, E010 stories
 - **Issue:** basename "$PWD" pattern is stale; may still appear in E010 stories
 - **Fix:** Audit all E010 stories and remaining epics
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -442,7 +442,7 @@
 - **Issue:** Both reference "does NOT use --daemonize flag" but the flag doesn't
   exist in architecture
 - **Fix:** Define in E001 or remove references
-- [ ] Resolved
+- [x] Resolved
 
 ### C49 — Plist Tilde Expansion Unreliable
 
@@ -450,7 +450,7 @@
 - **Issue:** `~/.local/state/...` in StandardErrorPath; launchd doesn't expand
   tilde reliably
 - **Fix:** Use $HOME expansion or absolute path
-- [ ] Resolved
+- [x] Resolved
 
 ### C50 — Log Directory Creation Responsibility Contradiction
 
@@ -458,7 +458,7 @@
 - **Issue:** S012.01 says daemon creates directory; S013.04 gives manual mkdir
   instructions
 - **Fix:** Confirm daemon auto-creates, make manual optional
-- [ ] Resolved
+- [x] Resolved
 
 ### C51 — systemd enable vs start Semantics
 
@@ -466,7 +466,7 @@
 - **Issue:** S013.02: "Daemon starts after enable". But `systemctl enable`
   doesn't start immediately
 - **Fix:** Update S013.02 AC
-- [ ] Resolved
+- [x] Resolved
 
 ### C52 — Uninstall launchctl Ordering Inconsistency
 
@@ -474,7 +474,7 @@
 - **Issue:** Table shows "unload, remove plist" but sequence shows "stop first,
   then remove"
 - **Fix:** Align table with sequence
-- [ ] Resolved
+- [x] Resolved
 
 ### C53 — No Service File Syntax Validation in S013.03
 
@@ -482,7 +482,7 @@
 - **Issue:** S013.01 validates plist syntax but S013.03 doesn't validate before
   copy
 - **Fix:** Add validation to S013.03
-- [ ] Resolved
+- [x] Resolved
 
 ### C54 — Restart Delay vs Backoff Mismatch
 
@@ -490,7 +490,7 @@
 - **Issue:** E013 says "backoff delay" but S013.02 uses `RestartSec=5` (fixed,
   not backoff)
 - **Fix:** Change E013 to "5-second delay" or implement actual backoff
-- [ ] Resolved
+- [x] Resolved
 
 ### C55 — XDG_STATE_HOME Not in launchd Environment
 
@@ -498,42 +498,42 @@
 - **Issue:** S012.01 uses XDG_STATE_HOME with HOME fallback but plist only sets
   HOME
 - **Fix:** Document path difference or inherit full env
-- [ ] Resolved
+- [x] Resolved
 
 ### C56 — E013 Blocked on Incomplete E012
 
 - **Files:** E013, E012
 - **Issue:** E013 lists E012 as dependency, E012 is "In Progress"
 - **Fix:** Clarify hard vs soft dependency
-- [ ] Resolved
+- [x] Resolved
 
 ### C57 — Platform Detection Fallback Missing
 
 - **Files:** S013.03
 - **Issue:** Uses `#[cfg(target_os)]` but no unsupported platform handling
 - **Fix:** Add "platform not supported" error
-- [ ] Resolved
+- [x] Resolved
 
 ### C58 — No Uninstall Rollback Testing
 
 - **Files:** S013.01, S013.02
 - **Issue:** Manual tests don't verify clean uninstall
 - **Fix:** Add full install→uninstall test cycle
-- [ ] Resolved
+- [x] Resolved
 
 ### C59 — Binary Installation Path Not Covered
 
 - **Files:** All assume `/usr/local/bin/acd`
 - **Issue:** No story covers getting binary to install path
 - **Fix:** Add story or expand S013.04
-- [ ] Resolved
+- [x] Resolved
 
 ### C60 — Resource File Embedding Won't Work After cargo install
 
 - **Files:** S013.03 line 138
 - **Issue:** `std::fs::copy("resources/...")` won't work after `cargo install`
 - **Fix:** Use `include_str!` macro
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -547,21 +547,21 @@
 - **Issue:** D3: "only fetches usage when ≥1 TUI subscribed". D5: "auto-stop
   after 60 minutes idle". If TUI is subscribed, is daemon "idle"?
 - **Fix:** Clarify daemon NOT idle if any TUI subscribed
-- [ ] Resolved
+- [x] Resolved
 
 ### C62 — Auto-Stop 30→60 Not Updated Everywhere
 
 - **Files:** D5 (60 min / 3600s), Q25
 - **Issue:** Q25 still shows 1800s
 - **Fix:** Update Q25
-- [ ] Resolved
+- [x] Resolved
 
 ### C63 — Auto-Stop Constants Not in Any Story
 
 - **Files:** D5 Rust constants, epics/stories
 - **Issue:** D5 shows Rust constants but not referenced in epics or stories
 - **Fix:** Add to E001 or remove from arch doc
-- [ ] Resolved
+- [x] Resolved
 
 ### C64 — SIGHUP Handler Missing from AC
 
@@ -569,14 +569,14 @@
 - **Issue:** Signal table shows "SIGHUP | Reload configuration" but AC only
   checks SIGTERM/SIGINT
 - **Fix:** Add SIGHUP to AC or note deferred to E007
-- [ ] Resolved
+- [x] Resolved
 
 ### C65 — Auto-Start Timeout Math Doesn't Add Up
 
 - **Files:** S001.04 line 161, S001.04 line 135
 - **Issue:** "Total max wait | ~5 seconds" but math gives ~2630ms
 - **Fix:** Fix math or adjust values
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -590,14 +590,14 @@
 - **Issue:** "exponential backoff (100ms → 5s max)" but no exact schedule, no
   max retry count
 - **Fix:** Specify schedule and whether retry is indefinite
-- [ ] Resolved
+- [x] Resolved
 
 ### C67 — Session Detail View Missing E009 Dependency
 
 - **Files:** S004.04 lines 49-59
 - **Issue:** Shows API usage display but dependencies don't include E009
 - **Fix:** Add E009 as dependency or note usage display is optional
-- [ ] Resolved
+- [x] Resolved
 
 ### C68 — View State Enum Help Variant Unimplemented
 
@@ -605,21 +605,21 @@
 - **Issue:** `enum View { Dashboard, Detail, Help }` and `?` for help, but no
   story implements Help view
 - **Fix:** Create story or remove from View enum
-- [ ] Resolved
+- [x] Resolved
 
 ### C69 — tokio::select! Event Loop Split Unclear
 
 - **Files:** S004.01 lines 154-176, S004.02 lines 188-205
 - **Issue:** Unclear which story implements the daemon arm of the event loop
 - **Fix:** Clarify S004.01 scaffolds, S004.02 adds daemon arm
-- [ ] Resolved
+- [x] Resolved
 
 ### C70 — Terminal Restoration on Panic: CI Testing Unclear
 
 - **Files:** S004.01 lines 68-69, S004.01 lines 83-84
 - **Issue:** "spawn subprocess, force panic" — how to verify in CI?
 - **Fix:** Clarify manual verification, out of scope for CI
-- [ ] Resolved
+- [x] Resolved
 
 ### C71 — Project Structure Path Notation Inconsistency
 
@@ -627,7 +627,7 @@
   `crates/agent-console-dashboard/src/tui/`
 - **Issue:** Relative vs full path in different docs
 - **Fix:** Standardize notation
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -641,7 +641,7 @@
 - **Issue:** S005.05 says "main dashboard view" only, E004 says "Context: Any",
   S004.03 has no restriction
 - **Fix:** Standardize, recommend main view only
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -655,14 +655,14 @@
 - **Issue:** Zellij-specific pane management vs terminal abstraction layer —
   relationship unclear
 - **Fix:** Clarify S010.02 consumes S010.03, add explicit dependency
-- [ ] Resolved
+- [x] Resolved
 
 ### C74 — S010.01 Missing Dependency on S005.05
 
 - **Files:** S010.01 lines 43-44
 - **Issue:** Depends on S005.05 layout presets which may not be implemented
 - **Fix:** Verify S005.05 exists
-- [ ] Resolved
+- [x] Resolved
 
 ### C75 — Zellij CLI Version Compatibility Not Specified
 
@@ -670,7 +670,7 @@
 - **Issue:** "Tested with Zellij 0.39.x+" but stories don't specify minimum
   version
 - **Fix:** Add minimum version to S010.01 AC
-- [ ] Resolved
+- [x] Resolved
 
 ### C76 — Duplicate Zellij Environment Detection
 
@@ -678,21 +678,21 @@
 - **Issue:** `is_inside_zellij()` in S010.02 and `TerminalEnvironment::detect()`
   in S010.03
 - **Fix:** Remove from S010.02, use S010.03
-- [ ] Resolved
+- [x] Resolved
 
 ### C77 — tmux Variant in Enum but Deferred
 
 - **Files:** S010.03, Q9
 - **Issue:** `Tmux` variant in TerminalEnvironment but Q9 says "On request only"
 - **Fix:** Remove Tmux variant or mark placeholder
-- [ ] Resolved
+- [x] Resolved
 
 ### C78 — No Testing Strategy for Zellij Features
 
 - **Files:** All E010 stories
 - **Issue:** Manual test only, no mock/integration strategy
 - **Fix:** Accept manual or add future plan
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -705,7 +705,7 @@
 - **Files:** E011 lines 64-65, S011.07
 - **Issue:** "npm package available via napi-rs" in AC but S011.07 is Deferred
 - **Fix:** Remove npm AC or mark as "Deferred"
-- [ ] Resolved
+- [x] Resolved
 
 ### C80 — S011.02 Security Notes Contradict Implementation
 
@@ -713,14 +713,14 @@
 - **Issue:** Returns `Ok(token.to_string())` but says "No storage beyond
   function scope". Token exists in memory during call chain
 - **Fix:** Clarify security notes
-- [ ] Resolved
+- [x] Resolved
 
 ### C81 — S011.03 Env Var Override Not in Epic
 
 - **Files:** S011.03 lines 19-20, E011
 - **Issue:** `CLAUDE_CODE_OAUTH_TOKEN` override in story but not in epic
 - **Fix:** Add to E011 credential sources
-- [ ] Resolved
+- [x] Resolved
 
 ### C82 — S011.04 Blocking Client but Daemon is Async
 
@@ -728,14 +728,14 @@
 - **Issue:** Uses blocking reqwest but daemon is tokio-based, needs
   spawn_blocking
 - **Fix:** Document why blocking chosen, note async needed later
-- [ ] Resolved
+- [x] Resolved
 
 ### C83 — Credential Expiration Overflow
 
 - **Files:** S011.02 lines 105-110
 - **Issue:** `as_millis() as i64` — u128 → i64 cast technically unsound
 - **Fix:** Use `.as_secs()` or `.try_into()`
-- [ ] Resolved
+- [x] Resolved
 
 ### C84 — S011.05 Optional Fields vs API Response
 
@@ -743,21 +743,21 @@
 - **Issue:** seven_day_sonnet, extra_usage as Option but E011 says API always
   includes them
 - **Fix:** Verify actual API behavior
-- [ ] Resolved
+- [x] Resolved
 
 ### C85 — Error Messages Reference Wrong CLI Command
 
 - **Files:** S011.02 line 131
 - **Issue:** "Run `claude` to login" — may be `claude-code` not `claude`
 - **Fix:** Verify correct command name
-- [ ] Resolved
+- [x] Resolved
 
 ### C86 — Workspace Structure: Crate Name ≠ Binary Name
 
 - **Files:** S011.01 lines 30-48, S011.01 lines 108-117
 - **Issue:** Binary name "acd" not explained relative to crate name
 - **Fix:** Add note referencing Q12
-- [ ] Resolved
+- [x] Resolved
 
 ### C87 — macOS Keychain ACL: Implementation vs Recommendation Conflict
 
@@ -765,7 +765,7 @@
 - **Issue:** S011.02 uses security-framework crate (will prompt); recommendation
   doc says use /usr/bin/security CLI
 - **Fix:** Either change implementation or document first-run prompt
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -778,7 +778,7 @@
 - **Files:** S012.02 line 50, E007
 - **Issue:** socket_path in output but E007 not done yet
 - **Fix:** Hardcode in v0, note E007 dependency
-- [ ] Resolved
+- [x] Resolved
 
 ### C89 — Health Check Memory Display Logic Missing
 
@@ -786,14 +786,14 @@
 - **Issue:** `memory_mb: Option<f64>` but no formatting spec for "N/A" vs "2.1
   MB"
 - **Fix:** Add display formatting
-- [ ] Resolved
+- [x] Resolved
 
 ### C90 — Duplicate SessionCounts Struct
 
 - **Files:** S012.02, S012.03
 - **Issue:** Both define identical SessionCounts
 - **Fix:** Share type
-- [ ] Resolved
+- [x] Resolved
 
 ### C91 — Service Status vs Health Check Output Formats Differ
 
@@ -801,14 +801,14 @@
 - **Issue:** "Service status: running (via launchd)" vs "Status: running" —
   unclear if intentional
 - **Fix:** Clarify different purposes
-- [ ] Resolved
+- [x] Resolved
 
 ### C92 — S012.03 Depends on S012.02
 
 - **Files:** S012.03 lines 71-73
 - **Issue:** Both are Draft; dependency may delay
 - **Fix:** Confirm or remove dependency
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -822,14 +822,14 @@
 - **Issue:** "may need to be `pub(crate)`" vs "ensure client module is not
   accidentally exposed as public API" — seem contradictory
 - **Fix:** Clarify pub(crate) is acceptable, concern is only about pub exports
-- [ ] Resolved
+- [x] Resolved
 
 ### C94 — S007.02 Missing Integration Point for xdg Module
 
 - **Files:** S007.02 line 161
 - **Issue:** `xdg::config_path()` without module path
 - **Fix:** Add `use crate::config::xdg;` to code examples
-- [ ] Resolved
+- [x] Resolved
 
 ### C95 — S007.02 SIGHUP Handler Integration Point Missing
 
@@ -837,7 +837,7 @@
 - **Issue:** Creates `daemon/reload.rs` but no mention of where handler is
   called from main loop
 - **Fix:** Add integration point
-- [ ] Resolved
+- [x] Resolved
 
 ### C96 — S008.02 Missing ErrorCode Enum
 
@@ -845,7 +845,7 @@
 - **Issue:** Error codes listed and `ErrorCode::SessionNotFound` used but enum
   never defined
 - **Fix:** Add enum definition or reference S003.01
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -858,14 +858,14 @@
 - **Files:** E008 line 33
 - **Issue:** Lists S008.03 with status "Moved"
 - **Fix:** Remove from main table or move to "Removed" section
-- [ ] Resolved
+- [x] Resolved
 
 ### C98 — S009.02 Cut but Still Listed in E009
 
 - **Files:** E009 line 29
 - **Issue:** Lists S009.02 with status "Cut"
 - **Fix:** Remove from main table or move to "Removed" section
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -879,42 +879,42 @@
 - **Issue:** Note says handled by E011, but no command exists. May confuse
   readers
 - **Fix:** Explicitly state there is NO api-usage CLI command
-- [ ] Resolved
+- [x] Resolved
 
 ### C100 — D3 "Temporary Decision" Not Tracked
 
 - **Files:** D3 lines 79-82
 - **Issue:** "Temporary decision; revisit in P3 issue" — no P3 issue referenced
 - **Fix:** Create issue or remove "temporary"
-- [ ] Resolved
+- [x] Resolved
 
 ### C101 — D4 Timer Alignment Issue Not Tracked
 
 - **Files:** D4 lines 96-99
 - **Issue:** "Tracked as separate P3 investigation issue" — no issue referenced
 - **Fix:** Create issue or defer explicitly
-- [ ] Resolved
+- [x] Resolved
 
 ### C102 — Concurrency.md References Missing Amendment
 
 - **Files:** concurrency.md line 123
 - **Issue:** References Amendment 2; file at `2026-01-31-decision-amendments.md`
 - **Fix:** Verify reference works
-- [ ] Resolved
+- [x] Resolved
 
 ### C103 — E010 and E011 Don't Cross-Reference
 
 - **Files:** E010, E011
 - **Issue:** Related epics with no links between them
 - **Fix:** Add cross-references
-- [ ] Resolved
+- [x] Resolved
 
 ### C104 — Complexity Review Resolutions Unclear
 
 - **Files:** S003.01 line 200, E002 line 150
 - **Issue:** "Address these during implementation" — no tracking mechanism
 - **Fix:** Create follow-up tracking or confirm resolution
-- [ ] Resolved
+- [x] Resolved
 
 ---
 
@@ -928,7 +928,7 @@
 - **Issue:** All show `/tmp/agent-console.sock`, E001 shows as option.
   Consistent but could be clearer
 - **Fix:** Minor, no action required unless consolidating config
-- [ ] Resolved
+- [x] Resolved
 
 ### C106 — Inconsistent Terminology: "Usage" vs "API Usage"
 
@@ -936,35 +936,35 @@
 - **Issue:** E009 says "API Usage Tracking", S009.01 says "claude-usage crate",
   "usage data"
 - **Fix:** Minor, acceptable given context
-- [ ] Resolved
+- [x] Resolved
 
 ### C107 — Daemon State Field: usage vs api_usage
 
 - **Files:** S009.01 line 110, widget name "api-usage"
 - **Issue:** Field named `usage` but widget named `api-usage`
 - **Fix:** Minor consistency question
-- [ ] Resolved
+- [x] Resolved
 
 ### C108 — Binary Size Not Tracked
 
 - **Files:** E011
 - **Issue:** E011 discusses size but no limits set
 - **Fix:** Add measurement or accept informal
-- [ ] Resolved
+- [x] Resolved
 
 ### C109 — Widget min_width Retracted Concern
 
 - **Files:** Agent 2 report item 20
 - **Issue:** Originally flagged but retracted as actually consistent
 - **Fix:** No action needed
-- [ ] Resolved
+- [x] Resolved
 
 ### C110 — WidgetContext Field Consistency Retracted
 
 - **Files:** Agent 3 report item 18
 - **Issue:** Originally flagged but retracted as actually consistent
 - **Fix:** No action needed
-- [ ] Resolved
+- [x] Resolved
 
 ### C111 — S010.01 Session ID basename Pattern Audit
 
@@ -972,11 +972,11 @@
 - **Issue:** Stale basename pattern may persist in E010 stories (overlaps with
   C47)
 - **Fix:** Covered by C47 audit
-- [ ] Resolved
+- [x] Resolved
 
 ### C112 — S008.01 Stale Pattern Warning Cross-Check
 
 - **Files:** S008.01 line 198
 - **Issue:** Warns about stale basename pattern, suggests checking other epics
 - **Fix:** Covered by C47 audit
-- [ ] Resolved
+- [x] Resolved

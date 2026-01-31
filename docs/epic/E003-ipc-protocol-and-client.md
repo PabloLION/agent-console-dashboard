@@ -58,22 +58,24 @@ and manual testing straightforward.
 
 ### IPC Protocol
 
-Text-based protocol over Unix socket (`/tmp/agent-console.sock`):
+JSON Lines protocol over Unix socket (`/tmp/agent-console.sock`), per
+[D2 decision](../architecture/2026-01-31-discussion-decisions.md#d2-ipc-message-format---json-lines).
+Each message is a single JSON object terminated by `\n`:
 
 ```text
-# Commands (client → daemon)
-SET <session> <status> [metadata_json]
-RM <session>
-LIST
-SUBSCRIBE
-RESURRECT <session>
+# Commands (client → daemon) — one JSON object per line
+{"type":"SET","session":"abc","status":"working","metadata":{"cwd":"/path"}}
+{"type":"RM","session":"abc"}
+{"type":"LIST"}
+{"type":"SUBSCRIBE"}
+{"type":"RESURRECT","session":"abc"}
 
-# Responses (daemon → client)
-OK
-OK <data_json>
-ERR <message>
-STATE <json>
-UPDATE <session> <status> <elapsed_seconds>
+# Responses (daemon → client) — one JSON object per line
+{"type":"OK"}
+{"type":"OK","data":[...]}
+{"type":"ERR","message":"error description"}
+{"type":"STATE","sessions":[...]}
+{"type":"UPDATE","session":"abc","status":"working","elapsed":45}
 ```
 
 ### CLI Client Commands
@@ -82,7 +84,7 @@ UPDATE <session> <status> <elapsed_seconds>
 # Update session status (called by hooks)
 agent-console set <session> working
 agent-console set <session> attention
-agent-console set <session> question
+agent-console set <session> attention
 
 # Remove session
 agent-console rm <session>

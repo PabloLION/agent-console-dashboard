@@ -71,10 +71,14 @@ The consolidated config schema includes ALL configurable values from across
 epics:
 
 ```toml
-[ui]
-layout = "two-line"  # or "one-line", "custom"
-widgets = ["working-dir", "status", "api-usage"]
-tick_rate = "250ms"  # TUI refresh rate
+[tui.layout]
+preset = "default"  # default | compact
+
+[tui.layout.presets.default]
+widgets = ["session-status:two-line", "api-usage"]
+
+[tui.layout.presets.compact]
+widgets = ["session-status:one-line", "api-usage"]
 
 [agents.claude-code]
 enabled = true
@@ -83,8 +87,13 @@ hooks_path = "~/.claude/hooks"
 [integrations.zellij]
 enabled = true
 
+[tui]
+color_scheme = "dark"         # dark | light | auto
+
 [daemon]
-idle_timeout = "60m"          # Auto-stop after idle (from Q25 amendment)
+idle_timeout = "60m"          # Daemon auto-stops after this duration with no active sessions or TUI subscribers (D5, amended from 30min to 60min)
+socket_path = "agent-console.sock"  # Unix socket filename in $XDG_RUNTIME_DIR
+max_closed_sessions = 20      # Maximum closed sessions retained before cleanup
 usage_fetch_interval = "3m"   # API usage fetch interval (from D4)
 log_level = "info"            # Hot-reloadable
 log_file = ""                 # Empty = stderr, path = file
@@ -97,6 +106,7 @@ log_file = ""                 # Empty = stderr, path = file
 | `[ui]`             | Dashboard layout and widget preferences         |
 | `[agents.*]`       | Per-agent settings (Claude Code, future agents) |
 | `[integrations.*]` | External tool integrations (Zellij, etc.)       |
+| `[tui]`            | TUI display preferences (color scheme, etc.)    |
 | `[daemon]`         | Daemon-specific settings (socket path, etc.)    |
 
 ### Implementation Approach

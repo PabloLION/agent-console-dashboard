@@ -67,7 +67,7 @@ Claude Code hooks are shell scripts invoked at specific lifecycle events:
 | `Stop`             | Session stops/completes      | Set status: Attention |
 | `Notification`     | Claude sends notification    | Set status: Attention |
 | `UserPromptSubmit` | User sends message           | Set status: Working   |
-| `PreToolUse`       | AskUserQuestion tool invoked | Set status: Question  |
+| `PreToolUse`       | AskUserQuestion tool invoked | Set status: Attention |
 
 ### Hook Script Location
 
@@ -138,7 +138,7 @@ full details.
         "hooks": [
           {
             "type": "command",
-            "command": "agent-console set $CC_SESSION_ID question"
+            "command": "agent-console set $CC_SESSION_ID attention"
           }
         ]
       }
