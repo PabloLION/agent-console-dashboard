@@ -19,11 +19,21 @@ socket_server = []
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
 tokio = { version = "1.49", features = ["rt-multi-thread", "signal", "macros", "sync", "net", "time", "io-util"] }
 fork = "0.6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+dirs = "5"
 thiserror = "1"
+ratatui = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+futures = "0.3"
+chrono = "0.4"
+claude-usage = { path = "../claude-usage" }
+serde_json = "1"
+sysinfo = "0.33"
 
 [dev-dependencies]
 tempfile = "3"

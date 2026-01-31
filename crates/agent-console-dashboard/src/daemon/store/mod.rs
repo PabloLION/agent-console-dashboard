@@ -4,10 +4,12 @@
 //! all active agent sessions. It uses `Arc<RwLock<HashMap>>` for O(1) lookups
 //! by session ID while supporting concurrent access from multiple async tasks.
 
+use crate::daemon::session::ClosedSession;
 use crate::{AgentType, Session, SessionUpdate, Status, StoreError};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{broadcast, RwLock};
 
 #[cfg(test)]
@@ -16,6 +18,9 @@ mod tests;
 /// Default capacity for the subscriber notification channel.
 /// This allows for bursty update scenarios without dropping notifications.
 const DEFAULT_SUBSCRIBER_CHANNEL_CAPACITY: usize = 256;
+
+/// Default maximum count of closed sessions to retain.
+const DEFAULT_MAX_CLOSED_SESSIONS: usize = 20;
 
 /// Thread-safe session store wrapping a HashMap with `Arc<RwLock>`.
 ///
@@ -54,6 +59,12 @@ pub struct SessionStore {
     /// Broadcast channel sender for subscriber notifications.
     /// Subscribers receive [`SessionUpdate`] messages on state changes.
     update_tx: broadcast::Sender<SessionUpdate>,
+    /// Closed session metadata for resurrection, ordered by close time.
+    closed: Arc<RwLock<VecDeque<ClosedSession>>>,
+    /// Maximum count of closed sessions to retain before evicting oldest.
+    max_closed_sessions: usize,
+    /// Daemon start time for computing elapsed seconds in closed sessions.
+    daemon_start: Instant,
 }
 
 impl std::fmt::Debug for SessionStore {
@@ -61,6 +72,8 @@ impl std::fmt::Debug for SessionStore {
         f.debug_struct("SessionStore")
             .field("sessions", &self.sessions)
             .field("subscriber_count", &self.update_tx.receiver_count())
+            .field("closed", &self.closed)
+            .field("max_closed_sessions", &self.max_closed_sessions)
             .finish()
     }
 }
@@ -87,6 +100,9 @@ impl SessionStore {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
             update_tx,
+            closed: Arc::new(RwLock::new(VecDeque::new())),
+            max_closed_sessions: DEFAULT_MAX_CLOSED_SESSIONS,
+            daemon_start: Instant::now(),
         }
     }
 
@@ -458,20 +474,53 @@ impl SessionStore {
     /// }
     /// ```
     pub async fn close_session(&self, id: &str) -> Option<Session> {
-        let mut sessions = self.sessions.write().await;
+        let closed_session = {
+            let mut sessions = self.sessions.write().await;
 
-        // Get mutable reference to session, close it, return clone
-        if let Some(session) = sessions.get_mut(id) {
-            let old_status = session.status;
-            session.closed = true;
-            session.set_status(Status::Closed);
-            let closed_session = session.clone();
+            if let Some(session) = sessions.get_mut(id) {
+                let old_status = session.status;
+                session.closed = true;
+                session.set_status(Status::Closed);
+                let result = session.clone();
+                self.broadcast_status_change(old_status, &result);
+                Some(result)
+            } else {
+                None
+            }
+        };
 
-            self.broadcast_status_change(old_status, &closed_session);
-            Some(closed_session)
-        } else {
-            None
+        // Store closed session metadata outside the sessions lock
+        if let Some(ref session) = closed_session {
+            let closed_meta = ClosedSession::from_session(session, self.daemon_start);
+            let mut closed_queue = self.closed.write().await;
+
+            // Deduplicate: remove existing entry for same session ID
+            closed_queue.retain(|c| c.session_id != id);
+            closed_queue.push_back(closed_meta);
+
+            // Enforce retention limit
+            while closed_queue.len() > self.max_closed_sessions {
+                closed_queue.pop_front();
+            }
         }
+
+        closed_session
+    }
+
+    /// Returns closed sessions sorted by close time (most recent first).
+    pub async fn list_closed(&self) -> Vec<ClosedSession> {
+        let closed = self.closed.read().await;
+        let mut result: Vec<ClosedSession> = closed.iter().cloned().collect();
+        result.reverse(); // VecDeque has oldest first, we want most recent first
+        result
+    }
+
+    /// Retrieves a closed session by its session ID.
+    ///
+    /// Returns `None` if no closed session with the given ID exists.
+    pub async fn get_closed(&self, session_id: &str) -> Option<ClosedSession> {
+        let closed = self.closed.read().await;
+        closed.iter().find(|c| c.session_id == session_id).cloned()
     }
 
     /// Permanently removes a session from the store.

@@ -5,7 +5,9 @@
 
 pub mod logging;
 pub mod server;
+pub mod session;
 pub mod store;
+pub mod usage;
 
 // Re-export commonly used types for convenience
 pub use server::SocketServer;

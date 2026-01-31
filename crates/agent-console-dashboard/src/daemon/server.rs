@@ -25,13 +25,19 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::broadcast;
 
 use crate::daemon::store::SessionStore;
-use crate::{AgentType, Status};
+use crate::{
+    get_memory_usage_mb, AgentType, DaemonDump, HealthStatus, SessionCounts, SessionSnapshot,
+    Status,
+};
 
 /// Unix socket server for daemon IPC.
 ///
@@ -48,6 +54,10 @@ pub struct SocketServer {
     listener: Option<UnixListener>,
     /// Thread-safe session store for managing agent sessions
     store: SessionStore,
+    /// Timestamp when the server was created (for uptime calculation).
+    start_time: Instant,
+    /// Count of currently active client connections.
+    active_connections: Arc<AtomicUsize>,
 }
 
 impl SocketServer {
@@ -73,12 +83,24 @@ impl SocketServer {
             socket_path,
             listener: None,
             store: SessionStore::new(),
+            start_time: Instant::now(),
+            active_connections: Arc::new(AtomicUsize::new(0)),
         }
     }
 
     /// Returns the configured socket path.
     pub fn socket_path(&self) -> &str {
         &self.socket_path
+    }
+
+    /// Returns the daemon start time.
+    pub fn start_time(&self) -> Instant {
+        self.start_time
+    }
+
+    /// Returns the count of active connections.
+    pub fn active_connection_count(&self) -> usize {
+        self.active_connections.load(Ordering::Relaxed)
     }
 
     /// Cleans up a stale socket file from a previous daemon crash.
@@ -164,13 +186,23 @@ impl SocketServer {
 
         tracing::info!("Socket server running, accepting connections...");
 
+        let daemon_state = DaemonState {
+            store: self.store.clone(),
+            start_time: self.start_time,
+            active_connections: Arc::clone(&self.active_connections),
+            socket_path: self.socket_path.clone(),
+        };
+
         loop {
             match listener.accept().await {
                 Ok((stream, _addr)) => {
                     tracing::debug!("Accepted new client connection");
-                    let store = self.store.clone();
+                    let state = daemon_state.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = handle_client(stream, store).await {
+                        state.active_connections.fetch_add(1, Ordering::Relaxed);
+                        let result = handle_client(stream, &state).await;
+                        state.active_connections.fetch_sub(1, Ordering::Relaxed);
+                        if let Err(e) = result {
                             tracing::warn!("Client handler error: {}", e);
                         }
                     });
@@ -219,15 +251,25 @@ impl SocketServer {
 
         tracing::info!("Socket server running with shutdown support...");
 
+        let daemon_state = DaemonState {
+            store: self.store.clone(),
+            start_time: self.start_time,
+            active_connections: Arc::clone(&self.active_connections),
+            socket_path: self.socket_path.clone(),
+        };
+
         loop {
             tokio::select! {
                 result = listener.accept() => {
                     match result {
                         Ok((stream, _addr)) => {
                             tracing::debug!("Accepted new client connection");
-                            let store = self.store.clone();
+                            let state = daemon_state.clone();
                             tokio::spawn(async move {
-                                if let Err(e) = handle_client(stream, store).await {
+                                state.active_connections.fetch_add(1, Ordering::Relaxed);
+                                let result = handle_client(stream, &state).await;
+                                state.active_connections.fetch_sub(1, Ordering::Relaxed);
+                                if let Err(e) = result {
                                     tracing::warn!("Client handler error: {}", e);
                                 }
                             });
@@ -266,6 +308,15 @@ impl Drop for SocketServer {
     }
 }
 
+/// Shared daemon state passed to each client handler.
+#[derive(Clone)]
+struct DaemonState {
+    store: SessionStore,
+    start_time: Instant,
+    active_connections: Arc<AtomicUsize>,
+    socket_path: String,
+}
+
 /// Handles a single client connection.
 ///
 /// This function reads commands from the client and processes them:
@@ -274,18 +325,19 @@ impl Drop for SocketServer {
 /// - LIST - List all sessions
 /// - GET <session_id> - Get a single session
 /// - SUB - Subscribe to session updates
+/// - STATUS - Return daemon health information as JSON
 ///
 /// # Arguments
 ///
 /// * `stream` - The Unix stream connected to the client.
-/// * `store` - The session store for managing agent sessions.
+/// * `state` - Shared daemon state including store, start time, and connection tracking.
 ///
 /// # Errors
 ///
 /// Returns an error if reading or writing fails.
 async fn handle_client(
     stream: UnixStream,
-    store: SessionStore,
+    state: &DaemonState,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
@@ -314,13 +366,15 @@ async fn handle_client(
 
         let command = parts[0].to_uppercase();
         let response = match command.as_str() {
-            "SET" => handle_set_command(&parts[1..], &store).await,
-            "RM" => handle_rm_command(&parts[1..], &store).await,
-            "LIST" => handle_list_command(&store).await,
-            "GET" => handle_get_command(&parts[1..], &store).await,
+            "SET" => handle_set_command(&parts[1..], &state.store).await,
+            "RM" => handle_rm_command(&parts[1..], &state.store).await,
+            "LIST" => handle_list_command(&state.store).await,
+            "GET" => handle_get_command(&parts[1..], &state.store).await,
+            "STATUS" => handle_status_command(state).await,
+            "DUMP" => handle_dump_command(state).await,
             "SUB" => {
                 // Subscribe mode: send UPDATE notifications to client
-                handle_sub_command(&store, &mut writer).await?;
+                handle_sub_command(&state.store, &mut writer).await?;
                 // After SUB returns (client disconnected or error), exit the loop
                 break;
             }
@@ -504,6 +558,65 @@ async fn handle_sub_command(
     }
 
     Ok(())
+}
+
+/// Handles the STATUS command: STATUS
+///
+/// Returns daemon health information as JSON.
+/// Format: OK <json>\n
+async fn handle_status_command(state: &DaemonState) -> String {
+    let sessions = state.store.list_all().await;
+    let active_count = sessions.iter().filter(|s| !s.closed).count();
+    let closed_count = sessions.iter().filter(|s| s.closed).count();
+
+    let health = HealthStatus {
+        uptime_seconds: state.start_time.elapsed().as_secs(),
+        sessions: SessionCounts {
+            active: active_count,
+            closed: closed_count,
+        },
+        connections: state.active_connections.load(Ordering::Relaxed),
+        memory_mb: get_memory_usage_mb(),
+        socket_path: state.socket_path.clone(),
+    };
+
+    let json = serde_json::to_string(&health).expect("failed to serialize HealthStatus");
+    format!("OK {}\n", json)
+}
+
+/// Handles the DUMP command: DUMP
+///
+/// Returns a full daemon state snapshot as JSON.
+/// Format: OK <json>\n
+async fn handle_dump_command(state: &DaemonState) -> String {
+    let sessions = state.store.list_all().await;
+    let active_count = sessions.iter().filter(|s| !s.closed).count();
+    let closed_count = sessions.iter().filter(|s| s.closed).count();
+
+    let snapshots: Vec<SessionSnapshot> = sessions
+        .iter()
+        .map(|s| SessionSnapshot {
+            id: s.id.clone(),
+            status: s.status.to_string(),
+            working_dir: s.working_dir.display().to_string(),
+            elapsed_seconds: s.since.elapsed().as_secs(),
+            closed: s.closed,
+        })
+        .collect();
+
+    let dump = DaemonDump {
+        uptime_seconds: state.start_time.elapsed().as_secs(),
+        socket_path: state.socket_path.clone(),
+        sessions: snapshots,
+        session_counts: SessionCounts {
+            active: active_count,
+            closed: closed_count,
+        },
+        connections: state.active_connections.load(Ordering::Relaxed),
+    };
+
+    let json = serde_json::to_string(&dump).expect("failed to serialize DaemonDump");
+    format!("OK {}\n", json)
 }
 
 #[cfg(test)]

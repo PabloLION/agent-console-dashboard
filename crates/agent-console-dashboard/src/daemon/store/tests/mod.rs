@@ -11,6 +11,7 @@
 //! - `subscriber`: Broadcast channel and notifications
 
 mod basic;
+mod closed;
 mod concurrent;
 mod lifecycle_close;
 mod lifecycle_create;
