@@ -36,6 +36,9 @@ pub mod widgets;
 /// Platform-specific system service management (install/uninstall/status).
 pub mod service;
 
+/// Terminal execution module for running commands in panes/terminals.
+pub mod terminal;
+
 /// Internal client module for daemon communication with auto-start capability.
 /// This module is not part of the public API - external tools should use CLI commands.
 pub(crate) mod client;
