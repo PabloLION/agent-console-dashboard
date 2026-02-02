@@ -1,0 +1,1 @@
+IPC wired (committed). Next: create claude-hook-install crate. See .claude/session-context.md
