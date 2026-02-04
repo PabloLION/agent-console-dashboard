@@ -7,6 +7,7 @@ authors = ["Pablo LION <36828324+PabloLION@users.noreply.github.com>"]
 description = "Programmatic management of Claude Code hooks"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/PabloLION/agent-console-dashboard"
+readme = "README.md"
 keywords = ["claude", "hooks", "settings", "anthropic"]
 categories = ["development-tools", "config"]
 
