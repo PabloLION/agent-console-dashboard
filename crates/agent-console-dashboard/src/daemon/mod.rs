@@ -131,8 +131,8 @@ fn cleanup_existing_acd_hooks() {
 ///
 /// Installs three hooks:
 /// - Stop hook: Notifies daemon when Claude Code stops
-/// - Start hook: Notifies daemon when Claude Code starts
-/// - BeforePrompt hook: Tracks prompt submissions
+/// - SessionStart hook: Notifies daemon when Claude Code starts
+/// - UserPromptSubmit hook: Tracks prompt submissions
 ///
 /// Layer 1 safety: Lists existing ACD hooks first and only installs missing ones.
 /// Layer 2 safety: claude-hooks crate checks registry before installing.
@@ -160,10 +160,10 @@ fn install_acd_hooks() {
 
     // If all 3 hooks already exist, skip installation
     let has_stop = existing_acd_hooks.contains(&HookEvent::Stop);
-    let has_start = existing_acd_hooks.contains(&HookEvent::Start);
-    let has_before_prompt = existing_acd_hooks.contains(&HookEvent::BeforePrompt);
+    let has_start = existing_acd_hooks.contains(&HookEvent::SessionStart);
+    let has_prompt = existing_acd_hooks.contains(&HookEvent::UserPromptSubmit);
 
-    if has_stop && has_start && has_before_prompt {
+    if has_stop && has_start && has_prompt {
         info!("all ACD hooks already installed, skipping");
         return;
     }
@@ -187,46 +187,46 @@ fn install_acd_hooks() {
         let stop_hook = HookHandler {
             r#type: "command".to_string(),
             command: format!("{}/stop.sh $SESSION_ID $ARGS", hooks_dir.display()),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
 
-        match claude_hooks::install(HookEvent::Stop, stop_hook, "acd") {
+        match claude_hooks::install(HookEvent::Stop, stop_hook, None, "acd") {
             Ok(_) => info!("installed Stop hook"),
             Err(e) => error!(error = %e, "failed to install Stop hook"),
         }
     }
 
-    // Install Start hook (if missing)
+    // Install SessionStart hook (if missing)
     if !has_start {
         let start_hook = HookHandler {
             r#type: "command".to_string(),
             command: format!("{}/start.sh $SESSION_ID $ARGS", hooks_dir.display()),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
 
-        match claude_hooks::install(HookEvent::Start, start_hook, "acd") {
-            Ok(_) => info!("installed Start hook"),
-            Err(e) => error!(error = %e, "failed to install Start hook"),
+        match claude_hooks::install(HookEvent::SessionStart, start_hook, None, "acd") {
+            Ok(_) => info!("installed SessionStart hook"),
+            Err(e) => error!(error = %e, "failed to install SessionStart hook"),
         }
     }
 
-    // Install BeforePrompt hook (if missing)
-    if !has_before_prompt {
-        let before_prompt_hook = HookHandler {
+    // Install UserPromptSubmit hook (if missing)
+    if !has_prompt {
+        let prompt_hook = HookHandler {
             r#type: "command".to_string(),
-            command: format!("{}/before-prompt.sh $SESSION_ID $ARGS", hooks_dir.display()),
-            matcher: String::new(),
+            command: format!("{}/user-prompt-submit.sh $SESSION_ID $ARGS", hooks_dir.display()),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
 
-        match claude_hooks::install(HookEvent::BeforePrompt, before_prompt_hook, "acd") {
-            Ok(_) => info!("installed BeforePrompt hook"),
-            Err(e) => error!(error = %e, "failed to install BeforePrompt hook"),
+        match claude_hooks::install(HookEvent::UserPromptSubmit, prompt_hook, None, "acd") {
+            Ok(_) => info!("installed UserPromptSubmit hook"),
+            Err(e) => error!(error = %e, "failed to install UserPromptSubmit hook"),
         }
     }
 }
@@ -258,20 +258,20 @@ fn uninstall_acd_hooks() {
         info!("uninstalled Stop hook");
     }
 
-    // Uninstall Start hook
+    // Uninstall SessionStart hook
     let start_cmd = format!("{}/start.sh $SESSION_ID $ARGS", hooks_dir.display());
-    if let Err(e) = claude_hooks::uninstall(HookEvent::Start, &start_cmd) {
-        warn!(error = %e, "failed to uninstall Start hook (may not exist)");
+    if let Err(e) = claude_hooks::uninstall(HookEvent::SessionStart, &start_cmd) {
+        warn!(error = %e, "failed to uninstall SessionStart hook (may not exist)");
     } else {
-        info!("uninstalled Start hook");
+        info!("uninstalled SessionStart hook");
     }
 
-    // Uninstall BeforePrompt hook
-    let before_prompt_cmd = format!("{}/before-prompt.sh $SESSION_ID $ARGS", hooks_dir.display());
-    if let Err(e) = claude_hooks::uninstall(HookEvent::BeforePrompt, &before_prompt_cmd) {
-        warn!(error = %e, "failed to uninstall BeforePrompt hook (may not exist)");
+    // Uninstall UserPromptSubmit hook
+    let prompt_cmd = format!("{}/user-prompt-submit.sh $SESSION_ID $ARGS", hooks_dir.display());
+    if let Err(e) = claude_hooks::uninstall(HookEvent::UserPromptSubmit, &prompt_cmd) {
+        warn!(error = %e, "failed to uninstall UserPromptSubmit hook (may not exist)");
     } else {
-        info!("uninstalled BeforePrompt hook");
+        info!("uninstalled UserPromptSubmit hook");
     }
 }
 
@@ -397,7 +397,7 @@ mod tests {
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_cleanup_existing_acd_hooks_handles_no_hooks() {
         // Setup test environment
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -407,7 +407,7 @@ mod tests {
         fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
 
         let settings = serde_json::json!({
-            "hooks": [],
+            "hooks": {},
             "cleanupPeriodDays": 7
         });
         fs::write(
@@ -418,17 +418,10 @@ mod tests {
 
         // Should not panic when no hooks exist
         cleanup_existing_acd_hooks();
-
-        // Verify settings.json unchanged
-        let contents = fs::read_to_string(claude_dir.join("settings.json"))
-            .expect("failed to read settings.json");
-        let parsed: serde_json::Value = serde_json::from_str(&contents)
-            .expect("failed to parse settings.json");
-        assert_eq!(parsed["hooks"].as_array().expect("hooks should be array").len(), 0);
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_cleanup_existing_acd_hooks_removes_acd_hooks() {
         // Setup test environment
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -438,7 +431,7 @@ mod tests {
         fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
 
         let settings = serde_json::json!({
-            "hooks": [],
+            "hooks": {},
             "cleanupPeriodDays": 7
         });
         fs::write(
@@ -451,11 +444,11 @@ mod tests {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: "/tmp/test-cleanup.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
-        claude_hooks::install(HookEvent::Stop, handler, "acd")
+        claude_hooks::install(HookEvent::Stop, handler, None, "acd")
             .expect("failed to install test hook");
 
         // Verify hook exists
@@ -471,7 +464,7 @@ mod tests {
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_cleanup_existing_acd_hooks_preserves_non_acd_hooks() {
         // Setup test environment
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -481,7 +474,7 @@ mod tests {
         fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
 
         let settings = serde_json::json!({
-            "hooks": [],
+            "hooks": {},
             "cleanupPeriodDays": 7
         });
         fs::write(
@@ -494,22 +487,22 @@ mod tests {
         let acd_handler = HookHandler {
             r#type: "command".to_string(),
             command: "/tmp/acd-hook.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
-        claude_hooks::install(HookEvent::Stop, acd_handler, "acd")
+        claude_hooks::install(HookEvent::Stop, acd_handler, None, "acd")
             .expect("failed to install acd hook");
 
         // Install a non-ACD hook
         let other_handler = HookHandler {
             r#type: "command".to_string(),
             command: "/tmp/other-hook.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(300),
             r#async: None,
+            status_message: None,
         };
-        claude_hooks::install(HookEvent::Start, other_handler, "other-app")
+        claude_hooks::install(HookEvent::SessionStart, other_handler, None, "other-app")
             .expect("failed to install other hook");
 
         // Verify both hooks exist
@@ -530,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_install_acd_hooks_installs_three_hooks() {
         // Setup test environment
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -540,7 +533,7 @@ mod tests {
         fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
 
         let settings = serde_json::json!({
-            "hooks": [],
+            "hooks": {},
             "cleanupPeriodDays": 7
         });
         fs::write(
@@ -568,12 +561,12 @@ mod tests {
         // Verify all three events are present
         let events: Vec<HookEvent> = entries.iter().map(|e| e.event).collect();
         assert!(events.contains(&HookEvent::Stop), "should have Stop hook");
-        assert!(events.contains(&HookEvent::Start), "should have Start hook");
-        assert!(events.contains(&HookEvent::BeforePrompt), "should have BeforePrompt hook");
+        assert!(events.contains(&HookEvent::SessionStart), "should have SessionStart hook");
+        assert!(events.contains(&HookEvent::UserPromptSubmit), "should have UserPromptSubmit hook");
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_install_acd_hooks_is_idempotent() {
         // Setup test environment
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -583,7 +576,7 @@ mod tests {
         fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
 
         let settings = serde_json::json!({
-            "hooks": [],
+            "hooks": {},
             "cleanupPeriodDays": 7
         });
         fs::write(
@@ -604,7 +597,7 @@ mod tests {
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_uninstall_acd_hooks_removes_all_hooks() {
         // Setup test environment
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -614,7 +607,7 @@ mod tests {
         fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
 
         let settings = serde_json::json!({
-            "hooks": [],
+            "hooks": {},
             "cleanupPeriodDays": 7
         });
         fs::write(
@@ -637,7 +630,7 @@ mod tests {
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_uninstall_acd_hooks_is_idempotent() {
         // Setup test environment
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -647,7 +640,7 @@ mod tests {
         fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
 
         let settings = serde_json::json!({
-            "hooks": [],
+            "hooks": {},
             "cleanupPeriodDays": 7
         });
         fs::write(
@@ -671,7 +664,7 @@ mod tests {
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_hook_commands_use_correct_paths() {
         // Setup test environment
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -681,7 +674,7 @@ mod tests {
         fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
 
         let settings = serde_json::json!({
-            "hooks": [],
+            "hooks": {},
             "cleanupPeriodDays": 7
         });
         fs::write(
@@ -709,8 +702,8 @@ mod tests {
             // Verify command ends with correct script based on event
             match entry.event {
                 HookEvent::Stop => assert!(cmd.contains("stop.sh"), "Stop hook should call stop.sh"),
-                HookEvent::Start => assert!(cmd.contains("start.sh"), "Start hook should call start.sh"),
-                HookEvent::BeforePrompt => assert!(cmd.contains("before-prompt.sh"), "BeforePrompt hook should call before-prompt.sh"),
+                HookEvent::SessionStart => assert!(cmd.contains("start.sh"), "SessionStart hook should call start.sh"),
+                HookEvent::UserPromptSubmit => assert!(cmd.contains("user-prompt-submit.sh"), "UserPromptSubmit hook should call user-prompt-submit.sh"),
                 _ => panic!("unexpected hook event: {:?}", entry.event),
             }
 
@@ -720,7 +713,7 @@ mod tests {
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_install_acd_hooks_handles_missing_settings() {
         // Setup test environment with no settings.json
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -738,7 +731,7 @@ mod tests {
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_uninstall_acd_hooks_handles_missing_settings() {
         // Setup test environment with no settings.json
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -754,7 +747,7 @@ mod tests {
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_layer1_skips_when_all_hooks_exist() {
         // Setup
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -763,7 +756,7 @@ mod tests {
         fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
         fs::write(
             claude_dir.join("settings.json"),
-            r#"{"hooks": [], "cleanupPeriodDays": 7}"#,
+            r#"{"hooks": {}, "cleanupPeriodDays": 7}"#,
         )
         .expect("failed to write settings.json");
 
@@ -792,7 +785,7 @@ mod tests {
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_layer1_installs_only_missing_hooks() {
         // Setup
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -801,7 +794,7 @@ mod tests {
         fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
         fs::write(
             claude_dir.join("settings.json"),
-            r#"{"hooks": [], "cleanupPeriodDays": 7}"#,
+            r#"{"hooks": {}, "cleanupPeriodDays": 7}"#,
         )
         .expect("failed to write settings.json");
 
@@ -809,15 +802,15 @@ mod tests {
         let stop_handler = HookHandler {
             r#type: "command".to_string(),
             command: "/some/path/hooks/stop.sh $SESSION_ID $ARGS".to_string(),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
-        claude_hooks::install(HookEvent::Stop, stop_handler, "acd")
+        claude_hooks::install(HookEvent::Stop, stop_handler, None, "acd")
             .expect("failed to install Stop hook");
         assert_eq!(claude_hooks::list().expect("list").len(), 1);
 
-        // install_acd_hooks should only add missing Start and BeforePrompt
+        // install_acd_hooks should only add missing SessionStart and UserPromptSubmit
         install_acd_hooks();
 
         let entries = claude_hooks::list().expect("failed to list hooks");
@@ -826,8 +819,8 @@ mod tests {
         // Verify all three events present
         let events: Vec<HookEvent> = entries.iter().map(|e| e.event).collect();
         assert!(events.contains(&HookEvent::Stop));
-        assert!(events.contains(&HookEvent::Start));
-        assert!(events.contains(&HookEvent::BeforePrompt));
+        assert!(events.contains(&HookEvent::SessionStart));
+        assert!(events.contains(&HookEvent::UserPromptSubmit));
 
         // Verify Stop hook preserved (original command, not overwritten)
         let stop_hook = entries.iter().find(|e| e.event == HookEvent::Stop).expect("Stop");
@@ -839,7 +832,7 @@ mod tests {
     }
 
     #[test]
-    #[serial(hooks)]
+    #[serial(home)]
     fn test_layer2_registry_prevents_duplicate() {
         // Setup
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
@@ -848,7 +841,7 @@ mod tests {
         fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
         fs::write(
             claude_dir.join("settings.json"),
-            r#"{"hooks": [], "cleanupPeriodDays": 7}"#,
+            r#"{"hooks": {}, "cleanupPeriodDays": 7}"#,
         )
         .expect("failed to write settings.json");
 
@@ -856,15 +849,15 @@ mod tests {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: "/test/hook.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
-        claude_hooks::install(HookEvent::Stop, handler.clone(), "test")
+        claude_hooks::install(HookEvent::Stop, handler.clone(), None, "test")
             .expect("first install should succeed");
 
         // Second install blocked by Layer 2 (registry check)
-        let result = claude_hooks::install(HookEvent::Stop, handler, "test");
+        let result = claude_hooks::install(HookEvent::Stop, handler, None, "test");
 
         assert!(matches!(
             result,

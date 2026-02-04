@@ -19,7 +19,7 @@ via local registry.
 
 ## Current State (2026-02-04)
 
-### v0.1 Implementation Complete
+### v0.1.2 Implementation (Correct Format)
 
 | Component | Files | Tests | Status |
 | --------- | ----- | ----- | ------ |
@@ -28,9 +28,9 @@ via local registry.
 | Registry I/O | `registry.rs` | 29 | ✅ |
 | Public API | `lib.rs` | 11 | ✅ |
 | Integration | `tests/*.rs` | 44 | ✅ |
-| ACD Wiring | `daemon/mod.rs` | 10 | ✅ |
+| ACD Wiring | `daemon/mod.rs` | - | ⚠️ Needs update |
 
-**Total: 83+ tests passing**
+**Total: 89 tests passing**
 
 ### Documents
 
@@ -150,10 +150,10 @@ crates/claude-hooks/
     └── performance.rs        # Timing targets (<100ms)
 ```
 
-## Public API (v0.1)
+## Public API (v0.1.2)
 
 ```rust
-pub fn install(event: HookEvent, handler: HookHandler, installed_by: &str) -> Result<()>;
+pub fn install(event: HookEvent, handler: HookHandler, matcher: Option<String>, installed_by: &str) -> Result<()>;
 pub fn uninstall(event: HookEvent, command: &str) -> Result<()>;
 pub fn list() -> Result<Vec<ListEntry>>;
 ```
@@ -179,7 +179,7 @@ fn setup_test_env() -> tempfile::TempDir {
     std::fs::create_dir_all(dir.path().join(".claude")).unwrap();
 
     // Create minimal settings.json
-    let settings = r#"{"hooks": []}"#;
+    let settings = r#"{"hooks": {}}"#;
     std::fs::write(dir.path().join(".claude/settings.json"), settings).unwrap();
 
     dir  // Return TempDir to keep it alive for test duration
@@ -242,3 +242,38 @@ Apply this pattern in all tests that touch `settings.json` or registry files.
 - 25 files changed, 8691 insertions
 - 83+ tests passing
 - Epic E014 complete (16 story points)
+
+### 2026-02-04: Fix Hooks Format (v0.1.1 → v0.1.2)
+
+**Problem:** v0.1.0 and v0.1.1 used an incorrect array-based hooks format.
+Claude Code actually uses an object-based format:
+
+```json
+{
+  "hooks": {
+    "EventName": [
+      { "matcher": "optional_regex", "hooks": [{ "type": "command", "command": "..." }] }
+    ]
+  }
+}
+```
+
+**Changes:**
+
+- **types.rs:** Added `MatcherGroup` struct (intermediate level with optional matcher and hooks array). Moved `matcher` from `HookHandler` to group level. Added `status_message` field to `HookHandler`. Changed `RegistryEntry.matcher` from `String` to `Option<String>`.
+- **settings.rs:** Rewrote `add_hook()`, `remove_hook()`, `list_hooks()` for object-based format. `add_hook()` now takes optional matcher parameter. `list_hooks()` uses resilient design — skips malformed entries instead of erroring.
+- **lib.rs:** Updated `install()` to take 4 parameters: `(event, handler, matcher, installed_by)`.
+- **error.rs:** Fixed `HookEvent::Start` → `HookEvent::SessionStart` in tests.
+- **registry.rs:** Fixed `matcher: String::new()` → `matcher: None` in tests.
+- **All 5 test files:** Updated to object-based format, new API signatures, correct event names, consistent `#[serial(home)]` group.
+
+**Test results:** 89 tests passing (45 unit + 9 atomic + 16 edge + 9 integration + 10 performance)
+
+**Commits:**
+- `4bc351c` fix: use correct Claude Code hooks format (object-based)
+
+**Remaining:**
+- ACD daemon code (`daemon/mod.rs`) needs updating for new API (~30 call sites)
+- Bump to v0.1.2 and republish to crates.io
+- acd-vnd: Fix dead code warnings
+- acd-9pq: Verify hook scripts exist at referenced paths
