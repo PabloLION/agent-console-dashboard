@@ -333,7 +333,7 @@ mod integration_tests {
     }
 
     #[test]
-    #[serial(integration)]
+    #[serial(home)]
     fn test_install_list_uninstall_workflow() {
         let _dir = setup_test_env();
 
@@ -374,7 +374,7 @@ mod integration_tests {
     }
 
     #[test]
-    #[serial(integration)]
+    #[serial(home)]
     fn test_install_duplicate_fails() {
         let _dir = setup_test_env();
 
@@ -404,7 +404,7 @@ mod integration_tests {
     }
 
     #[test]
-    #[serial(integration)]
+    #[serial(home)]
     fn test_uninstall_unmanaged_fails() {
         let _dir = setup_test_env();
 
@@ -422,7 +422,7 @@ mod integration_tests {
     }
 
     #[test]
-    #[serial(integration)]
+    #[serial(home)]
     fn test_list_shows_unmanaged_hooks() {
         let _dir = setup_test_env();
 
@@ -450,7 +450,7 @@ mod integration_tests {
     }
 
     #[test]
-    #[serial(integration)]
+    #[serial(home)]
     fn test_install_multiple_hooks() {
         let _dir = setup_test_env();
 
@@ -486,7 +486,7 @@ mod integration_tests {
     }
 
     #[test]
-    #[serial(integration)]
+    #[serial(home)]
     fn test_uninstall_preserves_other_hooks() {
         let _dir = setup_test_env();
 
@@ -520,7 +520,7 @@ mod integration_tests {
     }
 
     #[test]
-    #[serial(integration)]
+    #[serial(home)]
     fn test_install_with_optional_fields() {
         let _dir = setup_test_env();
 
@@ -543,7 +543,7 @@ mod integration_tests {
     }
 
     #[test]
-    #[serial(integration)]
+    #[serial(home)]
     fn test_metadata_is_preserved() {
         let _dir = setup_test_env();
 
@@ -568,7 +568,7 @@ mod integration_tests {
     }
 
     #[test]
-    #[serial(integration)]
+    #[serial(home)]
     fn test_hook_in_registry_but_not_settings() {
         let _dir = setup_test_env();
 
@@ -601,7 +601,7 @@ mod integration_tests {
     }
 
     #[test]
-    #[serial(integration)]
+    #[serial(home)]
     fn test_different_commands_same_event() {
         let _dir = setup_test_env();
 

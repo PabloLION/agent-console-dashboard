@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(home)]
     fn test_registry_path() {
         let _dir = setup_test_env();
         let path = registry_path();
@@ -289,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(home)]
     fn test_write_and_read_registry() {
         let _dir = setup_test_env();
 
@@ -318,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(home)]
     fn test_read_nonexistent_registry() {
         let _dir = setup_test_env();
         // Fresh HOME, no registry file exists
@@ -328,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(home)]
     fn test_registry_roundtrip_preserves_metadata() {
         let _dir = setup_test_env();
 

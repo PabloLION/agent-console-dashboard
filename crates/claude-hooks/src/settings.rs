@@ -136,6 +136,7 @@ pub fn remove_hook(mut value: Value, event: HookEvent, command: &str) -> Value {
 mod tests {
     use super::*;
     use serde_json::json;
+    use serial_test::serial;
 
     #[test]
     fn test_settings_path() {
@@ -397,6 +398,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(home)]
     fn test_read_valid_settings() {
         use std::io::Write;
         use tempfile::tempdir;
