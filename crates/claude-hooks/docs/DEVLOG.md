@@ -28,7 +28,7 @@ via local registry.
 | Registry I/O | `registry.rs` | 29 | ✅ |
 | Public API | `lib.rs` | 11 | ✅ |
 | Integration | `tests/*.rs` | 44 | ✅ |
-| ACD Wiring | `daemon/mod.rs` | - | ⚠️ Needs update |
+| ACD Wiring | `daemon/mod.rs` | 12 | ✅ |
 
 **Total: 89 tests passing**
 
@@ -271,9 +271,11 @@ Claude Code actually uses an object-based format:
 
 **Commits:**
 - `4bc351c` fix: use correct Claude Code hooks format (object-based)
+- `04112e2` fix: update ACD daemon to use correct claude-hooks API
+- `10e96a0` chore: bump claude-hooks to v0.1.2
+
+**Published:** v0.1.2 on crates.io
 
 **Remaining:**
-- ACD daemon code (`daemon/mod.rs`) needs updating for new API (~30 call sites)
-- Bump to v0.1.2 and republish to crates.io
 - acd-vnd: Fix dead code warnings
 - acd-9pq: Verify hook scripts exist at referenced paths
