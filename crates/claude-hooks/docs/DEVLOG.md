@@ -10,14 +10,27 @@ via local registry.
 
 ## Version Roadmap
 
-| Version | Features                                              | Status     |
-| ------- | ----------------------------------------------------- | ---------- |
-| v0.1    | install, uninstall, list (user scope), registry       | Planning   |
-| v0.2    | Multi-scope, export/import, CLI binary                | Designed   |
-| v1.0    | All v0.2 + doctor                                     | Designed   |
-| Post-v1 | migrate, enable/disable, templates, cross-agent       | Deferred   |
+| Version | Features                                              | Status       |
+| ------- | ----------------------------------------------------- | ------------ |
+| v0.1    | install, uninstall, list (user scope), registry       | **Complete** |
+| v0.2    | Multi-scope, export/import, CLI binary                | Designed     |
+| v1.0    | All v0.2 + doctor                                     | Designed     |
+| Post-v1 | migrate, enable/disable, templates, cross-agent       | Deferred     |
 
-## Current State (2026-02-03)
+## Current State (2026-02-04)
+
+### v0.1 Implementation Complete
+
+| Component | Files | Tests | Status |
+| --------- | ----- | ----- | ------ |
+| Types/Errors | `error.rs`, `types.rs` | 12 | ✅ |
+| Settings I/O | `settings.rs` | 11 | ✅ |
+| Registry I/O | `registry.rs` | 29 | ✅ |
+| Public API | `lib.rs` | 11 | ✅ |
+| Integration | `tests/*.rs` | 44 | ✅ |
+| ACD Wiring | `daemon/mod.rs` | 10 | ✅ |
+
+**Total: 83+ tests passing**
 
 ### Documents
 
@@ -27,19 +40,9 @@ via local registry.
 | `architecture.md`  | Module structure, data flow, API | Done   |
 | `PRD.md`           | Product requirements v0.1        | Done   |
 
-### What's Done
-
-- Design decisions documented (D01-D36)
-- Architecture specified (modules, types, errors, data flow)
-- File formats defined (settings.json structure, registry schema)
-- Dependencies selected (thiserror, serde, json_comments, chrono, dirs)
-- v0.1 scope locked (library-only, user scope, 3 public functions)
-- PRD created with 5 functional + 5 non-functional requirements
-- Epic E014 and 7 stories (S014.01-S014.07) created
-
 ### What's Next
 
-- Implementation (see Dependency Map below)
+- v0.2: Multi-scope support, CLI binary, export/import
 
 ## Story Dependency Map
 
@@ -132,13 +135,19 @@ crates/claude-hooks/
 ├── docs/
 │   ├── design-draft.md     # Design decisions
 │   ├── architecture.md     # Technical architecture
+│   ├── PRD.md              # Product requirements
 │   └── DEVLOG.md           # This file
-└── src/
-    ├── lib.rs              # Public API: install, uninstall, list
-    ├── error.rs            # Error types (thiserror)
-    ├── types.rs            # HookEvent, HookHandler, RegistryEntry
-    ├── settings.rs         # Atomic read/write for settings.json
-    └── registry.rs         # JSONC registry in XDG data dir
+├── src/
+│   ├── lib.rs              # Public API: install, uninstall, list
+│   ├── error.rs            # Error types (thiserror)
+│   ├── types.rs            # HookEvent, HookHandler, RegistryEntry
+│   ├── settings.rs         # Atomic read/write for settings.json
+│   └── registry.rs         # JSONC registry in XDG data dir
+└── tests/
+    ├── integration_tests.rs  # Full workflow tests
+    ├── edge_cases.rs         # Sync issues, corrupt files
+    ├── atomic_safety.rs      # Write safety, roundtrip
+    └── performance.rs        # Timing targets (<100ms)
 ```
 
 ## Public API (v0.1)
@@ -207,10 +216,29 @@ Apply this pattern in all tests that touch `settings.json` or registry files.
 - Established v0.1 scope (library-only, user scope)
 - Selected dependencies consistent with workspace patterns
 
-### 2026-02-04: Implementation Phase 1-2
+### 2026-02-04: v0.1 Implementation Complete
 
+**Phase 1 (Sequential):**
 - S014.01 (Scaffold): Crate created, added to workspace
-- S014.02 (Types/Errors): 12 tests passing
-- S014.03 (Settings): 11 tests passing, atomic write pattern implemented
-- S014.04 (Registry): 29 tests passing, JSONC parsing working
-- Parallel execution: S014.03 + S014.04 ran simultaneously
+- S014.02 (Types/Errors): 12 unit tests, HookEvent enum, error hierarchy
+
+**Phase 2 (Parallel):**
+- S014.03 (Settings): 11 tests, atomic write with temp-file-then-rename
+- S014.04 (Registry): 29 tests, JSONC parsing, XDG path resolution
+- Both agents ran simultaneously — no conflicts
+
+**Phase 3 (Sequential):**
+- S014.05 (Public API): install/uninstall/list wired together, 11 integration tests
+- S014.06 (Comprehensive Tests): 44 tests in `tests/` directory
+  - `integration_tests.rs`: Full workflows
+  - `edge_cases.rs`: Corrupt files, sync issues, missing data
+  - `atomic_safety.rs`: Roundtrip preservation, large files
+  - `performance.rs`: All operations <100ms
+- S014.07 (Wire into ACD): Daemon startup/shutdown hooks, crash recovery
+
+**Commit:** `6d8fb5f` feat: add claude-hooks library for programmatic hook management
+
+**Stats:**
+- 25 files changed, 8691 insertions
+- 83+ tests passing
+- Epic E014 complete (16 story points)
