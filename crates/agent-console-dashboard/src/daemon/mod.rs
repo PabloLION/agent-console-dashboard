@@ -296,10 +296,8 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
         "agent console daemon starting"
     );
 
-    // Clean up any existing ACD hooks (from previous crash)
-    cleanup_existing_acd_hooks();
-
-    // Install hooks for this daemon instance
+    // Install hooks (idempotent - skips if already exist)
+    // Hooks persist across daemon restarts; only removed when ACD is uninstalled
     install_acd_hooks();
 
     // Create Tokio runtime AFTER daemonization
@@ -338,8 +336,8 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
         let _ = server_handle.await;
     });
 
-    // Uninstall hooks before shutdown
-    uninstall_acd_hooks();
+    // Hooks remain installed after daemon stops (intentional)
+    // Use `acd uninstall-hooks` to remove them when removing ACD entirely
 
     info!("daemon stopped");
     Ok(())
