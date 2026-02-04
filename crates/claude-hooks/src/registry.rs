@@ -151,9 +151,20 @@ mod tests {
     use super::*;
     use crate::types::HookEvent;
     use serial_test::serial;
+    use std::env;
+    use tempfile::tempdir;
+
+    /// Setup isolated test environment with HOME pointing to temp directory
+    fn setup_test_env() -> tempfile::TempDir {
+        let dir = tempdir().expect("failed to create temp dir");
+        env::set_var("HOME", dir.path());
+        dir
+    }
 
     #[test]
+    #[serial]
     fn test_registry_path() {
+        let _dir = setup_test_env();
         let path = registry_path();
         assert!(
             path.to_string_lossy().contains("claude-hooks"),
@@ -279,10 +290,8 @@ mod tests {
 
     #[test]
     #[serial]
-    #[ignore] // Run with --ignored --test-threads=1 to test actual filesystem I/O
     fn test_write_and_read_registry() {
-        // Note: This test writes to the actual registry file and must run serially
-        // with --test-threads=1 to avoid race conditions
+        let _dir = setup_test_env();
 
         let entries = vec![RegistryEntry {
             event: HookEvent::Stop,
@@ -300,35 +309,29 @@ mod tests {
             optional: Some(false),
         }];
 
-        // Test write
-        let result = write_registry(entries.clone());
-        assert!(result.is_ok(), "Write should succeed: {:?}", result.err());
+        write_registry(entries.clone()).expect("write should succeed");
 
-        // Test read
-        let read_result = read_registry();
-        assert!(read_result.is_ok(), "Read should succeed: {:?}", read_result.err());
-
-        let read_entries = read_result.expect("Failed to read registry");
-        assert_eq!(read_entries.len(), 1, "Should have exactly 1 entry");
+        let read_entries = read_registry().expect("read should succeed");
+        assert_eq!(read_entries.len(), 1);
         assert_eq!(read_entries[0].command, "/path/to/test-stop.sh");
         assert_eq!(read_entries[0].event, HookEvent::Stop);
     }
 
     #[test]
+    #[serial]
     fn test_read_nonexistent_registry() {
-        // This test may fail if registry already exists from previous tests
-        // In real usage, we'd use a mock path
-        // For now, just ensure it returns Ok (either empty vec or existing data)
+        let _dir = setup_test_env();
+        // Fresh HOME, no registry file exists
         let result = read_registry();
-        assert!(result.is_ok(), "Read should not fail even if file doesn't exist");
+        assert!(result.is_ok());
+        assert_eq!(result.expect("should be ok").len(), 0, "should return empty vec");
     }
 
     #[test]
     #[serial]
-    #[ignore] // Run with --ignored --test-threads=1 to test actual filesystem I/O
     fn test_registry_roundtrip_preserves_metadata() {
-        // Note: This test writes to the actual registry file and must run serially
-        // with --test-threads=1 to avoid race conditions
+        let _dir = setup_test_env();
+
         let original_entries = vec![
             RegistryEntry {
                 event: HookEvent::Stop,
@@ -362,25 +365,14 @@ mod tests {
             },
         ];
 
-        // Write
-        write_registry(original_entries.clone()).expect("Write failed");
+        write_registry(original_entries.clone()).expect("write failed");
+        let read_entries = read_registry().expect("read failed");
 
-        // Read
-        let read_entries = read_registry().expect("Read failed");
-
-        // Verify count
-        assert_eq!(read_entries.len(), 2, "Should have exactly 2 entries");
-
-        // Verify first entry
+        assert_eq!(read_entries.len(), 2);
         assert_eq!(read_entries[0].event, HookEvent::Stop);
         assert_eq!(read_entries[0].command, "/path/to/test-stop-roundtrip.sh");
         assert_eq!(read_entries[0].timeout, Some(600));
-        assert_eq!(
-            read_entries[0].description,
-            Some("Stop hook".to_string())
-        );
-
-        // Verify second entry
+        assert_eq!(read_entries[0].description, Some("Stop hook".to_string()));
         assert_eq!(read_entries[1].event, HookEvent::Start);
         assert_eq!(read_entries[1].command, "/path/to/test-start-roundtrip.sh");
         assert_eq!(read_entries[1].timeout, None);
