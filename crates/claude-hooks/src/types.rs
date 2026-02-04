@@ -8,50 +8,67 @@ use serde::{Deserialize, Serialize};
 /// Claude Code hook events
 ///
 /// Matches Claude's event names exactly when serialized.
+/// See: https://docs.anthropic.com/en/docs/claude-code/hooks
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HookEvent {
-    /// Agent starts
-    Start,
-    /// Agent stops
+    /// Session begins or resumes
+    SessionStart,
+    /// User submits prompt
+    UserPromptSubmit,
+    /// Before tool execution
+    PreToolUse,
+    /// Permission dialog shown
+    PermissionRequest,
+    /// After tool succeeds
+    PostToolUse,
+    /// After tool fails
+    PostToolUseFailure,
+    /// Notification sent
+    Notification,
+    /// Subagent spawned
+    SubagentStart,
+    /// Subagent finishes
+    SubagentStop,
+    /// Claude finishes response
     Stop,
-    /// Before prompt input
-    BeforePrompt,
-    /// After prompt input
-    AfterPrompt,
-    /// Before tool use
-    BeforeToolUse,
-    /// After tool use
-    AfterToolUse,
-    /// Before edit
-    BeforeEdit,
-    /// After edit
-    AfterEdit,
-    /// Before revert
-    BeforeRevert,
-    /// After revert
-    AfterRevert,
-    /// Before run
-    BeforeRun,
-    /// After run
-    AfterRun,
+    /// Before compaction
+    PreCompact,
+    /// Session terminates
+    SessionEnd,
 }
 
 /// Hook handler configuration (matches Claude's settings.json structure)
+///
+/// This is the innermost handler object inside a matcher group's `hooks` array.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HookHandler {
-    /// Handler type (e.g., "command" in v0.1)
+    /// Handler type: "command", "prompt", or "agent"
     #[serde(rename = "type")]
     pub r#type: String,
-    /// Full command string with arguments
+    /// Full command string with arguments (for type="command")
     pub command: String,
-    /// Matcher string (empty for global hooks)
-    pub matcher: String,
-    /// Optional timeout in seconds
+    /// Optional timeout in seconds (default 600)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<u32>,
-    /// Optional async flag
+    /// Optional async flag (only for PostToolUse/PostToolUseFailure)
     #[serde(skip_serializing_if = "Option::is_none", rename = "async")]
     pub r#async: Option<bool>,
+    /// Optional custom spinner message
+    #[serde(skip_serializing_if = "Option::is_none", rename = "statusMessage")]
+    pub status_message: Option<String>,
+}
+
+/// Matcher group in Claude Code hooks structure
+///
+/// Each event has an array of matcher groups. Each group has an optional
+/// `matcher` regex and a `hooks` array of handlers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MatcherGroup {
+    /// Optional regex matcher to filter when hooks run
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matcher: Option<String>,
+    /// Array of hook handlers
+    pub hooks: Vec<HookHandler>,
 }
 
 /// Registry entry (internal representation with metadata)
@@ -60,8 +77,9 @@ pub struct RegistryEntry {
     // Identity fields (composite key - D22)
     /// Hook event
     pub event: HookEvent,
-    /// Matcher string
-    pub matcher: String,
+    /// Optional matcher regex (None for hooks without matcher)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matcher: Option<String>,
     /// Handler type
     #[serde(rename = "type")]
     pub r#type: String,
@@ -146,26 +164,26 @@ mod tests {
 
     #[test]
     fn test_hook_event_deserialization() {
-        let json = r#""Start""#;
+        let json = r#""SessionStart""#;
         let event: HookEvent = serde_json::from_str(json).expect("deserialization failed");
-        assert_eq!(event, HookEvent::Start);
+        assert_eq!(event, HookEvent::SessionStart);
     }
 
     #[test]
     fn test_all_hook_events_serialize() {
         let events = vec![
-            (HookEvent::Start, r#""Start""#),
+            (HookEvent::SessionStart, r#""SessionStart""#),
+            (HookEvent::UserPromptSubmit, r#""UserPromptSubmit""#),
+            (HookEvent::PreToolUse, r#""PreToolUse""#),
+            (HookEvent::PermissionRequest, r#""PermissionRequest""#),
+            (HookEvent::PostToolUse, r#""PostToolUse""#),
+            (HookEvent::PostToolUseFailure, r#""PostToolUseFailure""#),
+            (HookEvent::Notification, r#""Notification""#),
+            (HookEvent::SubagentStart, r#""SubagentStart""#),
+            (HookEvent::SubagentStop, r#""SubagentStop""#),
             (HookEvent::Stop, r#""Stop""#),
-            (HookEvent::BeforePrompt, r#""BeforePrompt""#),
-            (HookEvent::AfterPrompt, r#""AfterPrompt""#),
-            (HookEvent::BeforeToolUse, r#""BeforeToolUse""#),
-            (HookEvent::AfterToolUse, r#""AfterToolUse""#),
-            (HookEvent::BeforeEdit, r#""BeforeEdit""#),
-            (HookEvent::AfterEdit, r#""AfterEdit""#),
-            (HookEvent::BeforeRevert, r#""BeforeRevert""#),
-            (HookEvent::AfterRevert, r#""AfterRevert""#),
-            (HookEvent::BeforeRun, r#""BeforeRun""#),
-            (HookEvent::AfterRun, r#""AfterRun""#),
+            (HookEvent::PreCompact, r#""PreCompact""#),
+            (HookEvent::SessionEnd, r#""SessionEnd""#),
         ];
 
         for (event, expected) in events {
@@ -179,9 +197,9 @@ mod tests {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/stop.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
         let json = serde_json::to_string(&handler).expect("serialization failed");
         let deserialized: HookHandler =
@@ -195,9 +213,9 @@ mod tests {
         let handler_full = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/script.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(300),
             r#async: Some(true),
+            status_message: Some("Running validation...".to_string()),
         };
         let json = serde_json::to_string(&handler_full).expect("serialization failed");
         let deserialized: HookHandler =
@@ -208,9 +226,9 @@ mod tests {
         let handler_minimal = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/script.sh".to_string(),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
         let json = serde_json::to_string(&handler_minimal).expect("serialization failed");
         let deserialized: HookHandler =
@@ -219,10 +237,47 @@ mod tests {
     }
 
     #[test]
+    fn test_matcher_group_roundtrip() {
+        let group = MatcherGroup {
+            matcher: Some("Bash".to_string()),
+            hooks: vec![HookHandler {
+                r#type: "command".to_string(),
+                command: "/path/to/script.sh".to_string(),
+                timeout: Some(10),
+                r#async: None,
+                status_message: None,
+            }],
+        };
+        let json = serde_json::to_string(&group).expect("serialization failed");
+        let deserialized: MatcherGroup =
+            serde_json::from_str(&json).expect("deserialization failed");
+        assert_eq!(group, deserialized);
+    }
+
+    #[test]
+    fn test_matcher_group_without_matcher() {
+        let group = MatcherGroup {
+            matcher: None,
+            hooks: vec![HookHandler {
+                r#type: "command".to_string(),
+                command: "/path/to/script.sh".to_string(),
+                timeout: None,
+                r#async: None,
+                status_message: None,
+            }],
+        };
+        let json = serde_json::to_string(&group).expect("serialization failed");
+        assert!(!json.contains("matcher"), "matcher should be omitted when None");
+        let deserialized: MatcherGroup =
+            serde_json::from_str(&json).expect("deserialization failed");
+        assert_eq!(group, deserialized);
+    }
+
+    #[test]
     fn test_registry_entry_roundtrip() {
         let entry = RegistryEntry {
             event: HookEvent::Stop,
-            matcher: String::new(),
+            matcher: None,
             r#type: "command".to_string(),
             command: "/path/to/stop.sh".to_string(),
             timeout: Some(600),
@@ -245,7 +300,7 @@ mod tests {
     fn test_registry_entry_matches() {
         let entry = RegistryEntry {
             event: HookEvent::Stop,
-            matcher: String::new(),
+            matcher: None,
             r#type: "command".to_string(),
             command: "/path/to/stop.sh".to_string(),
             timeout: None,
@@ -266,9 +321,9 @@ mod tests {
         assert!(!entry.matches(HookEvent::Stop, "/different/path"));
 
         // Should not match different event
-        assert!(!entry.matches(HookEvent::Start, "/path/to/stop.sh"));
+        assert!(!entry.matches(HookEvent::SessionStart, "/path/to/stop.sh"));
 
         // Should not match both different
-        assert!(!entry.matches(HookEvent::Start, "/different/path"));
+        assert!(!entry.matches(HookEvent::SessionStart, "/different/path"));
     }
 }

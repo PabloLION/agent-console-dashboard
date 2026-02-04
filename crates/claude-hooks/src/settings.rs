@@ -2,12 +2,23 @@
 //!
 //! This module handles reading and writing Claude's settings.json with atomic
 //! safety guarantees. It preserves all non-hook fields while modifying the
-//! hooks array.
+//! hooks object.
+//!
+//! Claude Code hooks format:
+//! ```json
+//! {
+//!   "hooks": {
+//!     "EventName": [
+//!       { "matcher": "optional", "hooks": [{ "type": "command", "command": "..." }] }
+//!     ]
+//!   }
+//! }
+//! ```
 
 use crate::error::{Result, SettingsError};
-use crate::types::{HookEvent, HookHandler};
+use crate::types::{HookEvent, HookHandler, MatcherGroup};
 use chrono::Local;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::fs;
 use std::path::PathBuf;
 
@@ -54,6 +65,11 @@ pub fn write_settings_atomic(value: Value) -> Result<()> {
     let timestamp = Local::now().format("%Y%m%d-%H%M%S").to_string();
     let temp_path = path.with_file_name(format!("settings.json.tmp.{}", timestamp));
 
+    // Ensure .claude directory exists
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(SettingsError::Io)?;
+    }
+
     // Write to temp file
     let json = serde_json::to_string_pretty(&value)
         .map_err(|e| SettingsError::Parse(e.to_string()))?;
@@ -73,63 +89,156 @@ pub fn write_settings_atomic(value: Value) -> Result<()> {
     Ok(())
 }
 
-/// Add hook to hooks array (pure function, no I/O)
+/// Add hook to settings (pure function, no I/O)
 ///
-/// Inserts a new hook into the hooks array. This is a pure function that
-/// returns a modified copy of the value.
+/// Adds a hook handler to the specified event. Creates the hooks object and
+/// event array if they don't exist.
 ///
-/// # Panics
+/// # Arguments
 ///
-/// Panics if settings.json is missing 'hooks' array or if serialization fails.
-/// These conditions indicate a malformed settings file.
-pub fn add_hook(mut value: Value, event: HookEvent, handler: HookHandler) -> Value {
-    let hooks_array = value
+/// * `value` - The settings.json value
+/// * `event` - The hook event (e.g., Stop, PreToolUse)
+/// * `handler` - The hook handler configuration
+/// * `matcher` - Optional matcher regex (e.g., "Bash" for PreToolUse)
+pub fn add_hook(
+    mut value: Value,
+    event: HookEvent,
+    handler: HookHandler,
+    matcher: Option<String>,
+) -> Value {
+    // Ensure hooks object exists
+    let root = value.as_object_mut().expect("settings should be object");
+    if !root.contains_key("hooks") {
+        root.insert("hooks".to_string(), Value::Object(Map::new()));
+    }
+
+    let hooks_obj = root
         .get_mut("hooks")
-        .and_then(|h| h.as_array_mut())
-        .expect("settings.json missing 'hooks' array");
+        .and_then(|h| h.as_object_mut())
+        .expect("hooks should be object");
 
-    // Serialize handler to JSON
-    let mut hook_obj = serde_json::to_value(&handler)
-        .expect("handler serialization failed")
-        .as_object()
-        .expect("handler should serialize to object")
-        .clone();
+    // Get event name as string
+    let event_name = serde_json::to_value(&event)
+        .expect("event serialization failed")
+        .as_str()
+        .expect("event should serialize to string")
+        .to_string();
 
-    // Add event field
-    hook_obj.insert(
-        "event".to_string(),
-        serde_json::to_value(event).expect("event serialization failed"),
-    );
+    // Ensure event array exists
+    if !hooks_obj.contains_key(&event_name) {
+        hooks_obj.insert(event_name.clone(), Value::Array(Vec::new()));
+    }
 
-    hooks_array.push(Value::Object(hook_obj));
+    let event_array = hooks_obj
+        .get_mut(&event_name)
+        .and_then(|e| e.as_array_mut())
+        .expect("event should be array");
+
+    // Create matcher group with the handler
+    let group = MatcherGroup {
+        matcher,
+        hooks: vec![handler],
+    };
+
+    let group_value = serde_json::to_value(group).expect("group serialization failed");
+    event_array.push(group_value);
+
     value
 }
 
-/// Remove hook from hooks array by exact match (pure function, no I/O)
+/// Remove hook from settings by exact match (pure function, no I/O)
 ///
-/// Removes hooks that match both event and command. This is a pure function
-/// that returns a modified copy of the value.
+/// Removes hooks that match the event and command. If the event array becomes
+/// empty, it's preserved (not removed) for consistency.
 ///
-/// # Panics
+/// # Arguments
 ///
-/// Panics if settings.json is missing 'hooks' array.
+/// * `value` - The settings.json value
+/// * `event` - The hook event to match
+/// * `command` - The command string to match
 pub fn remove_hook(mut value: Value, event: HookEvent, command: &str) -> Value {
-    let hooks_array = value
+    let hooks_obj = match value
         .get_mut("hooks")
-        .and_then(|h| h.as_array_mut())
-        .expect("settings.json missing 'hooks' array");
+        .and_then(|h| h.as_object_mut())
+    {
+        Some(obj) => obj,
+        None => return value, // No hooks object, nothing to remove
+    };
 
-    hooks_array.retain(|hook| {
-        let hook_event = hook
-            .get("event")
-            .and_then(|e| serde_json::from_value(e.clone()).ok());
-        let hook_command = hook.get("command").and_then(|c| c.as_str());
+    // Get event name as string
+    let event_name = serde_json::to_value(&event)
+        .expect("event serialization failed")
+        .as_str()
+        .expect("event should serialize to string")
+        .to_string();
 
-        // Keep if event or command doesn't match
-        hook_event != Some(event) || hook_command != Some(command)
+    let event_array = match hooks_obj.get_mut(&event_name).and_then(|e| e.as_array_mut()) {
+        Some(arr) => arr,
+        None => return value, // Event not found, nothing to remove
+    };
+
+    // Remove matcher groups that contain the matching command
+    event_array.retain(|group| {
+        let hooks = group.get("hooks").and_then(|h| h.as_array());
+        match hooks {
+            Some(hooks_arr) => {
+                // Keep if no hook matches the command
+                !hooks_arr.iter().any(|h| {
+                    h.get("command").and_then(|c| c.as_str()) == Some(command)
+                })
+            }
+            None => true, // Keep malformed entries
+        }
     });
 
     value
+}
+
+/// List all hooks from settings (pure function, no I/O)
+///
+/// Returns a list of (event, matcher, handler) tuples for all hooks in settings.
+pub fn list_hooks(value: &Value) -> Vec<(HookEvent, Option<String>, HookHandler)> {
+    let mut result = Vec::new();
+
+    let hooks_obj = match value.get("hooks").and_then(|h| h.as_object()) {
+        Some(obj) => obj,
+        None => return result,
+    };
+
+    for (event_name, event_array) in hooks_obj {
+        // Parse event name
+        let event: HookEvent = match serde_json::from_value(Value::String(event_name.clone())) {
+            Ok(e) => e,
+            Err(_) => continue, // Skip unknown events
+        };
+
+        let groups = match event_array.as_array() {
+            Some(arr) => arr,
+            None => continue,
+        };
+
+        for group in groups {
+            let matcher = group
+                .get("matcher")
+                .and_then(|m| m.as_str())
+                .map(String::from);
+
+            let hooks = match group.get("hooks").and_then(|h| h.as_array()) {
+                Some(arr) => arr,
+                None => continue,
+            };
+
+            for hook in hooks {
+                let handler: HookHandler = match serde_json::from_value(hook.clone()) {
+                    Ok(h) => h,
+                    Err(_) => continue,
+                };
+                result.push((event, matcher.clone(), handler));
+            }
+        }
+    }
+
+    result
 }
 
 #[cfg(test)]
@@ -145,156 +254,218 @@ mod tests {
     }
 
     #[test]
-    fn test_add_hook_to_empty_array() {
+    fn test_add_hook_creates_structure() {
         let settings = json!({
-            "hooks": [],
             "cleanupPeriodDays": 7
         });
 
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/stop.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
 
-        let result = add_hook(settings, HookEvent::Stop, handler);
-        let hooks = result.get("hooks").expect("hooks array should exist");
-        let hooks_array = hooks.as_array().expect("hooks should be array");
+        let result = add_hook(settings, HookEvent::Stop, handler, None);
 
-        assert_eq!(hooks_array.len(), 1);
-        assert_eq!(
-            hooks_array[0].get("event").expect("event should exist"),
-            "Stop"
-        );
-        assert_eq!(
-            hooks_array[0]
-                .get("command")
-                .expect("command should exist"),
-            "/path/to/stop.sh"
-        );
-        assert_eq!(
-            hooks_array[0].get("type").expect("type should exist"),
-            "command"
-        );
+        // Check hooks object was created
+        let hooks = result.get("hooks").expect("hooks should exist");
+        assert!(hooks.is_object(), "hooks should be object");
+
+        // Check Stop array was created
+        let stop_array = hooks.get("Stop").expect("Stop should exist");
+        assert!(stop_array.is_array(), "Stop should be array");
+
+        // Check matcher group structure
+        let groups = stop_array.as_array().expect("should be array");
+        assert_eq!(groups.len(), 1);
+
+        let group = &groups[0];
+        assert!(group.get("matcher").is_none(), "matcher should be None");
+
+        let inner_hooks = group.get("hooks").expect("hooks should exist");
+        let inner_arr = inner_hooks.as_array().expect("should be array");
+        assert_eq!(inner_arr.len(), 1);
+        assert_eq!(inner_arr[0].get("command").expect("cmd").as_str(), Some("/path/to/stop.sh"));
     }
 
     #[test]
-    fn test_add_hook_to_existing_array() {
+    fn test_add_hook_with_matcher() {
         let settings = json!({
-            "hooks": [
-                {
-                    "event": "Start",
-                    "command": "/path/to/start.sh",
-                    "type": "command",
-                    "matcher": ""
-                }
-            ],
-            "cleanupPeriodDays": 7
+            "hooks": {}
         });
 
         let handler = HookHandler {
             r#type: "command".to_string(),
-            command: "/path/to/stop.sh".to_string(),
-            matcher: String::new(),
-            timeout: Some(600),
+            command: "/path/to/pre-bash.sh".to_string(),
+            timeout: Some(10),
             r#async: None,
+            status_message: None,
         };
 
-        let result = add_hook(settings, HookEvent::Stop, handler);
-        let hooks = result.get("hooks").expect("hooks array should exist");
-        let hooks_array = hooks.as_array().expect("hooks should be array");
+        let result = add_hook(settings, HookEvent::PreToolUse, handler, Some("Bash".to_string()));
 
-        assert_eq!(hooks_array.len(), 2);
-        assert_eq!(
-            hooks_array[1].get("event").expect("event should exist"),
-            "Stop"
-        );
+        let hooks = result.get("hooks").expect("hooks");
+        let pre_tool_use = hooks.get("PreToolUse").expect("PreToolUse");
+        let groups = pre_tool_use.as_array().expect("array");
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].get("matcher").expect("matcher").as_str(), Some("Bash"));
+    }
+
+    #[test]
+    fn test_add_hook_to_existing_event() {
+        let settings = json!({
+            "hooks": {
+                "Stop": [
+                    {
+                        "hooks": [
+                            { "type": "command", "command": "/existing/hook.sh" }
+                        ]
+                    }
+                ]
+            }
+        });
+
+        let handler = HookHandler {
+            r#type: "command".to_string(),
+            command: "/new/hook.sh".to_string(),
+            timeout: None,
+            r#async: None,
+            status_message: None,
+        };
+
+        let result = add_hook(settings, HookEvent::Stop, handler, None);
+
+        let stop_array = result.get("hooks").unwrap().get("Stop").unwrap().as_array().unwrap();
+        assert_eq!(stop_array.len(), 2, "should have 2 matcher groups");
     }
 
     #[test]
     fn test_remove_hook_exact_match() {
         let settings = json!({
-            "hooks": [
-                {
-                    "event": "Stop",
-                    "command": "/path/to/stop.sh",
-                    "type": "command",
-                    "matcher": ""
-                },
-                {
-                    "event": "Start",
-                    "command": "/path/to/start.sh",
-                    "type": "command",
-                    "matcher": ""
-                }
-            ]
+            "hooks": {
+                "Stop": [
+                    {
+                        "hooks": [
+                            { "type": "command", "command": "/path/to/stop.sh" }
+                        ]
+                    }
+                ],
+                "SessionStart": [
+                    {
+                        "hooks": [
+                            { "type": "command", "command": "/path/to/start.sh" }
+                        ]
+                    }
+                ]
+            }
         });
 
         let result = remove_hook(settings, HookEvent::Stop, "/path/to/stop.sh");
-        let hooks = result.get("hooks").expect("hooks array should exist");
-        let hooks_array = hooks.as_array().expect("hooks should be array");
 
-        assert_eq!(hooks_array.len(), 1);
-        assert_eq!(
-            hooks_array[0].get("event").expect("event should exist"),
-            "Start"
-        );
+        let stop_array = result.get("hooks").unwrap().get("Stop").unwrap().as_array().unwrap();
+        assert_eq!(stop_array.len(), 0, "Stop array should be empty");
+
+        // SessionStart should be preserved
+        let start_array = result.get("hooks").unwrap().get("SessionStart").unwrap().as_array().unwrap();
+        assert_eq!(start_array.len(), 1, "SessionStart should be preserved");
     }
 
     #[test]
-    fn test_remove_hook_preserves_other_hooks() {
+    fn test_remove_hook_preserves_other_groups() {
         let settings = json!({
-            "hooks": [
-                {
-                    "event": "Stop",
-                    "command": "/path/to/stop.sh",
-                    "type": "command",
-                    "matcher": ""
-                },
-                {
-                    "event": "Stop",
-                    "command": "/different/path.sh",
-                    "type": "command",
-                    "matcher": ""
-                },
-                {
-                    "event": "Start",
-                    "command": "/path/to/start.sh",
-                    "type": "command",
-                    "matcher": ""
-                }
-            ]
+            "hooks": {
+                "Stop": [
+                    {
+                        "hooks": [
+                            { "type": "command", "command": "/path/to/stop.sh" }
+                        ]
+                    },
+                    {
+                        "hooks": [
+                            { "type": "command", "command": "/different/hook.sh" }
+                        ]
+                    }
+                ]
+            }
         });
 
         let result = remove_hook(settings, HookEvent::Stop, "/path/to/stop.sh");
-        let hooks = result.get("hooks").expect("hooks array should exist");
-        let hooks_array = hooks.as_array().expect("hooks should be array");
 
-        assert_eq!(hooks_array.len(), 2);
-        // Should preserve the Stop hook with different command
-        assert_eq!(
-            hooks_array[0].get("event").expect("event should exist"),
-            "Stop"
-        );
-        assert_eq!(
-            hooks_array[0]
-                .get("command")
-                .expect("command should exist"),
-            "/different/path.sh"
-        );
-        // Should preserve the Start hook
-        assert_eq!(
-            hooks_array[1].get("event").expect("event should exist"),
-            "Start"
-        );
+        let stop_array = result.get("hooks").unwrap().get("Stop").unwrap().as_array().unwrap();
+        assert_eq!(stop_array.len(), 1, "should have 1 remaining group");
+
+        let remaining = &stop_array[0].get("hooks").unwrap().as_array().unwrap()[0];
+        assert_eq!(remaining.get("command").unwrap().as_str(), Some("/different/hook.sh"));
+    }
+
+    #[test]
+    fn test_remove_hook_no_hooks_object() {
+        let settings = json!({
+            "cleanupPeriodDays": 7
+        });
+
+        let result = remove_hook(settings.clone(), HookEvent::Stop, "/any/path");
+        assert_eq!(result, settings, "should return unchanged if no hooks");
+    }
+
+    #[test]
+    fn test_list_hooks_empty() {
+        let settings = json!({
+            "hooks": {}
+        });
+
+        let result = list_hooks(&settings);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_list_hooks_multiple() {
+        let settings = json!({
+            "hooks": {
+                "Stop": [
+                    {
+                        "hooks": [
+                            { "type": "command", "command": "/stop.sh", "timeout": 15 }
+                        ]
+                    }
+                ],
+                "PreToolUse": [
+                    {
+                        "matcher": "Bash",
+                        "hooks": [
+                            { "type": "command", "command": "/pre-bash.sh" }
+                        ]
+                    }
+                ]
+            }
+        });
+
+        let result = list_hooks(&settings);
+        assert_eq!(result.len(), 2);
+
+        // Find Stop hook
+        let stop = result.iter().find(|(e, _, _)| *e == HookEvent::Stop);
+        assert!(stop.is_some());
+        let (_, matcher, handler) = stop.unwrap();
+        assert!(matcher.is_none());
+        assert_eq!(handler.command, "/stop.sh");
+        assert_eq!(handler.timeout, Some(15));
+
+        // Find PreToolUse hook
+        let pre = result.iter().find(|(e, _, _)| *e == HookEvent::PreToolUse);
+        assert!(pre.is_some());
+        let (_, matcher, handler) = pre.unwrap();
+        assert_eq!(matcher.as_deref(), Some("Bash"));
+        assert_eq!(handler.command, "/pre-bash.sh");
     }
 
     #[test]
     fn test_roundtrip_preserves_non_hook_keys() {
         let settings = json!({
-            "hooks": [],
+            "hooks": {},
             "cleanupPeriodDays": 7,
             "env": {"TEST": "value"},
             "permissions": {},
@@ -303,98 +474,22 @@ mod tests {
             "syntaxHighlightingDisabled": false
         });
 
-        // Serialize and deserialize
-        let json_str = serde_json::to_string(&settings).expect("serialization failed");
-        let parsed: Value = serde_json::from_str(&json_str).expect("deserialization failed");
-
-        assert_eq!(
-            parsed.get("cleanupPeriodDays").expect("should exist"),
-            7
-        );
-        assert!(parsed.get("env").is_some());
-        assert!(parsed.get("permissions").is_some());
-        assert!(parsed.get("statusLine").is_some());
-        assert!(parsed.get("enabledPlugins").is_some());
-        assert!(parsed.get("syntaxHighlightingDisabled").is_some());
-    }
-
-    #[test]
-    fn test_atomic_write_with_tempfile() {
-        use std::io::Write;
-        use tempfile::tempdir;
-
-        // Create temp directory for test
-        let dir = tempdir().expect("tempdir creation failed");
-        let settings_file = dir.path().join("settings.json");
-
-        // Write initial settings
-        let initial_settings = json!({"hooks": [], "cleanupPeriodDays": 7});
-        let mut file = fs::File::create(&settings_file).expect("file creation failed");
-        file.write_all(
-            serde_json::to_string_pretty(&initial_settings)
-                .expect("serialization failed")
-                .as_bytes(),
-        )
-        .expect("write failed");
-        file.sync_all().expect("sync failed");
-
-        // Verify initial content
-        let content = fs::read_to_string(&settings_file).expect("read failed");
-        let parsed: Value = serde_json::from_str(&content).expect("parse failed");
-        assert_eq!(parsed.get("cleanupPeriodDays").expect("should exist"), 7);
-
-        // This test demonstrates the pattern but doesn't test the actual
-        // write_settings_atomic function since it uses hardcoded paths
-        // (that's tested in integration tests)
-    }
-
-    #[test]
-    fn test_add_hook_with_optional_fields() {
-        let settings = json!({
-            "hooks": []
-        });
-
         let handler = HookHandler {
             r#type: "command".to_string(),
-            command: "/path/to/script.sh".to_string(),
-            matcher: String::new(),
-            timeout: Some(300),
-            r#async: Some(true),
+            command: "/test.sh".to_string(),
+            timeout: None,
+            r#async: None,
+            status_message: None,
         };
 
-        let result = add_hook(settings, HookEvent::BeforePrompt, handler);
-        let hooks = result.get("hooks").expect("hooks array should exist");
-        let hooks_array = hooks.as_array().expect("hooks should be array");
+        let result = add_hook(settings, HookEvent::Stop, handler, None);
 
-        assert_eq!(hooks_array.len(), 1);
-        let hook = &hooks_array[0];
-        assert_eq!(hook.get("timeout").expect("timeout should exist"), 300);
-        assert_eq!(hook.get("async").expect("async should exist"), true);
-    }
-
-    #[test]
-    fn test_remove_hook_no_match() {
-        let settings = json!({
-            "hooks": [
-                {
-                    "event": "Start",
-                    "command": "/path/to/start.sh",
-                    "type": "command",
-                    "matcher": ""
-                }
-            ]
-        });
-
-        let result = remove_hook(settings, HookEvent::Stop, "/path/to/stop.sh");
-        let hooks = result.get("hooks").expect("hooks array should exist");
-        let hooks_array = hooks.as_array().expect("hooks should be array");
-
-        // Should preserve all hooks if no match
-        assert_eq!(hooks_array.len(), 1);
-        assert_eq!(
-            hooks_array[0].get("event").expect("event should exist"),
-            "Start"
-        );
+        assert_eq!(result.get("cleanupPeriodDays").expect("should exist"), 7);
+        assert!(result.get("env").is_some());
+        assert!(result.get("permissions").is_some());
+        assert!(result.get("statusLine").is_some());
+        assert!(result.get("enabledPlugins").is_some());
+        assert!(result.get("syntaxHighlightingDisabled").is_some());
     }
 
     #[test]
@@ -403,19 +498,16 @@ mod tests {
         use std::io::Write;
         use tempfile::tempdir;
 
-        // Create temp directory and settings file
         let dir = tempdir().expect("tempdir creation failed");
-
-        // Override HOME for this test
         std::env::set_var("HOME", dir.path());
 
-        // Create .claude directory
         let claude_dir = dir.path().join(".claude");
         fs::create_dir(&claude_dir).expect("mkdir failed");
 
-        // Write valid settings.json
         let settings = json!({
-            "hooks": [],
+            "hooks": {
+                "Stop": [{ "hooks": [{ "type": "command", "command": "/test.sh" }] }]
+            },
             "cleanupPeriodDays": 7
         });
         let settings_file = claude_dir.join("settings.json");
@@ -427,12 +519,8 @@ mod tests {
         )
         .expect("write failed");
 
-        // Test read_settings
         let result = read_settings().expect("read_settings failed");
-        assert_eq!(
-            result.get("cleanupPeriodDays").expect("should exist"),
-            7
-        );
+        assert_eq!(result.get("cleanupPeriodDays").expect("should exist"), 7);
         assert!(result.get("hooks").is_some());
     }
 
@@ -440,10 +528,7 @@ mod tests {
     fn test_timestamp_format() {
         use regex::Regex;
 
-        // Create a temp file to verify timestamp format
         let timestamp = Local::now().format("%Y%m%d-%H%M%S").to_string();
-
-        // Verify format matches yyyyMMdd-hhmmss
         let re = Regex::new(r"^\d{8}-\d{6}$").expect("regex creation failed");
         assert!(
             re.is_match(&timestamp),

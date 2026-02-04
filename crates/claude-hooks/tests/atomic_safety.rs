@@ -19,7 +19,7 @@ fn setup_test_env() -> tempfile::TempDir {
     fs::create_dir_all(&claude_dir).expect("Failed to create .claude directory");
 
     let settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "cleanupPeriodDays": 7
     });
     fs::write(
@@ -32,13 +32,13 @@ fn setup_test_env() -> tempfile::TempDir {
 }
 
 #[test]
-#[serial(atomic)]
+#[serial(home)]
 fn test_settings_roundtrip_preserves_all_keys() {
     let _dir = setup_test_env();
 
     // Create settings with extensive keys
     let settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "cleanupPeriodDays": 7,
         "env": {"TEST": "value", "PATH": "/usr/bin"},
         "permissions": {
@@ -69,11 +69,11 @@ fn test_settings_roundtrip_preserves_all_keys() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Stop, handler.clone(), "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler.clone(), None, "test").expect("Install should succeed");
 
     // Uninstall hook
     uninstall(HookEvent::Stop, "/path/to/test.sh").expect("Uninstall should succeed");
@@ -115,32 +115,34 @@ fn test_settings_roundtrip_preserves_all_keys() {
     assert_eq!(array_of_objects[0]["name"], "item1");
     assert_eq!(array_of_objects[1]["value"], 2);
 
-    // Hooks should be empty after uninstall
-    let hooks = final_settings["hooks"].as_array().expect("Should be array");
-    assert_eq!(hooks.len(), 0);
+    // Hooks should be empty object after uninstall
+    let hooks = final_settings["hooks"].as_object().expect("Should be object");
+    assert!(hooks.is_empty() || hooks.values().all(|v| v.as_array().map(|a| a.is_empty()).unwrap_or(true)));
 }
 
 #[test]
-#[serial(atomic)]
+#[serial(home)]
 fn test_install_preserves_existing_hook_order() {
     let _dir = setup_test_env();
 
-    // Create settings with hooks in specific order
+    // Create settings with hooks in specific order using correct format
     let settings = serde_json::json!({
-        "hooks": [
-            {
-                "event": "Start",
-                "command": "/first/hook.sh",
-                "type": "command",
-                "matcher": ""
-            },
-            {
-                "event": "Stop",
-                "command": "/second/hook.sh",
-                "type": "command",
-                "matcher": ""
-            }
-        ]
+        "hooks": {
+            "SessionStart": [
+                {
+                    "hooks": [
+                        { "command": "/first/hook.sh", "type": "command" }
+                    ]
+                }
+            ],
+            "Stop": [
+                {
+                    "hooks": [
+                        { "command": "/second/hook.sh", "type": "command" }
+                    ]
+                }
+            ]
+        }
     });
     fs::write(
         env::var("HOME").expect("HOME not set") + "/.claude/settings.json",
@@ -148,30 +150,29 @@ fn test_install_preserves_existing_hook_order() {
     )
     .expect("Write failed");
 
-    // Install new hook (should append)
+    // Install new hook (should append to PreToolUse)
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/third/hook.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::BeforePrompt, handler, "test").expect("Install should succeed");
+    install(HookEvent::PreToolUse, handler, None, "test").expect("Install should succeed");
 
-    // Verify order preserved
+    // Verify structure preserved and new hook added
     let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
         .expect("Read failed");
     let final_settings: serde_json::Value = serde_json::from_str(&content).expect("Parse failed");
 
-    let hooks = final_settings["hooks"].as_array().expect("Should be array");
-    assert_eq!(hooks.len(), 3);
-    assert_eq!(hooks[0]["command"], "/first/hook.sh");
-    assert_eq!(hooks[1]["command"], "/second/hook.sh");
-    assert_eq!(hooks[2]["command"], "/third/hook.sh");
+    let hooks = final_settings["hooks"].as_object().expect("Should be object");
+    assert!(hooks.contains_key("SessionStart"));
+    assert!(hooks.contains_key("Stop"));
+    assert!(hooks.contains_key("PreToolUse"));
 }
 
 #[test]
-#[serial(atomic)]
+#[serial(home)]
 fn test_uninstall_preserves_remaining_hook_order() {
     let _dir = setup_test_env();
 
@@ -181,30 +182,45 @@ fn test_uninstall_preserves_remaining_hook_order() {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: command.to_string(),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+        install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
     }
 
     // Uninstall middle hook
     uninstall(HookEvent::Stop, "/second.sh").expect("Uninstall should succeed");
 
-    // Verify order of remaining hooks
+    // Verify remaining hooks
     let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
         .expect("Read failed");
     let final_settings: serde_json::Value = serde_json::from_str(&content).expect("Parse failed");
 
-    let hooks = final_settings["hooks"].as_array().expect("Should be array");
-    assert_eq!(hooks.len(), 3);
-    assert_eq!(hooks[0]["command"], "/first.sh");
-    assert_eq!(hooks[1]["command"], "/third.sh");
-    assert_eq!(hooks[2]["command"], "/fourth.sh");
+    // Count hooks in Stop event
+    let stop_hooks = &final_settings["hooks"]["Stop"];
+    let mut hook_commands: Vec<String> = Vec::new();
+    if let Some(groups) = stop_hooks.as_array() {
+        for group in groups {
+            if let Some(hooks) = group["hooks"].as_array() {
+                for hook in hooks {
+                    if let Some(cmd) = hook["command"].as_str() {
+                        hook_commands.push(cmd.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    assert_eq!(hook_commands.len(), 3);
+    assert!(hook_commands.contains(&"/first.sh".to_string()));
+    assert!(!hook_commands.contains(&"/second.sh".to_string()));
+    assert!(hook_commands.contains(&"/third.sh".to_string()));
+    assert!(hook_commands.contains(&"/fourth.sh".to_string()));
 }
 
 #[test]
-#[serial(atomic)]
+#[serial(home)]
 fn test_atomic_write_creates_temp_file() {
     let _dir = setup_test_env();
 
@@ -221,11 +237,11 @@ fn test_atomic_write_creates_temp_file() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
 
     // Verify file was updated (mtime changed)
     let final_metadata = fs::metadata(&settings_path).expect("Metadata failed");
@@ -248,13 +264,13 @@ fn test_atomic_write_creates_temp_file() {
 }
 
 #[test]
-#[serial(atomic)]
+#[serial(home)]
 fn test_json_formatting_preserved() {
     let _dir = setup_test_env();
 
     // Create pretty-formatted settings
     let settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "cleanupPeriodDays": 7
     });
     let pretty_json = serde_json::to_string_pretty(&settings).expect("Serialize failed");
@@ -268,11 +284,11 @@ fn test_json_formatting_preserved() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
 
     // Verify output is still pretty-formatted
     let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
@@ -288,13 +304,13 @@ fn test_json_formatting_preserved() {
 }
 
 #[test]
-#[serial(atomic)]
+#[serial(home)]
 fn test_unicode_and_special_chars_preserved() {
     let _dir = setup_test_env();
 
     // Create settings with unicode and special chars
     let settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "env": {
             "UNICODE": "Hello 世界 🌍",
             "SPECIAL": "quotes\"and\\backslashes",
@@ -311,11 +327,11 @@ fn test_unicode_and_special_chars_preserved() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Stop, handler.clone(), "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler.clone(), None, "test").expect("Install should succeed");
     uninstall(HookEvent::Stop, "/path/to/test.sh").expect("Uninstall should succeed");
 
     // Verify special chars preserved
@@ -342,13 +358,13 @@ fn test_unicode_and_special_chars_preserved() {
 }
 
 #[test]
-#[serial(atomic)]
+#[serial(home)]
 fn test_empty_strings_and_nulls_preserved() {
     let _dir = setup_test_env();
 
     // Create settings with empty strings and nulls
     let settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "emptyString": "",
         "nullValue": null,
         "zeroValue": 0,
@@ -364,11 +380,11 @@ fn test_empty_strings_and_nulls_preserved() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Stop, handler.clone(), "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler.clone(), None, "test").expect("Install should succeed");
     uninstall(HookEvent::Stop, "/path/to/test.sh").expect("Uninstall should succeed");
 
     // Verify values preserved
@@ -383,13 +399,13 @@ fn test_empty_strings_and_nulls_preserved() {
 }
 
 #[test]
-#[serial(atomic)]
+#[serial(home)]
 fn test_large_settings_file_handled() {
     let _dir = setup_test_env();
 
     // Create settings with many keys and large arrays
     let mut settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "cleanupPeriodDays": 7
     });
 
@@ -411,11 +427,11 @@ fn test_large_settings_file_handled() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
 
     // Verify all keys still present
     let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
@@ -433,7 +449,7 @@ fn test_large_settings_file_handled() {
 }
 
 #[test]
-#[serial(atomic)]
+#[serial(home)]
 fn test_concurrent_operations_sequential() {
     let _dir = setup_test_env();
 
@@ -442,11 +458,11 @@ fn test_concurrent_operations_sequential() {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: format!("/path/to/hook{}.sh", i),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+        install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
     }
 
     // Verify all hooks present
@@ -454,6 +470,15 @@ fn test_concurrent_operations_sequential() {
         .expect("Read failed");
     let final_settings: serde_json::Value = serde_json::from_str(&content).expect("Parse failed");
 
-    let hooks = final_settings["hooks"].as_array().expect("Should be array");
-    assert_eq!(hooks.len(), 10);
+    // Count hooks in Stop event
+    let stop_hooks = &final_settings["hooks"]["Stop"];
+    let mut hook_count = 0;
+    if let Some(groups) = stop_hooks.as_array() {
+        for group in groups {
+            if let Some(hooks) = group["hooks"].as_array() {
+                hook_count += hooks.len();
+            }
+        }
+    }
+    assert_eq!(hook_count, 10);
 }

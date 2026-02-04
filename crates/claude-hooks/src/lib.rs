@@ -24,12 +24,12 @@
 //! let handler = HookHandler {
 //!     r#type: "command".to_string(),
 //!     command: "/path/to/stop.sh".to_string(),
-//!     matcher: String::new(),
 //!     timeout: Some(600),
 //!     r#async: None,
+//!     status_message: None,
 //! };
 //!
-//! install(HookEvent::Stop, handler, "acd")?;
+//! install(HookEvent::Stop, handler, None, "acd")?;
 //! ```
 
 #![warn(missing_docs)]
@@ -41,13 +41,14 @@ mod types;
 
 // Re-export all public types
 pub use error::{Error, HookError, RegistryError, Result, SettingsError};
-pub use types::{HookEvent, HookHandler, ListEntry, RegistryEntry, RegistryMetadata};
+pub use types::{HookEvent, HookHandler, ListEntry, MatcherGroup, RegistryEntry, RegistryMetadata};
 
 /// Install a hook for the specified event.
 ///
 /// # Arguments
-/// * `event` - Hook event (Start, Stop, etc.)
+/// * `event` - Hook event (Stop, PreToolUse, etc.)
 /// * `handler` - Hook handler configuration (command, timeout, etc.)
+/// * `matcher` - Optional matcher regex (e.g., "Bash" for PreToolUse hooks)
 /// * `installed_by` - Free-form string identifying installer (e.g., "acd")
 ///
 /// # Errors
@@ -62,14 +63,19 @@ pub use types::{HookEvent, HookHandler, ListEntry, RegistryEntry, RegistryMetada
 /// let handler = HookHandler {
 ///     r#type: "command".to_string(),
 ///     command: "/path/to/stop.sh".to_string(),
-///     matcher: String::new(),
 ///     timeout: Some(600),
 ///     r#async: None,
+///     status_message: None,
 /// };
 ///
-/// install(HookEvent::Stop, handler, "acd")?;
+/// install(HookEvent::Stop, handler, None, "acd")?;
 /// ```
-pub fn install(event: HookEvent, handler: HookHandler, installed_by: &str) -> Result<()> {
+pub fn install(
+    event: HookEvent,
+    handler: HookHandler,
+    matcher: Option<String>,
+    installed_by: &str,
+) -> Result<()> {
     use chrono::Local;
 
     // 1. Read registry
@@ -90,19 +96,10 @@ pub fn install(event: HookEvent, handler: HookHandler, installed_by: &str) -> Re
     // 3. Read settings
     let settings_value = settings::read_settings()?;
 
-    // 4. Check if hook exists in settings.json
-    let hooks_array = settings_value
-        .get("hooks")
-        .and_then(|h| h.as_array())
-        .ok_or_else(|| SettingsError::Parse("Missing 'hooks' array".to_string()))?;
-
-    for hook in hooks_array {
-        let hook_event = hook
-            .get("event")
-            .and_then(|e| serde_json::from_value(e.clone()).ok());
-        let hook_command = hook.get("command").and_then(|c| c.as_str());
-
-        if hook_event == Some(event) && hook_command == Some(&handler.command) {
+    // 4. Check if hook exists in settings.json using list_hooks
+    let existing_hooks = settings::list_hooks(&settings_value);
+    for (hook_event, _, hook_handler) in &existing_hooks {
+        if *hook_event == event && hook_handler.command == handler.command {
             return Err(HookError::AlreadyExists {
                 event,
                 command: handler.command.clone(),
@@ -112,7 +109,7 @@ pub fn install(event: HookEvent, handler: HookHandler, installed_by: &str) -> Re
     }
 
     // 5. Add hook to settings
-    let updated_settings = settings::add_hook(settings_value, event, handler.clone());
+    let updated_settings = settings::add_hook(settings_value, event, handler.clone(), matcher.clone());
 
     // 6. Write settings atomically
     settings::write_settings_atomic(updated_settings)?;
@@ -121,7 +118,7 @@ pub fn install(event: HookEvent, handler: HookHandler, installed_by: &str) -> Re
     let timestamp = Local::now().format("%Y%m%d-%H%M%S").to_string();
     let entry = RegistryEntry {
         event,
-        matcher: handler.matcher.clone(),
+        matcher,
         r#type: handler.r#type.clone(),
         command: handler.command.clone(),
         timeout: handler.timeout,
@@ -184,19 +181,11 @@ pub fn uninstall(event: HookEvent, command: &str) -> Result<()> {
     // 3. Read settings
     let settings_value = settings::read_settings()?;
 
-    // 4. Check if hook exists in settings.json
-    let hooks_array = settings_value
-        .get("hooks")
-        .and_then(|h| h.as_array())
-        .ok_or_else(|| SettingsError::Parse("Missing 'hooks' array".to_string()))?;
-
-    let hook_in_settings = hooks_array.iter().any(|hook| {
-        let hook_event = hook
-            .get("event")
-            .and_then(|e| serde_json::from_value(e.clone()).ok());
-        let hook_command = hook.get("command").and_then(|c| c.as_str());
-        hook_event == Some(event) && hook_command == Some(command)
-    });
+    // 4. Check if hook exists in settings.json using list_hooks
+    let existing_hooks = settings::list_hooks(&settings_value);
+    let hook_in_settings = existing_hooks
+        .iter()
+        .any(|(e, _, h)| *e == event && h.command == command);
 
     if !hook_in_settings {
         log::warn!(
@@ -252,23 +241,12 @@ pub fn list() -> Result<Vec<ListEntry>> {
     // 2. Read settings
     let settings_value = settings::read_settings()?;
 
-    // 3. Parse hooks from settings.json
-    let hooks_array = settings_value
-        .get("hooks")
-        .and_then(|h| h.as_array())
-        .ok_or_else(|| SettingsError::Parse("Missing 'hooks' array".to_string()))?;
+    // 3. Parse hooks from settings.json using list_hooks
+    let hooks = settings::list_hooks(&settings_value);
 
     let mut results = Vec::new();
 
-    for hook in hooks_array {
-        let event: HookEvent = hook
-            .get("event")
-            .and_then(|e| serde_json::from_value(e.clone()).ok())
-            .ok_or_else(|| SettingsError::Parse("Invalid event in hook".to_string()))?;
-
-        let handler: HookHandler = serde_json::from_value(hook.clone())
-            .map_err(|e| SettingsError::Parse(format!("Invalid hook handler: {}", e)))?;
-
+    for (event, _matcher, handler) in hooks {
         // Check if hook exists in registry
         let registry_entry = registry_entries
             .iter()
@@ -317,9 +295,9 @@ mod integration_tests {
         let claude_dir = dir.path().join(".claude");
         fs::create_dir_all(&claude_dir).expect("Failed to create .claude directory");
 
-        // Create empty settings.json with hooks array
+        // Create empty settings.json with hooks object (not array)
         let settings = serde_json::json!({
-            "hooks": [],
+            "hooks": {},
             "cleanupPeriodDays": 7
         });
         let settings_path = claude_dir.join("settings.json");
@@ -341,12 +319,12 @@ mod integration_tests {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/stop.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
 
-        let result = install(HookEvent::Stop, handler.clone(), "test");
+        let result = install(HookEvent::Stop, handler.clone(), None, "test");
         assert!(result.is_ok(), "Install should succeed: {:?}", result.err());
 
         // List hooks - should show as managed
@@ -381,17 +359,17 @@ mod integration_tests {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/stop.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
 
         // First install should succeed
-        let result = install(HookEvent::Stop, handler.clone(), "test");
+        let result = install(HookEvent::Stop, handler.clone(), None, "test");
         assert!(result.is_ok(), "First install should succeed");
 
         // Second install should fail with AlreadyExists
-        let result = install(HookEvent::Stop, handler, "test");
+        let result = install(HookEvent::Stop, handler, None, "test");
         assert!(result.is_err(), "Second install should fail");
 
         match result.unwrap_err() {
@@ -431,18 +409,18 @@ mod integration_tests {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: "/unmanaged/hook.sh".to_string(),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        let updated = settings::add_hook(settings, HookEvent::Start, handler);
+        let updated = settings::add_hook(settings, HookEvent::SessionStart, handler, None);
         settings::write_settings_atomic(updated).expect("Failed to write settings");
 
         // List should show hook as unmanaged
         let entries = list().expect("List should succeed");
         assert_eq!(entries.len(), 1, "Should have 1 hook");
         assert!(!entries[0].managed, "Hook should be unmanaged");
-        assert_eq!(entries[0].event, HookEvent::Start);
+        assert_eq!(entries[0].event, HookEvent::SessionStart);
         assert!(
             entries[0].metadata.is_none(),
             "Unmanaged hook should not have metadata"
@@ -458,21 +436,21 @@ mod integration_tests {
         let stop_handler = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/stop.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, stop_handler, "test").expect("Stop install should succeed");
+        install(HookEvent::Stop, stop_handler, None, "test").expect("Stop install should succeed");
 
-        // Install Start hook
+        // Install SessionStart hook
         let start_handler = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/start.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(300),
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Start, start_handler, "test").expect("Start install should succeed");
+        install(HookEvent::SessionStart, start_handler, None, "test").expect("SessionStart install should succeed");
 
         // List should show both hooks
         let entries = list().expect("List should succeed");
@@ -482,7 +460,7 @@ mod integration_tests {
         // Verify both events are present
         let events: Vec<HookEvent> = entries.iter().map(|e| e.event).collect();
         assert!(events.contains(&HookEvent::Stop));
-        assert!(events.contains(&HookEvent::Start));
+        assert!(events.contains(&HookEvent::SessionStart));
     }
 
     #[test]
@@ -494,28 +472,28 @@ mod integration_tests {
         let stop_handler = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/stop.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(600),
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, stop_handler, "test").expect("Stop install should succeed");
+        install(HookEvent::Stop, stop_handler, None, "test").expect("Stop install should succeed");
 
         let start_handler = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/start.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(300),
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Start, start_handler, "test").expect("Start install should succeed");
+        install(HookEvent::SessionStart, start_handler, None, "test").expect("SessionStart install should succeed");
 
         // Uninstall Stop hook
         uninstall(HookEvent::Stop, "/path/to/stop.sh").expect("Uninstall should succeed");
 
-        // List should show only Start hook
+        // List should show only SessionStart hook
         let entries = list().expect("List should succeed");
         assert_eq!(entries.len(), 1, "Should have 1 hook remaining");
-        assert_eq!(entries[0].event, HookEvent::Start);
+        assert_eq!(entries[0].event, HookEvent::SessionStart);
         assert_eq!(entries[0].handler.command, "/path/to/start.sh");
     }
 
@@ -528,12 +506,12 @@ mod integration_tests {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/async.sh".to_string(),
-            matcher: String::new(),
             timeout: Some(900),
             r#async: Some(true),
+            status_message: Some("Running...".to_string()),
         };
 
-        install(HookEvent::BeforePrompt, handler, "test").expect("Install should succeed");
+        install(HookEvent::PostToolUse, handler, None, "test").expect("Install should succeed");
 
         // List and verify optional fields are preserved
         let entries = list().expect("List should succeed");
@@ -551,12 +529,12 @@ mod integration_tests {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/test.sh".to_string(),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
 
-        install(HookEvent::Stop, handler, "test-installer").expect("Install should succeed");
+        install(HookEvent::Stop, handler, None, "test-installer").expect("Install should succeed");
 
         // List and verify metadata
         let entries = list().expect("List should succeed");
@@ -576,12 +554,12 @@ mod integration_tests {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/test.sh".to_string(),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
 
-        install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+        install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
 
         // Manually remove from settings.json (simulate user deletion)
         let settings = settings::read_settings().expect("Failed to read settings");
@@ -609,20 +587,20 @@ mod integration_tests {
         let handler1 = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/stop1.sh".to_string(),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, handler1, "test").expect("First install should succeed");
+        install(HookEvent::Stop, handler1, None, "test").expect("First install should succeed");
 
         let handler2 = HookHandler {
             r#type: "command".to_string(),
             command: "/path/to/stop2.sh".to_string(),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, handler2, "test").expect("Second install should succeed");
+        install(HookEvent::Stop, handler2, None, "test").expect("Second install should succeed");
 
         // List should show both hooks
         let entries = list().expect("List should succeed");
@@ -643,5 +621,29 @@ mod integration_tests {
         let entries = list().expect("List should succeed");
         assert_eq!(entries.len(), 1, "Should have 1 hook remaining");
         assert_eq!(entries[0].handler.command, "/path/to/stop2.sh");
+    }
+
+    #[test]
+    #[serial(home)]
+    fn test_install_with_matcher() {
+        let _dir = setup_test_env();
+
+        // Install PreToolUse hook with Bash matcher
+        let handler = HookHandler {
+            r#type: "command".to_string(),
+            command: "/path/to/pre-bash.sh".to_string(),
+            timeout: Some(10),
+            r#async: None,
+            status_message: None,
+        };
+
+        install(HookEvent::PreToolUse, handler, Some("Bash".to_string()), "test")
+            .expect("Install should succeed");
+
+        // List should show the hook
+        let entries = list().expect("List should succeed");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].event, HookEvent::PreToolUse);
+        assert_eq!(entries[0].handler.command, "/path/to/pre-bash.sh");
     }
 }

@@ -19,7 +19,7 @@ fn setup_test_env() -> tempfile::TempDir {
     fs::create_dir_all(&claude_dir).expect("Failed to create .claude directory");
 
     let settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "cleanupPeriodDays": 7
     });
     fs::write(
@@ -32,20 +32,20 @@ fn setup_test_env() -> tempfile::TempDir {
 }
 
 #[test]
-#[serial(performance)]
+#[serial(home)]
 fn test_install_performance() {
     let _dir = setup_test_env();
 
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/stop.sh".to_string(),
-        matcher: String::new(),
         timeout: Some(600),
         r#async: None,
+        status_message: None,
     };
 
     let start = Instant::now();
-    install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
     let duration = start.elapsed();
 
     println!("Install took: {}ms", duration.as_millis());
@@ -57,7 +57,7 @@ fn test_install_performance() {
 }
 
 #[test]
-#[serial(performance)]
+#[serial(home)]
 fn test_uninstall_performance() {
     let _dir = setup_test_env();
 
@@ -65,11 +65,11 @@ fn test_uninstall_performance() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/stop.sh".to_string(),
-        matcher: String::new(),
         timeout: Some(600),
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
 
     // Measure uninstall
     let start = Instant::now();
@@ -85,7 +85,7 @@ fn test_uninstall_performance() {
 }
 
 #[test]
-#[serial(performance)]
+#[serial(home)]
 fn test_list_performance_with_10_hooks() {
     let _dir = setup_test_env();
 
@@ -94,11 +94,11 @@ fn test_list_performance_with_10_hooks() {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: format!("/path/to/hook{}.sh", i),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+        install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
     }
 
     // Measure list
@@ -116,7 +116,7 @@ fn test_list_performance_with_10_hooks() {
 }
 
 #[test]
-#[serial(performance)]
+#[serial(home)]
 fn test_list_performance_empty() {
     let _dir = setup_test_env();
 
@@ -135,7 +135,7 @@ fn test_list_performance_empty() {
 }
 
 #[test]
-#[serial(performance)]
+#[serial(home)]
 fn test_install_100_hooks_sequentially() {
     let _dir = setup_test_env();
 
@@ -146,11 +146,11 @@ fn test_install_100_hooks_sequentially() {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: format!("/path/to/hook{}.sh", i),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+        install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
     }
 
     let duration = start.elapsed();
@@ -171,7 +171,7 @@ fn test_install_100_hooks_sequentially() {
 }
 
 #[test]
-#[serial(performance)]
+#[serial(home)]
 fn test_uninstall_100_hooks_sequentially() {
     let _dir = setup_test_env();
 
@@ -180,11 +180,11 @@ fn test_uninstall_100_hooks_sequentially() {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: format!("/path/to/hook{}.sh", i),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+        install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
     }
 
     let start = Instant::now();
@@ -213,7 +213,7 @@ fn test_uninstall_100_hooks_sequentially() {
 }
 
 #[test]
-#[serial(performance)]
+#[serial(home)]
 fn test_list_performance_with_100_hooks() {
     let _dir = setup_test_env();
 
@@ -222,11 +222,11 @@ fn test_list_performance_with_100_hooks() {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: format!("/path/to/hook{}.sh", i),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+        install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
     }
 
     // Measure list
@@ -247,7 +247,7 @@ fn test_list_performance_with_100_hooks() {
 }
 
 #[test]
-#[serial(performance)]
+#[serial(home)]
 fn test_mixed_operations_performance() {
     let _dir = setup_test_env();
 
@@ -259,11 +259,11 @@ fn test_mixed_operations_performance() {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: format!("/path/to/hook{}.sh", i),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+        install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
 
         // List
         let entries = list().expect("List should succeed");
@@ -295,13 +295,13 @@ fn test_mixed_operations_performance() {
 }
 
 #[test]
-#[serial(performance)]
+#[serial(home)]
 fn test_install_with_large_settings_file() {
     let _dir = setup_test_env();
 
     // Create settings with many keys to simulate large file
     let mut settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "cleanupPeriodDays": 7
     });
 
@@ -326,13 +326,13 @@ fn test_install_with_large_settings_file() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
 
     let start = Instant::now();
-    install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
     let duration = start.elapsed();
 
     println!(
@@ -348,26 +348,28 @@ fn test_install_with_large_settings_file() {
 }
 
 #[test]
-#[serial(performance)]
+#[serial(home)]
 fn test_list_with_mixed_managed_unmanaged() {
     let _dir = setup_test_env();
 
-    // Create settings with some unmanaged hooks
+    // Create settings with some unmanaged hooks using correct format
     let settings = serde_json::json!({
-        "hooks": [
-            {
-                "event": "Start",
-                "command": "/unmanaged/hook1.sh",
-                "type": "command",
-                "matcher": ""
-            },
-            {
-                "event": "Stop",
-                "command": "/unmanaged/hook2.sh",
-                "type": "command",
-                "matcher": ""
-            }
-        ]
+        "hooks": {
+            "SessionStart": [
+                {
+                    "hooks": [
+                        { "command": "/unmanaged/hook1.sh", "type": "command" }
+                    ]
+                }
+            ],
+            "Stop": [
+                {
+                    "hooks": [
+                        { "command": "/unmanaged/hook2.sh", "type": "command" }
+                    ]
+                }
+            ]
+        }
     });
     fs::write(
         env::var("HOME").expect("HOME not set") + "/.claude/settings.json",
@@ -380,11 +382,11 @@ fn test_list_with_mixed_managed_unmanaged() {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: format!("/managed/hook{}.sh", i),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+        install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
     }
 
     // Measure list (10 total: 2 unmanaged, 8 managed)

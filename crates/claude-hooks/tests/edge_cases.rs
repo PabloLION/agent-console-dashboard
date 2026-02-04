@@ -18,7 +18,7 @@ fn setup_test_env() -> tempfile::TempDir {
     fs::create_dir_all(&claude_dir).expect("Failed to create .claude directory");
 
     let settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "cleanupPeriodDays": 7
     });
     fs::write(
@@ -31,7 +31,7 @@ fn setup_test_env() -> tempfile::TempDir {
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_hook_in_registry_but_not_in_settings() {
     let _dir = setup_test_env();
 
@@ -39,15 +39,15 @@ fn test_hook_in_registry_but_not_in_settings() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
 
     // Manually remove from settings.json (simulate user deletion)
     let settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "cleanupPeriodDays": 7
     });
     fs::write(
@@ -66,20 +66,21 @@ fn test_hook_in_registry_but_not_in_settings() {
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_hook_in_settings_but_not_in_registry() {
     let _dir = setup_test_env();
 
-    // Manually add hook to settings.json (not via install)
+    // Manually add hook to settings.json (not via install) using correct format
     let settings = serde_json::json!({
-        "hooks": [
-            {
-                "event": "Start",
-                "command": "/unmanaged/hook.sh",
-                "type": "command",
-                "matcher": ""
-            }
-        ],
+        "hooks": {
+            "SessionStart": [
+                {
+                    "hooks": [
+                        { "command": "/unmanaged/hook.sh", "type": "command" }
+                    ]
+                }
+            ]
+        },
         "cleanupPeriodDays": 7
     });
     fs::write(
@@ -96,7 +97,7 @@ fn test_hook_in_settings_but_not_in_registry() {
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_corrupt_settings_json() {
     let _dir = setup_test_env();
 
@@ -120,8 +121,8 @@ fn test_corrupt_settings_json() {
 }
 
 #[test]
-#[serial(edge_cases)]
-fn test_missing_hooks_array() {
+#[serial(home)]
+fn test_missing_hooks_object() {
     let _dir = setup_test_env();
 
     // Settings.json without hooks key
@@ -134,26 +135,20 @@ fn test_missing_hooks_array() {
     )
     .expect("Write failed");
 
-    // List should return parse error
+    // List should return empty result (resilient design)
     let result = list();
-    assert!(result.is_err(), "List should fail without hooks array");
-
-    match result.unwrap_err() {
-        Error::Settings(SettingsError::Parse(msg)) => {
-            assert!(msg.contains("hooks"), "Error should mention hooks array");
-        }
-        e => panic!("Expected SettingsError::Parse, got: {:?}", e),
-    }
+    assert!(result.is_ok(), "List should succeed with missing hooks");
+    assert_eq!(result.expect("should be ok").len(), 0, "Should return empty list");
 }
 
 #[test]
-#[serial(edge_cases)]
-fn test_hooks_not_an_array() {
+#[serial(home)]
+fn test_hooks_not_an_object() {
     let _dir = setup_test_env();
 
     // Settings.json with hooks as wrong type
     let settings = serde_json::json!({
-        "hooks": "not an array",
+        "hooks": "not an object",
         "cleanupPeriodDays": 7
     });
     fs::write(
@@ -162,13 +157,14 @@ fn test_hooks_not_an_array() {
     )
     .expect("Write failed");
 
-    // Operations should fail
+    // List should return empty result (resilient design - skips invalid hooks)
     let result = list();
-    assert!(result.is_err(), "List should fail with invalid hooks type");
+    assert!(result.is_ok(), "List should succeed with invalid hooks type");
+    assert_eq!(result.expect("should be ok").len(), 0, "Should return empty list");
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_settings_file_not_found() {
     let dir = tempdir().expect("Tempdir failed");
     env::set_var("HOME", dir.path());
@@ -188,23 +184,23 @@ fn test_settings_file_not_found() {
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_install_duplicate_via_registry() {
     let _dir = setup_test_env();
 
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
 
     // First install
-    install(HookEvent::Stop, handler.clone(), "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler.clone(), None, "test").expect("Install should succeed");
 
     // Second install should fail
-    let result = install(HookEvent::Stop, handler, "test");
+    let result = install(HookEvent::Stop, handler, None, "test");
     assert!(result.is_err(), "Duplicate install should fail");
 
     match result.unwrap_err() {
@@ -217,20 +213,21 @@ fn test_install_duplicate_via_registry() {
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_install_duplicate_via_settings() {
     let _dir = setup_test_env();
 
-    // Manually add hook to settings (not in registry)
+    // Manually add hook to settings (not in registry) using correct format
     let settings = serde_json::json!({
-        "hooks": [
-            {
-                "event": "Stop",
-                "command": "/path/to/test.sh",
-                "type": "command",
-                "matcher": ""
-            }
-        ]
+        "hooks": {
+            "Stop": [
+                {
+                    "hooks": [
+                        { "command": "/path/to/test.sh", "type": "command" }
+                    ]
+                }
+            ]
+        }
     });
     fs::write(
         env::var("HOME").expect("HOME not set") + "/.claude/settings.json",
@@ -242,12 +239,12 @@ fn test_install_duplicate_via_settings() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
 
-    let result = install(HookEvent::Stop, handler, "test");
+    let result = install(HookEvent::Stop, handler, None, "test");
     assert!(result.is_err(), "Install should fail if already in settings");
 
     match result.unwrap_err() {
@@ -259,7 +256,7 @@ fn test_install_duplicate_via_settings() {
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_uninstall_nonexistent_hook() {
     let _dir = setup_test_env();
 
@@ -277,20 +274,21 @@ fn test_uninstall_nonexistent_hook() {
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_uninstall_unmanaged_hook() {
     let _dir = setup_test_env();
 
-    // Manually add hook to settings (not in registry)
+    // Manually add hook to settings (not in registry) using correct format
     let settings = serde_json::json!({
-        "hooks": [
-            {
-                "event": "Stop",
-                "command": "/unmanaged/hook.sh",
-                "type": "command",
-                "matcher": ""
-            }
-        ]
+        "hooks": {
+            "Stop": [
+                {
+                    "hooks": [
+                        { "command": "/unmanaged/hook.sh", "type": "command" }
+                    ]
+                }
+            ]
+        }
     });
     fs::write(
         env::var("HOME").expect("HOME not set") + "/.claude/settings.json",
@@ -311,18 +309,19 @@ fn test_uninstall_unmanaged_hook() {
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_malformed_hook_in_settings() {
     let _dir = setup_test_env();
 
-    // Add malformed hook (missing required fields)
+    // Add malformed hook (missing required hooks array)
     let settings = serde_json::json!({
-        "hooks": [
-            {
-                "event": "Stop",
-                // Missing command, type, matcher
-            }
-        ]
+        "hooks": {
+            "Stop": [
+                {
+                    // Missing hooks array
+                }
+            ]
+        }
     });
     fs::write(
         env::var("HOME").expect("HOME not set") + "/.claude/settings.json",
@@ -330,26 +329,28 @@ fn test_malformed_hook_in_settings() {
     )
     .expect("Write failed");
 
-    // List should fail with parse error
+    // List should return empty result (resilient design - skips malformed entries)
     let result = list();
-    assert!(result.is_err(), "List should fail with malformed hook");
+    assert!(result.is_ok(), "List should succeed with malformed hook");
+    assert_eq!(result.expect("should be ok").len(), 0, "Should return empty list");
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_invalid_event_in_settings() {
     let _dir = setup_test_env();
 
     // Add hook with invalid event
     let settings = serde_json::json!({
-        "hooks": [
-            {
-                "event": "InvalidEvent",
-                "command": "/path/to/hook.sh",
-                "type": "command",
-                "matcher": ""
-            }
-        ]
+        "hooks": {
+            "InvalidEvent": [
+                {
+                    "hooks": [
+                        { "command": "/path/to/hook.sh", "type": "command" }
+                    ]
+                }
+            ]
+        }
     });
     fs::write(
         env::var("HOME").expect("HOME not set") + "/.claude/settings.json",
@@ -357,13 +358,14 @@ fn test_invalid_event_in_settings() {
     )
     .expect("Write failed");
 
-    // List should fail with parse error
+    // List should return empty result (resilient design - skips unknown events)
     let result = list();
-    assert!(result.is_err(), "List should fail with invalid event");
+    assert!(result.is_ok(), "List should succeed with invalid event");
+    assert_eq!(result.expect("should be ok").len(), 0, "Should return empty list");
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_empty_settings_file() {
     let _dir = setup_test_env();
 
@@ -380,21 +382,22 @@ fn test_empty_settings_file() {
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_settings_with_comments_and_trailing_commas() {
     let _dir = setup_test_env();
 
     // JSONC with comments (should work due to json_comments crate)
     let jsonc = r#"{
         // This is a comment
-        "hooks": [
-            {
-                "event": "Stop",
-                "command": "/path/to/hook.sh",
-                "type": "command",
-                "matcher": "",
-            }  // trailing comma
-        ],
+        "hooks": {
+            "Stop": [
+                {
+                    "hooks": [
+                        { "command": "/path/to/hook.sh", "type": "command" },
+                    ]
+                }
+            ]
+        },
         "cleanupPeriodDays": 7,
     }"#;
 
@@ -421,7 +424,7 @@ fn test_settings_with_comments_and_trailing_commas() {
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_registry_dir_not_exist() {
     let dir = tempdir().expect("Tempdir failed");
     env::set_var("HOME", dir.path());
@@ -431,7 +434,7 @@ fn test_registry_dir_not_exist() {
     fs::create_dir_all(&claude_dir).expect("mkdir failed");
 
     let settings = serde_json::json!({
-        "hooks": []
+        "hooks": {}
     });
     fs::write(
         claude_dir.join("settings.json"),
@@ -443,17 +446,17 @@ fn test_registry_dir_not_exist() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
 
-    let result = install(HookEvent::Stop, handler, "test");
+    let result = install(HookEvent::Stop, handler, None, "test");
     assert!(result.is_ok(), "Install should create registry dir if missing");
 }
 
 #[test]
-#[serial(edge_cases)]
+#[serial(home)]
 fn test_multiple_same_command_different_events() {
     let _dir = setup_test_env();
 
@@ -463,20 +466,20 @@ fn test_multiple_same_command_different_events() {
     let handler1 = HookHandler {
         r#type: "command".to_string(),
         command: command.to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Start, handler1, "test").expect("Start install should succeed");
+    install(HookEvent::SessionStart, handler1, None, "test").expect("SessionStart install should succeed");
 
     let handler2 = HookHandler {
         r#type: "command".to_string(),
         command: command.to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Stop, handler2, "test").expect("Stop install should succeed");
+    install(HookEvent::Stop, handler2, None, "test").expect("Stop install should succeed");
 
     // Verify both exist
     let entries = list().expect("List should succeed");
@@ -487,6 +490,6 @@ fn test_multiple_same_command_different_events() {
 
     // Events should be different
     let events: Vec<HookEvent> = entries.iter().map(|e| e.event).collect();
-    assert!(events.contains(&HookEvent::Start));
+    assert!(events.contains(&HookEvent::SessionStart));
     assert!(events.contains(&HookEvent::Stop));
 }

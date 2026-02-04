@@ -143,11 +143,11 @@ mod tests {
     #[test]
     fn test_hook_error_not_managed_display() {
         let err = HookError::NotManaged {
-            event: HookEvent::Start,
+            event: HookEvent::SessionStart,
             command: "/path/to/start.sh".to_string(),
         };
         let display = format!("{}", err);
-        assert!(display.contains("Start"), "Error should contain event");
+        assert!(display.contains("SessionStart"), "Error should contain event");
         assert!(
             display.contains("/path/to/start.sh"),
             "Error should contain command"

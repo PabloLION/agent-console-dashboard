@@ -181,7 +181,7 @@ mod tests {
         let entries = Vec::new();
         let entry = RegistryEntry {
             event: HookEvent::Stop,
-            matcher: String::new(),
+            matcher: None,
             r#type: "command".to_string(),
             command: "/path/to/stop.sh".to_string(),
             timeout: None,
@@ -204,7 +204,7 @@ mod tests {
     fn test_remove_entry() {
         let entry1 = RegistryEntry {
             event: HookEvent::Stop,
-            matcher: String::new(),
+            matcher: None,
             r#type: "command".to_string(),
             command: "/path/to/stop.sh".to_string(),
             timeout: None,
@@ -219,7 +219,7 @@ mod tests {
         };
 
         let entry2 = RegistryEntry {
-            event: HookEvent::Start,
+            event: HookEvent::SessionStart,
             command: "/path/to/start.sh".to_string(),
             ..entry1.clone()
         };
@@ -228,14 +228,14 @@ mod tests {
         let result = remove_entry(entries, HookEvent::Stop, "/path/to/stop.sh");
 
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].event, HookEvent::Start);
+        assert_eq!(result[0].event, HookEvent::SessionStart);
     }
 
     #[test]
     fn test_remove_entry_multiple_matches() {
         let entry1 = RegistryEntry {
             event: HookEvent::Stop,
-            matcher: String::new(),
+            matcher: None,
             r#type: "command".to_string(),
             command: "/path/to/stop.sh".to_string(),
             timeout: None,
@@ -251,7 +251,7 @@ mod tests {
 
         let entry2 = entry1.clone();
         let entry3 = RegistryEntry {
-            event: HookEvent::Start,
+            event: HookEvent::SessionStart,
             command: "/path/to/start.sh".to_string(),
             ..entry1.clone()
         };
@@ -261,7 +261,7 @@ mod tests {
 
         // Should remove both Stop entries
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].event, HookEvent::Start);
+        assert_eq!(result[0].event, HookEvent::SessionStart);
     }
 
     #[test]
@@ -295,7 +295,7 @@ mod tests {
 
         let entries = vec![RegistryEntry {
             event: HookEvent::Stop,
-            matcher: String::new(),
+            matcher: None,
             r#type: "command".to_string(),
             command: "/path/to/test-stop.sh".to_string(),
             timeout: Some(600),
@@ -335,7 +335,7 @@ mod tests {
         let original_entries = vec![
             RegistryEntry {
                 event: HookEvent::Stop,
-                matcher: String::new(),
+                matcher: None,
                 r#type: "command".to_string(),
                 command: "/path/to/test-stop-roundtrip.sh".to_string(),
                 timeout: Some(600),
@@ -349,8 +349,8 @@ mod tests {
                 optional: Some(false),
             },
             RegistryEntry {
-                event: HookEvent::Start,
-                matcher: String::new(),
+                event: HookEvent::SessionStart,
+                matcher: None,
                 r#type: "command".to_string(),
                 command: "/path/to/test-start-roundtrip.sh".to_string(),
                 timeout: None,
@@ -373,7 +373,7 @@ mod tests {
         assert_eq!(read_entries[0].command, "/path/to/test-stop-roundtrip.sh");
         assert_eq!(read_entries[0].timeout, Some(600));
         assert_eq!(read_entries[0].description, Some("Stop hook".to_string()));
-        assert_eq!(read_entries[1].event, HookEvent::Start);
+        assert_eq!(read_entries[1].event, HookEvent::SessionStart);
         assert_eq!(read_entries[1].command, "/path/to/test-start-roundtrip.sh");
         assert_eq!(read_entries[1].timeout, None);
     }

@@ -21,9 +21,9 @@ fn setup_test_env() -> tempfile::TempDir {
     let claude_dir = dir.path().join(".claude");
     fs::create_dir_all(&claude_dir).expect("Failed to create .claude directory");
 
-    // Create minimal settings.json with hooks array
+    // Create minimal settings.json with hooks object (not array)
     let settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "cleanupPeriodDays": 7
     });
     let settings_path = claude_dir.join("settings.json");
@@ -37,20 +37,20 @@ fn setup_test_env() -> tempfile::TempDir {
 }
 
 #[test]
-#[serial(integration)]
+#[serial(home)]
 fn test_full_install_workflow() {
     let _dir = setup_test_env();
 
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/stop.sh".to_string(),
-        matcher: String::new(),
         timeout: Some(600),
         r#async: None,
+        status_message: None,
     };
 
     // Install
-    install(HookEvent::Stop, handler.clone(), "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler.clone(), None, "test").expect("Install should succeed");
 
     // Verify in list
     let entries = list().expect("List should succeed");
@@ -67,20 +67,21 @@ fn test_full_install_workflow() {
 }
 
 #[test]
-#[serial(integration)]
+#[serial(home)]
 fn test_install_preserves_existing_hooks() {
     let _dir = setup_test_env();
 
-    // Manually add a hook first
+    // Manually add a hook first (using correct format)
     let settings = serde_json::json!({
-        "hooks": [
-            {
-                "event": "Start",
-                "command": "/existing/hook.sh",
-                "type": "command",
-                "matcher": ""
-            }
-        ]
+        "hooks": {
+            "SessionStart": [
+                {
+                    "hooks": [
+                        { "command": "/existing/hook.sh", "type": "command" }
+                    ]
+                }
+            ]
+        }
     });
     fs::write(
         env::var("HOME").expect("HOME not set") + "/.claude/settings.json",
@@ -92,12 +93,12 @@ fn test_install_preserves_existing_hooks() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/new/hook.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
 
-    install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
 
     // Verify both hooks exist
     let entries = list().expect("List should succeed");
@@ -111,20 +112,21 @@ fn test_install_preserves_existing_hooks() {
 }
 
 #[test]
-#[serial(integration)]
+#[serial(home)]
 fn test_uninstall_preserves_unmanaged_hooks() {
     let _dir = setup_test_env();
 
-    // Create settings with both managed and unmanaged hooks
+    // Create settings with unmanaged hook
     let settings = serde_json::json!({
-        "hooks": [
-            {
-                "event": "Start",
-                "command": "/unmanaged/hook.sh",
-                "type": "command",
-                "matcher": ""
-            }
-        ]
+        "hooks": {
+            "SessionStart": [
+                {
+                    "hooks": [
+                        { "command": "/unmanaged/hook.sh", "type": "command" }
+                    ]
+                }
+            ]
+        }
     });
     fs::write(
         env::var("HOME").expect("HOME not set") + "/.claude/settings.json",
@@ -136,11 +138,11 @@ fn test_uninstall_preserves_unmanaged_hooks() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/managed/hook.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
 
     // Verify both exist
     let entries = list().expect("List should succeed");
@@ -157,26 +159,26 @@ fn test_uninstall_preserves_unmanaged_hooks() {
 }
 
 #[test]
-#[serial(integration)]
+#[serial(home)]
 fn test_multiple_hooks_different_events() {
     let _dir = setup_test_env();
 
     // Install hooks for different events
     let events = vec![
-        (HookEvent::Start, "/path/to/start.sh"),
+        (HookEvent::SessionStart, "/path/to/start.sh"),
         (HookEvent::Stop, "/path/to/stop.sh"),
-        (HookEvent::BeforePrompt, "/path/to/before.sh"),
+        (HookEvent::PreToolUse, "/path/to/pretool.sh"),
     ];
 
     for (event, command) in &events {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: command.to_string(),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(*event, handler, "test").expect("Install should succeed");
+        install(*event, handler, None, "test").expect("Install should succeed");
     }
 
     // Verify all hooks present
@@ -186,13 +188,13 @@ fn test_multiple_hooks_different_events() {
 
     // Verify all events represented
     let found_events: Vec<HookEvent> = entries.iter().map(|e| e.event).collect();
-    assert!(found_events.contains(&HookEvent::Start));
+    assert!(found_events.contains(&HookEvent::SessionStart));
     assert!(found_events.contains(&HookEvent::Stop));
-    assert!(found_events.contains(&HookEvent::BeforePrompt));
+    assert!(found_events.contains(&HookEvent::PreToolUse));
 }
 
 #[test]
-#[serial(integration)]
+#[serial(home)]
 fn test_multiple_hooks_same_event() {
     let _dir = setup_test_env();
 
@@ -207,11 +209,11 @@ fn test_multiple_hooks_same_event() {
         let handler = HookHandler {
             r#type: "command".to_string(),
             command: command.to_string(),
-            matcher: String::new(),
             timeout: None,
             r#async: None,
+            status_message: None,
         };
-        install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+        install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
     }
 
     // Verify all hooks present
@@ -231,42 +233,42 @@ fn test_multiple_hooks_same_event() {
 }
 
 #[test]
-#[serial(integration)]
+#[serial(home)]
 fn test_install_with_all_optional_fields() {
     let _dir = setup_test_env();
 
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/async.sh".to_string(),
-        matcher: "*.rs".to_string(),
         timeout: Some(900),
         r#async: Some(true),
+        status_message: Some("Running...".to_string()),
     };
 
-    install(HookEvent::AfterPrompt, handler, "test").expect("Install should succeed");
+    install(HookEvent::PostToolUse, handler, Some("*.rs".to_string()), "test")
+        .expect("Install should succeed");
 
     // Verify all fields preserved
     let entries = list().expect("List should succeed");
     assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].handler.matcher, "*.rs");
     assert_eq!(entries[0].handler.timeout, Some(900));
     assert_eq!(entries[0].handler.r#async, Some(true));
 }
 
 #[test]
-#[serial(integration)]
+#[serial(home)]
 fn test_metadata_fields_populated() {
     let _dir = setup_test_env();
 
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
 
-    install(HookEvent::Stop, handler, "my-installer").expect("Install should succeed");
+    install(HookEvent::Stop, handler, None, "my-installer").expect("Install should succeed");
 
     // Verify metadata
     let entries = list().expect("List should succeed");
@@ -280,8 +282,8 @@ fn test_metadata_fields_populated() {
 }
 
 #[test]
-#[serial(integration)]
-fn test_list_empty_hooks_array() {
+#[serial(home)]
+fn test_list_empty_hooks_object() {
     let _dir = setup_test_env();
 
     // Verify empty list returns empty vector
@@ -290,13 +292,13 @@ fn test_list_empty_hooks_array() {
 }
 
 #[test]
-#[serial(integration)]
+#[serial(home)]
 fn test_roundtrip_preserves_settings_keys() {
     let _dir = setup_test_env();
 
     // Create settings with various keys
     let settings = serde_json::json!({
-        "hooks": [],
+        "hooks": {},
         "cleanupPeriodDays": 7,
         "env": {"TEST": "value"},
         "permissions": {},
@@ -314,11 +316,11 @@ fn test_roundtrip_preserves_settings_keys() {
     let handler = HookHandler {
         r#type: "command".to_string(),
         command: "/path/to/test.sh".to_string(),
-        matcher: String::new(),
         timeout: None,
         r#async: None,
+        status_message: None,
     };
-    install(HookEvent::Stop, handler, "test").expect("Install should succeed");
+    install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
     uninstall(HookEvent::Stop, "/path/to/test.sh").expect("Uninstall should succeed");
 
     // Verify all non-hook keys preserved
