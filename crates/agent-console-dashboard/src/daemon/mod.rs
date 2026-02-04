@@ -134,9 +134,40 @@ fn cleanup_existing_acd_hooks() {
 /// - Start hook: Notifies daemon when Claude Code starts
 /// - BeforePrompt hook: Tracks prompt submissions
 ///
+/// Layer 1 safety: Lists existing ACD hooks first and only installs missing ones.
+/// Layer 2 safety: claude-hooks crate checks registry before installing.
+///
 /// Hook script paths are determined relative to the binary location.
 /// Errors are logged but do not fail the operation.
 fn install_acd_hooks() {
+    // Layer 1: Check which ACD hooks are already installed
+    let existing_acd_hooks: Vec<HookEvent> = match claude_hooks::list() {
+        Ok(entries) => entries
+            .iter()
+            .filter(|e| {
+                e.managed
+                    && e.metadata
+                        .as_ref()
+                        .is_some_and(|m| m.installed_by == "acd")
+            })
+            .map(|e| e.event)
+            .collect(),
+        Err(e) => {
+            warn!(error = %e, "failed to list hooks, will attempt fresh install");
+            Vec::new()
+        }
+    };
+
+    // If all 3 hooks already exist, skip installation
+    let has_stop = existing_acd_hooks.contains(&HookEvent::Stop);
+    let has_start = existing_acd_hooks.contains(&HookEvent::Start);
+    let has_before_prompt = existing_acd_hooks.contains(&HookEvent::BeforePrompt);
+
+    if has_stop && has_start && has_before_prompt {
+        info!("all ACD hooks already installed, skipping");
+        return;
+    }
+
     // Determine hook script directory
     let hooks_dir = match std::env::current_exe() {
         Ok(exe_path) => exe_path
@@ -151,60 +182,51 @@ fn install_acd_hooks() {
 
     info!(hooks_dir = %hooks_dir.display(), "installing ACD hooks");
 
-    // Install Stop hook
-    let stop_hook = HookHandler {
-        r#type: "command".to_string(),
-        command: format!("{}/stop.sh $SESSION_ID $ARGS", hooks_dir.display()),
-        matcher: String::new(),
-        timeout: Some(600),
-        r#async: None,
-    };
+    // Install Stop hook (if missing)
+    if !has_stop {
+        let stop_hook = HookHandler {
+            r#type: "command".to_string(),
+            command: format!("{}/stop.sh $SESSION_ID $ARGS", hooks_dir.display()),
+            matcher: String::new(),
+            timeout: Some(600),
+            r#async: None,
+        };
 
-    match claude_hooks::install(HookEvent::Stop, stop_hook, "acd") {
-        Ok(_) => info!("installed Stop hook"),
-        Err(claude_hooks::Error::Hook(claude_hooks::HookError::AlreadyExists { .. })) => {
-            info!("Stop hook already exists (idempotent)");
-        }
-        Err(e) => {
-            error!(error = %e, "failed to install Stop hook");
+        match claude_hooks::install(HookEvent::Stop, stop_hook, "acd") {
+            Ok(_) => info!("installed Stop hook"),
+            Err(e) => error!(error = %e, "failed to install Stop hook"),
         }
     }
 
-    // Install Start hook
-    let start_hook = HookHandler {
-        r#type: "command".to_string(),
-        command: format!("{}/start.sh $SESSION_ID $ARGS", hooks_dir.display()),
-        matcher: String::new(),
-        timeout: Some(600),
-        r#async: None,
-    };
+    // Install Start hook (if missing)
+    if !has_start {
+        let start_hook = HookHandler {
+            r#type: "command".to_string(),
+            command: format!("{}/start.sh $SESSION_ID $ARGS", hooks_dir.display()),
+            matcher: String::new(),
+            timeout: Some(600),
+            r#async: None,
+        };
 
-    match claude_hooks::install(HookEvent::Start, start_hook, "acd") {
-        Ok(_) => info!("installed Start hook"),
-        Err(claude_hooks::Error::Hook(claude_hooks::HookError::AlreadyExists { .. })) => {
-            info!("Start hook already exists (idempotent)");
-        }
-        Err(e) => {
-            error!(error = %e, "failed to install Start hook");
+        match claude_hooks::install(HookEvent::Start, start_hook, "acd") {
+            Ok(_) => info!("installed Start hook"),
+            Err(e) => error!(error = %e, "failed to install Start hook"),
         }
     }
 
-    // Install BeforePrompt hook
-    let before_prompt_hook = HookHandler {
-        r#type: "command".to_string(),
-        command: format!("{}/before-prompt.sh $SESSION_ID $ARGS", hooks_dir.display()),
-        matcher: String::new(),
-        timeout: Some(600),
-        r#async: None,
-    };
+    // Install BeforePrompt hook (if missing)
+    if !has_before_prompt {
+        let before_prompt_hook = HookHandler {
+            r#type: "command".to_string(),
+            command: format!("{}/before-prompt.sh $SESSION_ID $ARGS", hooks_dir.display()),
+            matcher: String::new(),
+            timeout: Some(600),
+            r#async: None,
+        };
 
-    match claude_hooks::install(HookEvent::BeforePrompt, before_prompt_hook, "acd") {
-        Ok(_) => info!("installed BeforePrompt hook"),
-        Err(claude_hooks::Error::Hook(claude_hooks::HookError::AlreadyExists { .. })) => {
-            info!("BeforePrompt hook already exists (idempotent)");
-        }
-        Err(e) => {
-            error!(error = %e, "failed to install BeforePrompt hook");
+        match claude_hooks::install(HookEvent::BeforePrompt, before_prompt_hook, "acd") {
+            Ok(_) => info!("installed BeforePrompt hook"),
+            Err(e) => error!(error = %e, "failed to install BeforePrompt hook"),
         }
     }
 }
