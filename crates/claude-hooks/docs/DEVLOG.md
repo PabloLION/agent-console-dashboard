@@ -1,0 +1,216 @@
+# claude-hooks Development Log
+
+Authoritative record of crate progress, decisions, and state.
+
+## Crate Overview
+
+`claude-hooks` — a Rust library for programmatic management of Claude Code hooks.
+Reads/writes `~/.claude/settings.json` with atomic safety, tracks installed hooks
+via local registry.
+
+## Version Roadmap
+
+| Version | Features                                              | Status     |
+| ------- | ----------------------------------------------------- | ---------- |
+| v0.1    | install, uninstall, list (user scope), registry       | Planning   |
+| v0.2    | Multi-scope, export/import, CLI binary                | Designed   |
+| v1.0    | All v0.2 + doctor                                     | Designed   |
+| Post-v1 | migrate, enable/disable, templates, cross-agent       | Deferred   |
+
+## Current State (2026-02-03)
+
+### Documents
+
+| Document           | Purpose                          | Status |
+| ------------------ | -------------------------------- | ------ |
+| `design-draft.md`  | 36 design decisions, formats     | Done   |
+| `architecture.md`  | Module structure, data flow, API | Done   |
+| `PRD.md`           | Product requirements v0.1        | Done   |
+
+### What's Done
+
+- Design decisions documented (D01-D36)
+- Architecture specified (modules, types, errors, data flow)
+- File formats defined (settings.json structure, registry schema)
+- Dependencies selected (thiserror, serde, json_comments, chrono, dirs)
+- v0.1 scope locked (library-only, user scope, 3 public functions)
+- PRD created with 5 functional + 5 non-functional requirements
+- Epic E014 and 7 stories (S014.01-S014.07) created
+
+### What's Next
+
+- Implementation (see Dependency Map below)
+
+## Story Dependency Map
+
+### Dependency Graph
+
+```text
+Layer 0:  S014.01 (Scaffold)
+             │
+Layer 1:  S014.02 (Types/Errors)
+             │
+        ┌────┴────┐
+Layer 2: S014.03   S014.04    ← Can run in PARALLEL
+        (Settings) (Registry)
+        └────┬────┘
+             │
+Layer 3:  S014.05 (Public API)
+             │
+Layer 4:  S014.06 (Tests)
+             │
+Layer 5:  S014.07 (Wire into ACD)
+```
+
+### Story Details
+
+| Story   | Title                | Points | Blocks     | Blocked By    | Parallel? |
+| ------- | -------------------- | ------ | ---------- | ------------- | --------- |
+| S014.01 | Scaffold Crate       | 1      | S014.02    | -             | No        |
+| S014.02 | Types and Errors     | 2      | S014.03,04 | S014.01       | No        |
+| S014.03 | Settings Reader      | 3      | S014.05    | S014.02       | **Yes**   |
+| S014.04 | Registry Reader      | 2      | S014.05    | S014.02       | **Yes**   |
+| S014.05 | Public API           | 3      | S014.06    | S014.03,04    | No        |
+| S014.06 | Tests                | 3      | S014.07    | S014.05       | No        |
+| S014.07 | Wire into ACD        | 2      | -          | S014.06       | No        |
+
+### Parallelization Strategy
+
+**Phase 1** (Sequential): S014.01 → S014.02
+- Must be sequential: scaffold before types
+
+**Phase 2** (Parallel): S014.03 + S014.04
+- Both depend only on S014.02 (types/errors)
+- No code dependency between them
+- **Can spin up 2 agents in parallel**
+
+**Phase 3** (Sequential): S014.05 → S014.06 → S014.07
+- Each depends on previous
+- Must be sequential
+
+### Commit Checkpoints
+
+| Checkpoint | After Story | Commit Message |
+| ---------- | ----------- | -------------- |
+| 1          | S014.01     | `feat: scaffold claude-hooks crate` |
+| 2          | S014.05     | `feat: implement public API (install, uninstall, list)` |
+| 3          | S014.06     | `test: add comprehensive test suite` |
+
+### Agent Assignment Plan
+
+```text
+Agent 1: S014.01 (Scaffold)
+         ↓
+Agent 1: S014.02 (Types/Errors)
+         ↓
+         ├─→ Agent 1: S014.03 (Settings)
+         └─→ Agent 2: S014.04 (Registry)  ← PARALLEL
+         ↓
+Agent 1: S014.05 (Public API) - after both complete
+         ↓
+Agent 1: S014.06 (Tests)
+         ↓
+Agent 1: S014.07 (Wire into ACD)
+```
+
+Total: 16 points, 7 stories, 3 commits, 1 parallel opportunity
+
+## Key Design Decisions
+
+| ID  | Decision                                            |
+| --- | --------------------------------------------------- |
+| D01 | Atomic rename pattern for settings.json writes      |
+| D16 | Local registry in XDG data dir tracks our hooks     |
+| D22 | Hook identity = composite key (event, matcher, type, command) |
+| D36 | v0.1 is library-only (no CLI binary)                |
+
+## Architecture Summary
+
+```text
+crates/claude-hooks/
+├── Cargo.toml
+├── docs/
+│   ├── design-draft.md     # Design decisions
+│   ├── architecture.md     # Technical architecture
+│   └── DEVLOG.md           # This file
+└── src/
+    ├── lib.rs              # Public API: install, uninstall, list
+    ├── error.rs            # Error types (thiserror)
+    ├── types.rs            # HookEvent, HookHandler, RegistryEntry
+    ├── settings.rs         # Atomic read/write for settings.json
+    └── registry.rs         # JSONC registry in XDG data dir
+```
+
+## Public API (v0.1)
+
+```rust
+pub fn install(event: HookEvent, handler: HookHandler, installed_by: &str) -> Result<()>;
+pub fn uninstall(event: HookEvent, command: &str) -> Result<()>;
+pub fn list() -> Result<Vec<ListEntry>>;
+```
+
+## Testing Patterns
+
+Reusable patterns for testing file-based operations.
+
+### HOME Isolation Pattern
+
+Tests that read/write user-scoped files (`~/.claude/settings.json`, XDG data dirs) should
+isolate themselves by setting HOME to a temp directory:
+
+```rust
+use tempfile::tempdir;
+use std::env;
+
+fn setup_test_env() -> tempfile::TempDir {
+    let dir = tempdir().unwrap();
+    env::set_var("HOME", dir.path());
+
+    // Create required directories
+    std::fs::create_dir_all(dir.path().join(".claude")).unwrap();
+
+    // Create minimal settings.json
+    let settings = r#"{"hooks": []}"#;
+    std::fs::write(dir.path().join(".claude/settings.json"), settings).unwrap();
+
+    dir  // Return TempDir to keep it alive for test duration
+}
+
+#[test]
+fn test_example() {
+    let _dir = setup_test_env();  // Keep TempDir alive
+    // Test code uses isolated HOME
+}
+```
+
+**Benefits:**
+
+- No interference with real user settings
+- Tests can run in parallel safely
+- Automatic cleanup when TempDir drops
+- Deterministic initial state
+
+**Caveats:**
+
+- Must keep TempDir in scope for test duration
+- Use `#[serial]` from `serial_test` crate if tests must run sequentially
+- XDG dirs (`dirs::data_dir()`) also respect HOME changes
+
+Apply this pattern in all tests that touch `settings.json` or registry files.
+
+## Session History
+
+### 2026-02-03: Initial Design
+
+- Created design-draft.md with 36 decisions
+- Created architecture.md with module specs
+- Established v0.1 scope (library-only, user scope)
+- Selected dependencies consistent with workspace patterns
+
+### 2026-02-04: Implementation Phase 1-2
+
+- S014.01 (Scaffold): Crate created, added to workspace
+- S014.02 (Types/Errors): 12 tests passing
+- S014.03 (Settings): 11 tests passing, atomic write pattern implemented
+- S014.04 (Registry): 29 tests passing, JSONC parsing working
+- Parallel execution: S014.03 + S014.04 ran simultaneously

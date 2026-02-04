@@ -1,0 +1,29 @@
+[package]
+name = "claude-hooks"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77"
+authors = ["Pablo LION <36828324+PabloLION@users.noreply.github.com>"]
+description = "Programmatic management of Claude Code hooks"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/PabloLION/agent-console-dashboard"
+keywords = ["claude", "hooks", "settings", "anthropic"]
+categories = ["development-tools", "config"]
+
+[dependencies]
+# Dependencies added in S014.02+
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+# Dependencies added in S014.04
+json_comments = "0.2"  # JSONC parsing
+dirs = "5"             # XDG directory resolution
+log = "0.4"            # Logging
+
+[dev-dependencies]
+# Test dependencies added in S014.03+
+tempfile = "3"
+regex = "1"
+serial_test = "3"  # Serialize tests that modify shared state
+env_logger = "0.11"  # Test logging output
