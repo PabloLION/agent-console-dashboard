@@ -752,4 +752,166 @@ mod tests {
 
         // Verify no panic occurred (function completed)
     }
+
+    #[test]
+    #[serial(hooks)]
+    fn test_layer1_skips_when_all_hooks_exist() {
+        // Setup test environment
+        let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
+        env::set_var("HOME", temp_dir.path());
+
+        let claude_dir = temp_dir.path().join(".claude");
+        fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
+
+        let settings = serde_json::json!({
+            "hooks": [],
+            "cleanupPeriodDays": 7
+        });
+        fs::write(
+            claude_dir.join("settings.json"),
+            serde_json::to_string_pretty(&settings).expect("failed to serialize settings"),
+        )
+        .expect("failed to write settings.json");
+
+        // First install - creates all 3 hooks
+        println!("[Layer 1 Test] First install: expecting 3 new hooks...");
+        install_acd_hooks();
+        let entries1 = claude_hooks::list().expect("failed to list hooks");
+        assert_eq!(entries1.len(), 3, "should have 3 hooks after first install");
+        println!("[Layer 1 Test] ✓ Installed {} hooks: {:?}",
+            entries1.len(),
+            entries1.iter().map(|e| format!("{:?}", e.event)).collect::<Vec<_>>()
+        );
+
+        // Get timestamps from first install
+        let timestamps1: Vec<String> = entries1
+            .iter()
+            .map(|e| e.metadata.as_ref().expect("should have metadata").added_at.clone())
+            .collect();
+        println!("[Layer 1 Test] Timestamps after first install: {:?}", timestamps1);
+
+        // Second install - Layer 1 should skip (all exist)
+        println!("[Layer 1 Test] Second install: expecting Layer 1 to SKIP...");
+        install_acd_hooks();
+        let entries2 = claude_hooks::list().expect("failed to list hooks");
+        assert_eq!(entries2.len(), 3, "should still have 3 hooks");
+
+        // Verify timestamps unchanged (proves no reinstall happened)
+        let timestamps2: Vec<String> = entries2
+            .iter()
+            .map(|e| e.metadata.as_ref().expect("should have metadata").added_at.clone())
+            .collect();
+        println!("[Layer 1 Test] Timestamps after second install: {:?}", timestamps2);
+
+        assert_eq!(timestamps1, timestamps2, "timestamps should be unchanged (Layer 1 skipped)");
+        println!("[Layer 1 Test] ✓ Layer 1 correctly skipped - timestamps unchanged");
+    }
+
+    #[test]
+    #[serial(hooks)]
+    fn test_layer1_installs_only_missing_hooks() {
+        // Setup test environment
+        let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
+        env::set_var("HOME", temp_dir.path());
+
+        let claude_dir = temp_dir.path().join(".claude");
+        fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
+
+        let settings = serde_json::json!({
+            "hooks": [],
+            "cleanupPeriodDays": 7
+        });
+        fs::write(
+            claude_dir.join("settings.json"),
+            serde_json::to_string_pretty(&settings).expect("failed to serialize settings"),
+        )
+        .expect("failed to write settings.json");
+
+        // Manually install only Stop hook (simulating partial state)
+        println!("[Layer 1 Partial Test] Pre-installing only Stop hook...");
+        let stop_handler = HookHandler {
+            r#type: "command".to_string(),
+            command: "/some/path/hooks/stop.sh $SESSION_ID $ARGS".to_string(),
+            matcher: String::new(),
+            timeout: Some(600),
+            r#async: None,
+        };
+        claude_hooks::install(HookEvent::Stop, stop_handler, "acd")
+            .expect("failed to install Stop hook");
+
+        let entries_before = claude_hooks::list().expect("failed to list hooks");
+        assert_eq!(entries_before.len(), 1, "should have 1 hook before");
+        println!("[Layer 1 Partial Test] ✓ Pre-installed: {:?}", entries_before[0].event);
+
+        // Run install_acd_hooks - should only install Start and BeforePrompt
+        println!("[Layer 1 Partial Test] Running install_acd_hooks (should skip Stop, install Start+BeforePrompt)...");
+        install_acd_hooks();
+
+        let entries_after = claude_hooks::list().expect("failed to list hooks");
+        assert_eq!(entries_after.len(), 3, "should have 3 hooks after");
+        println!("[Layer 1 Partial Test] ✓ Now have {} hooks: {:?}",
+            entries_after.len(),
+            entries_after.iter().map(|e| format!("{:?}", e.event)).collect::<Vec<_>>()
+        );
+
+        // Verify Stop hook command unchanged (original, not reinstalled)
+        let stop_hook = entries_after.iter().find(|e| e.event == HookEvent::Stop).expect("Stop hook should exist");
+        assert_eq!(stop_hook.handler.command, "/some/path/hooks/stop.sh $SESSION_ID $ARGS",
+            "Stop hook should have original command (not reinstalled)");
+        println!("[Layer 1 Partial Test] ✓ Stop hook preserved with original command");
+    }
+
+    #[test]
+    #[serial(hooks)]
+    fn test_layer2_registry_prevents_duplicate() {
+        // This tests the claude-hooks crate's Layer 2 protection
+        let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
+        env::set_var("HOME", temp_dir.path());
+
+        let claude_dir = temp_dir.path().join(".claude");
+        fs::create_dir_all(&claude_dir).expect("failed to create .claude dir");
+
+        let settings = serde_json::json!({
+            "hooks": [],
+            "cleanupPeriodDays": 7
+        });
+        fs::write(
+            claude_dir.join("settings.json"),
+            serde_json::to_string_pretty(&settings).expect("failed to serialize settings"),
+        )
+        .expect("failed to write settings.json");
+
+        // First install via claude-hooks directly
+        println!("[Layer 2 Test] First install via claude-hooks::install()...");
+        let handler = HookHandler {
+            r#type: "command".to_string(),
+            command: "/test/hook.sh".to_string(),
+            matcher: String::new(),
+            timeout: Some(600),
+            r#async: None,
+        };
+        let result1 = claude_hooks::install(HookEvent::Stop, handler.clone(), "test");
+        assert!(result1.is_ok(), "first install should succeed");
+        println!("[Layer 2 Test] ✓ First install succeeded");
+
+        // Second install with same hook - Layer 2 (registry) should block
+        println!("[Layer 2 Test] Second install with same hook (should be blocked by registry)...");
+        let result2 = claude_hooks::install(HookEvent::Stop, handler, "test");
+        assert!(result2.is_err(), "second install should fail");
+
+        match result2 {
+            Err(claude_hooks::Error::Hook(claude_hooks::HookError::AlreadyExists { event, command })) => {
+                println!("[Layer 2 Test] ✓ Layer 2 blocked: AlreadyExists {{ event: {:?}, command: {} }}", event, command);
+                assert_eq!(event, HookEvent::Stop);
+                assert_eq!(command, "/test/hook.sh");
+            }
+            Err(e) => panic!("unexpected error type: {:?}", e),
+            Ok(_) => panic!("should have failed with AlreadyExists"),
+        }
+
+        // Verify only 1 hook exists (no duplicate)
+        let entries = claude_hooks::list().expect("failed to list");
+        assert_eq!(entries.len(), 1, "should have exactly 1 hook (no duplicate)");
+        println!("[Layer 2 Test] ✓ Only 1 hook exists (no duplicate created)");
+    }
 }
