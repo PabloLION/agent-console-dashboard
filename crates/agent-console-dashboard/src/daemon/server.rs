@@ -537,12 +537,19 @@ async fn handle_sub_command(
     // Subscribe to usage updates if fetcher is available
     let mut usage_sub = usage_fetcher.map(|f| f.subscribe());
 
-    // Send current usage state as initial snapshot
+    // Send current usage state as initial snapshot.
+    // Clone data and drop lock before I/O to avoid holding RwLock during writes.
     if let Some(fetcher) = usage_fetcher {
         let usage_state = fetcher.state();
-        let guard = usage_state.read().await;
-        if let super::usage::UsageState::Available(ref data) = *guard {
-            let json = serde_json::to_string(data).expect("failed to serialize UsageData");
+        let snapshot = {
+            let guard = usage_state.read().await;
+            match &*guard {
+                super::usage::UsageState::Available(data) => Some(data.clone()),
+                super::usage::UsageState::Unavailable => None,
+            }
+        };
+        if let Some(data) = snapshot {
+            let json = serde_json::to_string(&data).expect("failed to serialize UsageData");
             let message = format!("USAGE {}\n", json);
             writer.write_all(message.as_bytes()).await?;
             writer.flush().await?;

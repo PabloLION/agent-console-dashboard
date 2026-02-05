@@ -387,11 +387,17 @@ fn parse_daemon_line(line: &str) -> Option<DaemonMessage> {
     let parts: Vec<&str> = line.split_whitespace().collect();
     // UPDATE <session_id> <status> <elapsed>
     if parts.len() >= 3 && parts[0] == "UPDATE" {
-        if let Ok(status) = parts[2].parse::<Status>() {
-            return Some(DaemonMessage::SessionUpdate {
-                session_id: parts[1].to_string(),
-                status,
-            });
+        match parts[2].parse::<Status>() {
+            Ok(status) => {
+                return Some(DaemonMessage::SessionUpdate {
+                    session_id: parts[1].to_string(),
+                    status,
+                });
+            }
+            Err(_) => {
+                tracing::warn!("failed to parse UPDATE status: {}", parts[2]);
+                return None;
+            }
         }
     }
 
