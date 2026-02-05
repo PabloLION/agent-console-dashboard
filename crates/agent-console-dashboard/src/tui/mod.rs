@@ -5,5 +5,6 @@
 
 pub mod app;
 pub mod event;
+pub mod subscription;
 pub mod ui;
 pub mod views;
