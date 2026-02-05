@@ -362,6 +362,12 @@ RwLock is idiomatic Rust — the language's ownership model is designed
 for this pattern. The actor model would add boilerplate to solve problems
 that don't exist in practice.
 
+**TOCTOU fix (6733cdf):** The one theoretical TOCTOU in
+`handle_set_command` was eliminated by adding a `status` parameter to
+`get_or_create_session()`. Previously two separate lock acquisitions
+(create, then update); now a single atomic operation. The "BUG" error
+path on server.rs:436 is removed — the None branch is unreachable.
+
 **Outcome:**
 
 - acd-ojb closed (original issue bundling idle timer + actor refactor)
