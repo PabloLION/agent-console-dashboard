@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/agent-console-dashboard", "crates/claude-usage"]
+members = ["crates/agent-console-dashboard", "crates/claude-usage", "crates/claude-hooks"]
 resolver = "2"
 
 [workspace.dependencies]

@@ -1,6 +1,7 @@
 # Epic: Logging and Diagnostics
 
-**Epic ID:** E012 **Status:** Draft **Priority:** High **Estimated Effort:** S
+**Epic ID:** E012 **Status:** In Progress **Priority:** High **Estimated
+Effort:** S
 
 ## Summary
 
@@ -25,11 +26,11 @@ troubleshooting.
 
 ## Stories
 
-| Story ID | Title                            | Priority | Status |
-| -------- | -------------------------------- | -------- | ------ |
-| S012.01  | Add structured logging to daemon | P1       | Draft  |
-| S012.02  | Implement health check command   | P2       | Draft  |
-| S012.03  | Add diagnostic dump command      | P3       | Draft  |
+| Story ID                                                 | Title                            | Priority | Status |
+| -------------------------------------------------------- | -------------------------------- | -------- | ------ |
+| [S012.01](../stories/S012.01-structured-logging.md)      | Add structured logging to daemon | P1       | Done   |
+| [S012.02](../stories/S012.02-health-check-command.md)    | Implement health check command   | P2       | Draft  |
+| [S012.03](../stories/S012.03-diagnostic-dump-command.md) | Add diagnostic dump command      | P3       | Draft  |
 
 ## Dependencies
 
@@ -97,6 +98,29 @@ Agent Console Daemon
   Memory:      2.1 MB
   Socket:      /tmp/acd.sock
 ```
+
+### Log Format
+
+Two output formats depending on target:
+
+| Target              | Format          | Example                                                                                             |
+| ------------------- | --------------- | --------------------------------------------------------------------------------------------------- |
+| stderr (foreground) | Human-readable  | `2026-01-31T12:00:00 INFO session status updated session_id=abc123`                                 |
+| file (background)   | JSON structured | `{"ts":"2026-01-31T12:00:00Z","level":"info","msg":"session status updated","session_id":"abc123"}` |
+
+Use `tracing-subscriber` with `fmt::Layer` for stderr and `json::Layer` for file
+output. Both layers can be active simultaneously.
+
+### Log File Permissions
+
+Log files created with mode `0600` (owner read/write only) since they may
+contain session IDs and working directory paths.
+
+### Memory Measurement
+
+The `acd status` health check reports memory usage. Use the `sysinfo` crate to
+query resident set size of the daemon process. This is a best-effort metric — if
+`sysinfo` fails, report "N/A".
 
 ### Log Rotation
 

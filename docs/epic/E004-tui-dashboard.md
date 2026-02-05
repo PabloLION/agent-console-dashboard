@@ -71,29 +71,29 @@ perfectly in a Zellij/tmux pane without consuming excessive screen space.
 ### Application Architecture
 
 ```text
-src/
-├── tui/
-│   ├── mod.rs           # TUI module entry
-│   ├── app.rs           # Application state and event loop
-│   ├── ui.rs            # UI rendering logic
-│   ├── event.rs         # Event handling (keyboard, resize)
-│   └── views/
-│       ├── mod.rs
-│       ├── dashboard.rs # Main dashboard view
-│       └── detail.rs    # Session detail view
+crates/agent-console-dashboard/
+├── src/
+│   └── tui/
+│       ├── mod.rs           # TUI module entry
+│       ├── app.rs           # Application state and event loop
+│       ├── ui.rs            # UI rendering logic
+│       ├── event.rs         # Event handling (keyboard, resize)
+│       └── views/
+│           ├── mod.rs
+│           ├── dashboard.rs # Main dashboard view
+│           └── detail.rs    # Session detail view
 ```
 
 ### Keyboard Shortcuts
 
-| Key     | Action                    |
-| ------- | ------------------------- |
-| `j/k`   | Navigate sessions up/down |
-| `Enter` | Expand session detail     |
-| `r`     | Resurrect closed session  |
-| `d`     | Remove session from list  |
-| `1-4`   | Switch layout preset      |
-| `q`     | Quit application          |
-| `?`     | Show help                 |
+| Key     | Action                                      |
+| ------- | ------------------------------------------- |
+| `j/k`   | Navigate sessions up/down                   |
+| `Enter` | Expand session detail                       |
+| `r`     | Resurrect closed session                    |
+| `d`     | Remove session from list                    |
+| `1-2`   | Switch layout preset (1=default, 2=compact) |
+| `q`     | Quit application                            |
 
 ### Color Scheme
 
@@ -101,7 +101,6 @@ src/
 | --------- | ------ |
 | Working   | Green  |
 | Attention | Yellow |
-| Question  | Blue   |
 | Closed    | Gray   |
 | Error     | Red    |
 
@@ -123,14 +122,33 @@ The TUI adapts to terminal width:
 │  Sessions:                                                 │
 │  ● proj-a      Working      ~/projects/proj-a              │
 │  ○ proj-b      Attention    ~/projects/proj-b      2m34s   │
-│  ? proj-c      Question     ~/projects/proj-c              │
-│  × old-proj    Closed       ~/old/project                  │
+│  ○ proj-c      Attention    ~/projects/proj-c      1m12s   │
+│  ○ old-proj    Closed       ~/old/project                  │
 │                                                            │
-│  API Usage: 45.2k tokens today | ~$1.80                    │
+│  Quota: 5h 8% | 7d 77% | resets 2h 15m                    │
 │                                                            │
 │  [j/k] Navigate  [Enter] Details  [r] Resurrect  [q] Quit  │
 └────────────────────────────────────────────────────────────┘
 ```
+
+### Event Loop Architecture
+
+The TUI uses `tokio::select!` to multiplex terminal events and daemon updates:
+
+- Terminal input events (keyboard, resize) via crossterm
+- Daemon subscription updates (sessions, usage) via socket
+- UI refresh tick (250ms default, configurable via `[ui] tick_rate`)
+
+### Connection Behavior
+
+- **Auto-reconnect:** If daemon disconnects, show "disconnected" in status area
+  and auto-reconnect with exponential backoff: 100ms, 200ms, 400ms, 800ms,
+  1600ms, 3200ms, capped at 5000ms. Retries indefinitely — daemon may restart.
+- **Terminal restoration:** Panic hook restores terminal on crash (crossterm
+  cleanup)
+- **Data source:** TUI receives ALL data from daemon (sessions + usage). No
+  direct API calls. See [widget data flow](../architecture/widget-data-flow.md).
+- **E009 fallback:** If usage data unavailable, widget shows "N/A"
 
 ### Integration with Zellij
 

@@ -1,0 +1,10 @@
+layout {
+    pane size=3 {
+        command "agent-console"
+        args "tui" "--layout" "two-line"
+    }
+    pane split_direction="vertical" {
+        pane
+        pane
+    }
+}

@@ -58,23 +58,24 @@ and manual testing straightforward.
 
 ### IPC Protocol
 
-Text-based protocol over Unix socket (`/tmp/agent-console.sock`):
+JSON Lines protocol over Unix socket (`/tmp/agent-console.sock`), per
+[D2 decision](../architecture/2026-01-31-discussion-decisions.md#d2-ipc-message-format---json-lines).
+Each message is a single JSON object terminated by `\n`:
 
 ```text
-# Commands (client → daemon)
-SET <session> <status> [metadata_json]
-RM <session>
-LIST
-SUBSCRIBE
-RESURRECT <session>
-API_USAGE <session> <tokens_json>
+# Commands (client → daemon) — one JSON object per line
+{"type":"SET","session":"abc","status":"working","metadata":{"cwd":"/path"}}
+{"type":"RM","session":"abc"}
+{"type":"LIST"}
+{"type":"SUBSCRIBE"}
+{"type":"RESURRECT","session":"abc"}
 
-# Responses (daemon → client)
-OK
-OK <data_json>
-ERR <message>
-STATE <json>
-UPDATE <session> <status> <elapsed_seconds>
+# Responses (daemon → client) — one JSON object per line
+{"type":"OK"}
+{"type":"OK","data":[...]}
+{"type":"ERR","message":"error description"}
+{"type":"STATE","sessions":[...]}
+{"type":"UPDATE","session":"abc","status":"working","elapsed":45}
 ```
 
 ### CLI Client Commands
@@ -83,7 +84,7 @@ UPDATE <session> <status> <elapsed_seconds>
 # Update session status (called by hooks)
 agent-console set <session> working
 agent-console set <session> attention
-agent-console set <session> question
+agent-console set <session> attention
 
 # Remove session
 agent-console rm <session>
@@ -96,20 +97,18 @@ agent-console watch
 
 # Resurrect closed session
 agent-console resurrect <session>
-
-# Report API usage
-agent-console api-usage <session> --input 1000 --output 500
 ```
 
 ### Project Structure
 
 ```text
-src/
-├── daemon/
-│   └── protocol.rs   # IPC message parsing
-├── client/
-│   ├── mod.rs
-│   └── commands.rs   # CLI client commands
+crates/agent-console-dashboard/
+├── src/
+│   ├── daemon/
+│   │   └── protocol.rs   # IPC message parsing
+│   └── client/
+│       ├── mod.rs
+│       └── commands.rs   # CLI client commands
 ```
 
 ### Key Dependencies
@@ -122,11 +121,17 @@ src/
 
 ### Design Decisions
 
-- **Text-based protocol** - Human-readable for easy debugging
-- **JSON for complex data** - Status updates use simple text, complex data uses
-  JSON
-- **Push model for subscriptions** - Server pushes updates, clients don't poll
-- **Newline-delimited messages** - Simple framing for streaming
+- **JSON Lines format** — One JSON object per `\n`-delimited line. JSON
+  serializers escape `\n` inside strings, so no framing ambiguity. See
+  [D2](../architecture/2026-01-31-discussion-decisions.md).
+- **Transport-independent** — JSON Lines is the wire format. Unix socket is the
+  transport (Linux/macOS). Future Windows: named pipes. Future v1+: could swap
+  to TCP or SQLite without changing wire format.
+- **Push model for subscriptions** — Server pushes updates, clients don't poll
+- **SUBSCRIBE semantics** — Sends full state snapshot first, then deltas on
+  change
+- **Protocol version** — Include `"version": 1` in messages for forward
+  compatibility
 
 ### Complexity Review Notes
 

@@ -63,13 +63,14 @@ The daemon approach was chosen over shared memory and SQLite alternatives:
 ### Project Structure
 
 ```text
-src/
-├── main.rs           # CLI entry, argument parsing
-├── daemon/
-│   ├── mod.rs
-│   ├── server.rs     # Socket server
-│   ├── store.rs      # State management
-│   └── protocol.rs   # IPC message parsing
+crates/agent-console-dashboard/
+├── src/
+│   ├── main.rs           # CLI entry, argument parsing
+│   └── daemon/
+│       ├── mod.rs
+│       ├── server.rs     # Socket server
+│       ├── store.rs      # State management
+│       └── protocol.rs   # IPC message parsing
 ```
 
 ### Key Dependencies
@@ -91,6 +92,47 @@ agent-console daemon --daemonize
 # With custom socket path
 agent-console daemon --socket /tmp/agent-console.sock
 ```
+
+### Concurrency Model
+
+The daemon uses a **single-threaded actor model** with an mpsc message queue.
+All connections feed into one channel, a single event loop processes messages
+sequentially, and the session store is a plain `HashMap` (no `RwLock` needed).
+See [concurrency model](../architecture/concurrency.md).
+
+### Graceful Shutdown
+
+Daemon supports graceful shutdown via multiple mechanisms (Q25, Q26):
+
+| Mechanism          | Behavior                                  |
+| ------------------ | ----------------------------------------- |
+| `acd stop`         | Warns if dashboards connected, then stops |
+| `acd stop --force` | Stops immediately                         |
+| SIGTERM/SIGINT     | Graceful shutdown (same as `acd stop`)    |
+| SIGHUP             | Reload configuration                      |
+| Auto-stop          | After 60 min idle (configurable)          |
+
+On shutdown: notify connected clients, remove socket file, exit.
+
+### Auto-Stop
+
+```rust
+const AUTO_STOP_CHECK_INTERVAL_SECS: u64 = 300;   // 5 minutes
+const AUTO_STOP_IDLE_THRESHOLD_SECS: u64 = 3600;  // 60 minutes (configurable)
+```
+
+Auto-stop triggers when: no dashboards connected AND no active sessions AND
+condition persists for `idle_timeout` duration.
+
+### Daemon Responsibilities
+
+Beyond session state management, the daemon also:
+
+- Fetches API usage from `claude-usage` crate every 3 minutes (when ≥1 TUI
+  subscribed). See [widget data flow](../architecture/widget-data-flow.md).
+- Broadcasts session and usage updates to all subscribed TUIs.
+- Handles error propagation. See
+  [error handling](../architecture/error-handling.md).
 
 ### Success Metrics
 

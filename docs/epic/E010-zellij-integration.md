@@ -41,7 +41,7 @@ Native plugin (WASM) remains deferred to v2+ per
 | ------------------------------------------------------------- | ---------------------------------------- | -------- | ------ |
 | [S010.01](../stories/S010.01-zellij-layout-dashboard.md)      | Create zellij layout with dashboard pane | P1       | Draft  |
 | [S010.02](../stories/S010.02-zellij-resurrection-workflow.md) | Zellij resurrection workflow             | P2       | Draft  |
-| S010.03                                                       | Invoke claude --resume in terminal/pane  | P2       | Draft  |
+| [S010.03](../stories/S010.03-claude-resume-in-terminal.md)    | Invoke claude --resume in terminal/pane  | P2       | Draft  |
 
 S010.03 was moved from E008 S008.03 — handles the actual terminal creation and
 `claude --resume` invocation that E008's protocol enables.
@@ -56,6 +56,8 @@ S010.03 was moved from E008 S008.03 — handles the actual terminal creation and
   integration settings stored in config
 - [E008 - Session Resurrection](./E008-session-resurrection.md) - Provides
   RESURRECT protocol and metadata for S010.03
+- [E011 - Claude Usage Crate](./E011-claude-usage-crate.md) - Usage data
+  displayed in dashboard pane comes from E011 via daemon broadcasts
 
 ## Acceptance Criteria
 
@@ -87,11 +89,23 @@ Recommended pane configuration:
 
 ### Session Resurrection in Zellij
 
+**Pane selection strategy:** Create new pane in current tab (default). This is
+the simplest and most predictable behavior. Configurable in future versions.
+
 When resurrecting a session within Zellij context:
 
-1. Determine which Zellij pane/tab to use (or create new)
+1. Create new pane in current tab via `zellij action new-pane`
 2. Run `claude --resume <session-id>` in that pane
 3. Update dashboard to show session as Working
+
+**Non-Zellij fallback:** Display the command for user to copy/paste:
+`claude --resume <session-id> --cwd /path/to/dir`
+
+**Zellij version compatibility:** Tested with Zellij 0.39.x+. CLI commands may
+vary in older versions.
+
+**Error handling:** Wrap Zellij CLI commands in a helper module that handles
+`new-pane` failures gracefully (fall back to displaying command).
 
 ### Zellij CLI Commands
 

@@ -195,22 +195,26 @@ How long do we keep closed sessions for resurrection?
 
 ### Decision Rationale - Session Resurrection Scope
 
-**Configurable TTL + manual removal chosen because:**
+**Count-based cleanup + manual removal chosen because:**
 
-- Flexibility: users can set retention period
+- Simple: cap closed sessions at a configurable maximum
 - Automatic cleanup prevents unbounded memory growth
 - Manual removal gives control for specific sessions
 - Config example:
 
 ```toml
-[sessions]
-# Keep closed sessions for 24 hours
-resurrection_ttl = "24h"
+[daemon]
+# Keep at most 20 closed sessions (oldest removed first)
+max_closed_sessions = 20
 ```
+
+> `resurrection_ttl` was removed — using count-based cleanup via
+> `max_closed_sessions = 20` instead (see Q5 resolution in
+> [6-open-questions.md](./6-open-questions.md)).
 
 ### Implementation Notes - Session Resurrection Scope
 
-- Daemon checks TTL periodically (e.g., every 5 minutes)
+- Daemon evicts oldest closed sessions when count exceeds `max_closed_sessions`
 - CLI command: `agent-console rm <session>` for manual removal
 - List closed sessions: `agent-console list --closed`
 
@@ -411,7 +415,7 @@ Resolved
 
 | Widget                    | Lines | Description                                        |
 | ------------------------- | ----- | -------------------------------------------------- |
-| Session Status            | 1     | Compact: `proj-a: - \| proj-b: 2m34s \| proj-c: ?` |
+| Session Status            | 1     | Compact: `proj-a: ● \| proj-b: 2m34s \| proj-c: ?` |
 | Expandable Session Status | 2     | Clickable, shows history when expanded             |
 | API Usage                 | 1     | Token info (details TBD)                           |
 

@@ -18,15 +18,36 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
+/// Configuration utilities including XDG path resolution.
+pub mod config;
+
 /// Daemon module providing process lifecycle management and daemonization.
 pub mod daemon;
+
+/// Layout system for dashboard widget arrangement.
+pub mod layout;
+
+/// TUI module providing the terminal user interface for the dashboard.
+pub mod tui;
+
+/// Widget system for composable dashboard UI components.
+pub mod widgets;
+
+/// Platform-specific system service management (install/uninstall/status).
+pub mod service;
+
+/// Terminal execution module for running commands in panes/terminals.
+pub mod terminal;
+
+/// Integration modules for external tools (Zellij, tmux, etc.).
+pub mod integrations;
 
 /// Internal client module for daemon communication with auto-start capability.
 /// This module is not part of the public API - external tools should use CLI commands.
 pub(crate) mod client;
 
 /// Session status enumeration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Status {
     /// Agent is actively working
     Working,
@@ -241,6 +262,86 @@ pub enum StoreError {
     /// Session was not found in the store.
     #[error("Session not found: {0}")]
     SessionNotFound(String),
+}
+
+/// Session count breakdown for health status reporting.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct SessionCounts {
+    /// Count of active (non-closed) sessions.
+    pub active: usize,
+    /// Count of closed sessions.
+    pub closed: usize,
+}
+
+/// Health status response from the daemon STATUS command.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct HealthStatus {
+    /// Daemon uptime in seconds.
+    pub uptime_seconds: u64,
+    /// Session count breakdown.
+    pub sessions: SessionCounts,
+    /// Count of active connections to the daemon.
+    pub connections: usize,
+    /// Process memory usage in MB (None if unavailable).
+    pub memory_mb: Option<f64>,
+    /// Path to the Unix domain socket.
+    pub socket_path: String,
+}
+
+/// Full daemon state dump for diagnostics.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct DaemonDump {
+    /// Daemon uptime in seconds.
+    pub uptime_seconds: u64,
+    /// Path to the Unix domain socket.
+    pub socket_path: String,
+    /// Snapshot of all sessions.
+    pub sessions: Vec<SessionSnapshot>,
+    /// Session count breakdown.
+    pub session_counts: SessionCounts,
+    /// Count of active connections to the daemon.
+    pub connections: usize,
+}
+
+/// Snapshot of a single session for dump output.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct SessionSnapshot {
+    /// Unique session identifier.
+    pub id: String,
+    /// Current session status as string.
+    pub status: String,
+    /// Working directory for this session.
+    pub working_dir: String,
+    /// Elapsed seconds in the current status.
+    pub elapsed_seconds: u64,
+    /// Whether session has been closed.
+    pub closed: bool,
+}
+
+/// Formats a duration in seconds to a human-readable string.
+///
+/// Returns "Xh Ym" for durations >= 1 hour, "Xm" otherwise.
+pub fn format_uptime(seconds: u64) -> String {
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    if hours > 0 {
+        format!("{}h {}m", hours, minutes)
+    } else {
+        format!("{}m", minutes)
+    }
+}
+
+/// Queries the current process memory usage via sysinfo.
+///
+/// Returns the RSS in megabytes, or None if the process cannot be found.
+pub fn get_memory_usage_mb() -> Option<f64> {
+    use sysinfo::{Pid, System};
+
+    let pid = Pid::from_u32(std::process::id());
+    let mut sys = System::new();
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
+    sys.process(pid)
+        .map(|proc_info| proc_info.memory() as f64 / 1024.0 / 1024.0)
 }
 
 /// Metadata parsed from SET command JSON payload.
@@ -898,5 +999,201 @@ mod tests {
             let update = SessionUpdate::new("status-test".to_string(), status, 0);
             assert_eq!(update.status, status);
         }
+    }
+
+    #[test]
+    fn test_format_uptime_minutes_only() {
+        assert_eq!(format_uptime(0), "0m");
+        assert_eq!(format_uptime(59), "0m");
+        assert_eq!(format_uptime(60), "1m");
+        assert_eq!(format_uptime(600), "10m");
+        assert_eq!(format_uptime(3599), "59m");
+    }
+
+    #[test]
+    fn test_format_uptime_hours_and_minutes() {
+        assert_eq!(format_uptime(3600), "1h 0m");
+        assert_eq!(format_uptime(3660), "1h 1m");
+        assert_eq!(format_uptime(9240), "2h 34m");
+        assert_eq!(format_uptime(86400), "24h 0m");
+    }
+
+    #[test]
+    fn test_health_status_serialization_roundtrip() {
+        let health = HealthStatus {
+            uptime_seconds: 9240,
+            sessions: SessionCounts {
+                active: 3,
+                closed: 1,
+            },
+            connections: 2,
+            memory_mb: Some(2.1),
+            socket_path: "/tmp/acd.sock".to_string(),
+        };
+
+        let json = serde_json::to_string(&health).expect("failed to serialize HealthStatus");
+        let parsed: HealthStatus =
+            serde_json::from_str(&json).expect("failed to deserialize HealthStatus");
+
+        assert_eq!(parsed.uptime_seconds, 9240);
+        assert_eq!(parsed.sessions.active, 3);
+        assert_eq!(parsed.sessions.closed, 1);
+        assert_eq!(parsed.connections, 2);
+        assert_eq!(parsed.memory_mb, Some(2.1));
+        assert_eq!(parsed.socket_path, "/tmp/acd.sock");
+    }
+
+    #[test]
+    fn test_health_status_memory_none() {
+        let health = HealthStatus {
+            uptime_seconds: 0,
+            sessions: SessionCounts {
+                active: 0,
+                closed: 0,
+            },
+            connections: 0,
+            memory_mb: None,
+            socket_path: "/tmp/test.sock".to_string(),
+        };
+
+        let json = serde_json::to_string(&health).expect("failed to serialize HealthStatus");
+        assert!(json.contains("\"memory_mb\":null"));
+
+        let parsed: HealthStatus =
+            serde_json::from_str(&json).expect("failed to deserialize HealthStatus");
+        assert!(parsed.memory_mb.is_none());
+    }
+
+    #[test]
+    fn test_session_counts_equality() {
+        let a = SessionCounts {
+            active: 3,
+            closed: 1,
+        };
+        let b = SessionCounts {
+            active: 3,
+            closed: 1,
+        };
+        let c = SessionCounts {
+            active: 2,
+            closed: 1,
+        };
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn test_get_memory_usage_mb_returns_value() {
+        // Best-effort test: on most systems this should return Some
+        let mem = get_memory_usage_mb();
+        // We just verify it doesn't panic; the value may be None in some CI environments
+        if let Some(mb) = mem {
+            assert!(mb > 0.0, "memory usage should be positive");
+        }
+    }
+
+    #[test]
+    fn test_daemon_dump_serialization_roundtrip() {
+        let dump = DaemonDump {
+            uptime_seconds: 3600,
+            socket_path: "/tmp/test.sock".to_string(),
+            sessions: vec![SessionSnapshot {
+                id: "session-1".to_string(),
+                status: "working".to_string(),
+                working_dir: "/home/user/project".to_string(),
+                elapsed_seconds: 120,
+                closed: false,
+            }],
+            session_counts: SessionCounts {
+                active: 1,
+                closed: 0,
+            },
+            connections: 2,
+        };
+
+        let json = serde_json::to_string(&dump).expect("failed to serialize DaemonDump");
+        let parsed: DaemonDump =
+            serde_json::from_str(&json).expect("failed to deserialize DaemonDump");
+        assert_eq!(parsed, dump);
+    }
+
+    #[test]
+    fn test_session_snapshot_serialization() {
+        let snapshot = SessionSnapshot {
+            id: "snap-1".to_string(),
+            status: "attention".to_string(),
+            working_dir: "/tmp/work".to_string(),
+            elapsed_seconds: 45,
+            closed: true,
+        };
+
+        let json = serde_json::to_string(&snapshot).expect("failed to serialize SessionSnapshot");
+        let parsed: SessionSnapshot =
+            serde_json::from_str(&json).expect("failed to deserialize SessionSnapshot");
+        assert_eq!(parsed, snapshot);
+    }
+
+    #[test]
+    fn test_daemon_dump_empty_sessions() {
+        let dump = DaemonDump {
+            uptime_seconds: 0,
+            socket_path: "/tmp/empty.sock".to_string(),
+            sessions: vec![],
+            session_counts: SessionCounts {
+                active: 0,
+                closed: 0,
+            },
+            connections: 0,
+        };
+
+        let json = serde_json::to_string(&dump).expect("failed to serialize DaemonDump");
+        let parsed: DaemonDump =
+            serde_json::from_str(&json).expect("failed to deserialize DaemonDump");
+        assert_eq!(parsed.sessions.len(), 0);
+        assert_eq!(parsed.session_counts.active, 0);
+    }
+
+    #[test]
+    fn test_daemon_dump_multiple_sessions() {
+        let dump = DaemonDump {
+            uptime_seconds: 7200,
+            socket_path: "/tmp/multi.sock".to_string(),
+            sessions: vec![
+                SessionSnapshot {
+                    id: "s1".to_string(),
+                    status: "working".to_string(),
+                    working_dir: "/project-a".to_string(),
+                    elapsed_seconds: 60,
+                    closed: false,
+                },
+                SessionSnapshot {
+                    id: "s2".to_string(),
+                    status: "closed".to_string(),
+                    working_dir: "/project-b".to_string(),
+                    elapsed_seconds: 300,
+                    closed: true,
+                },
+                SessionSnapshot {
+                    id: "s3".to_string(),
+                    status: "question".to_string(),
+                    working_dir: "/project-c".to_string(),
+                    elapsed_seconds: 10,
+                    closed: false,
+                },
+            ],
+            session_counts: SessionCounts {
+                active: 2,
+                closed: 1,
+            },
+            connections: 3,
+        };
+
+        let json = serde_json::to_string(&dump).expect("failed to serialize DaemonDump");
+        let parsed: DaemonDump =
+            serde_json::from_str(&json).expect("failed to deserialize DaemonDump");
+        assert_eq!(parsed.sessions.len(), 3);
+        assert_eq!(parsed.session_counts.active, 2);
+        assert_eq!(parsed.session_counts.closed, 1);
+        assert_eq!(parsed.connections, 3);
     }
 }

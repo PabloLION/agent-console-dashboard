@@ -67,10 +67,18 @@ Default: ~/.config/agent-console/config.toml
 
 ### Configuration Schema
 
+The consolidated config schema includes ALL configurable values from across
+epics:
+
 ```toml
-[ui]
-layout = "two-line"  # or "one-line", "custom"
-widgets = ["working-dir", "status", "api-usage"]
+[tui.layout]
+preset = "default"  # default | compact
+
+[tui.layout.presets.default]
+widgets = ["session-status:two-line", "api-usage"]
+
+[tui.layout.presets.compact]
+widgets = ["session-status:one-line", "api-usage"]
 
 [agents.claude-code]
 enabled = true
@@ -78,6 +86,17 @@ hooks_path = "~/.claude/hooks"
 
 [integrations.zellij]
 enabled = true
+
+[tui]
+color_scheme = "dark"         # dark | light | auto
+
+[daemon]
+idle_timeout = "60m"          # Daemon auto-stops after this duration with no active sessions or TUI subscribers (D5, amended from 30min to 60min)
+socket_path = "agent-console.sock"  # Unix socket filename in $XDG_RUNTIME_DIR
+max_closed_sessions = 20      # Maximum closed sessions retained before cleanup
+usage_fetch_interval = "3m"   # API usage fetch interval (from D4)
+log_level = "info"            # Hot-reloadable
+log_file = ""                 # Empty = stderr, path = file
 ```
 
 ### Configuration Sections
@@ -87,6 +106,7 @@ enabled = true
 | `[ui]`             | Dashboard layout and widget preferences         |
 | `[agents.*]`       | Per-agent settings (Claude Code, future agents) |
 | `[integrations.*]` | External tool integrations (Zellij, etc.)       |
+| `[tui]`            | TUI display preferences (color scheme, etc.)    |
 | `[daemon]`         | Daemon-specific settings (socket path, etc.)    |
 
 ### Implementation Approach
@@ -112,6 +132,13 @@ struct Config {
 3. If no file exists, use built-in defaults
 4. Optionally create default config file on first run
 
+### Validation Strategy
+
+- Validate configuration on load
+- Reject invalid config with error message indicating specific field and
+  expected values
+- Fall back to defaults for missing fields (partial config + hardcoded defaults)
+
 ### Hot-Reload Scope
 
 Per [Q27 decision](../plans/7-decisions.md#q27-config-reload), the daemon
@@ -119,6 +146,7 @@ supports hot-reload via `kill -HUP <pid>` or `acd reload`:
 
 | Setting              | Hot-reloadable?           |
 | -------------------- | ------------------------- |
+| Log level            | Yes                       |
 | Colors               | Yes                       |
 | Tick interval        | Yes                       |
 | Display mode         | Yes                       |

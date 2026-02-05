@@ -1,0 +1,7 @@
+layout {
+    pane size=5 {
+        command "agent-console"
+        args "tui"
+    }
+    pane
+}

@@ -5,8 +5,9 @@
 ## Summary
 
 Display API usage metrics in the TUI dashboard by consuming the `claude-usage`
-crate (E011). The TUI fetches account-level quota data (5h/7d utilization)
-directly — no daemon-side tracking or custom IPC commands needed.
+crate (E011). The **daemon** fetches account-level quota data (5h/7d
+utilization) and broadcasts it to all subscribed TUIs. See
+[widget data flow](../architecture/widget-data-flow.md).
 
 ## Goals
 
@@ -22,11 +23,14 @@ dashboard, users can pace their usage and avoid hitting rate limits.
 
 ## Stories
 
-| Story ID                                               | Title                        | Priority | Status |
-| ------------------------------------------------------ | ---------------------------- | -------- | ------ |
-| [S009.01](../stories/S009.01-api-usage-data-model.md)  | Integrate claude-usage crate | P1       | Draft  |
-| [S009.02](../stories/S009.02-api-usage-command.md)     | ~~IPC command~~ (removed)    | —        | Cut    |
-| [S009.03](../stories/S009.03-api-usage-tui-display.md) | Display usage in TUI         | P1       | Draft  |
+| Story ID                                                      | Title                        | Priority | Status |
+| ------------------------------------------------------------- | ---------------------------- | -------- | ------ |
+| [S009.01](../stories/S009.01-integrate-claude-usage-crate.md) | Integrate claude-usage crate | P1       | Draft  |
+| [S009.03](../stories/S009.03-api-usage-tui-display.md)        | Display usage in TUI         | P1       | Draft  |
+
+> **Cut Stories:** S009.02 (API usage IPC command) was cut. Usage data flows
+> through the daemon broadcast mechanism (D3), not through a dedicated IPC
+> command.
 
 ## Dependencies
 
@@ -37,7 +41,7 @@ dashboard, users can pace their usage and avoid hitting rate limits.
 
 ## Acceptance Criteria
 
-- [ ] TUI calls `claude_usage::get_usage()` periodically (e.g., every 5 minutes)
+- [ ] Daemon calls `claude_usage::get_usage()` every 3 minutes (configurable)
 - [ ] Displays 5h and 7d utilization percentages
 - [ ] Shows time until rate limit reset
 - [ ] Handles credential/network errors gracefully (shows "unavailable")
@@ -46,22 +50,26 @@ dashboard, users can pace their usage and avoid hitting rate limits.
 
 ## Technical Notes
 
-### Simplified Architecture
+### Centralized Architecture
 
-The TUI calls the `claude-usage` crate directly, bypassing the daemon entirely:
+The **daemon** fetches usage data and broadcasts to all subscribed TUIs. This
+avoids N TUIs making N redundant API calls.
 
 ```rust
+// In daemon event loop (every 3 min, when ≥1 TUI subscribed)
 use claude_usage::get_usage;
 
-// In TUI tick handler (every 5 min)
 match get_usage() {
-    Ok(data) => {
-        // data.five_hour.utilization, data.seven_day.utilization
-        update_usage_widget(data);
-    }
-    Err(_) => show_unavailable(),
+    Ok(data) => broadcast_usage_update(data),
+    Err(_) => broadcast_usage_unavailable(),
 }
 ```
+
+**Fetch interval:** 3 minutes. Rationale: 5h = 300 min, 1% = 3 min. Aligns with
+1% accuracy granularity.
+
+**Conditional fetching:** Only when ≥1 TUI is subscribed. See beads issue
+`acd-j4u` for edge case discussion.
 
 ### Display Format
 

@@ -4,10 +4,12 @@
 //! all active agent sessions. It uses `Arc<RwLock<HashMap>>` for O(1) lookups
 //! by session ID while supporting concurrent access from multiple async tasks.
 
+use crate::daemon::session::ClosedSession;
 use crate::{AgentType, Session, SessionUpdate, Status, StoreError};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{broadcast, RwLock};
 
 #[cfg(test)]
@@ -16,6 +18,9 @@ mod tests;
 /// Default capacity for the subscriber notification channel.
 /// This allows for bursty update scenarios without dropping notifications.
 const DEFAULT_SUBSCRIBER_CHANNEL_CAPACITY: usize = 256;
+
+/// Default maximum count of closed sessions to retain.
+const DEFAULT_MAX_CLOSED_SESSIONS: usize = 20;
 
 /// Thread-safe session store wrapping a HashMap with `Arc<RwLock>`.
 ///
@@ -54,6 +59,12 @@ pub struct SessionStore {
     /// Broadcast channel sender for subscriber notifications.
     /// Subscribers receive [`SessionUpdate`] messages on state changes.
     update_tx: broadcast::Sender<SessionUpdate>,
+    /// Closed session metadata for resurrection, ordered by close time.
+    closed: Arc<RwLock<VecDeque<ClosedSession>>>,
+    /// Maximum count of closed sessions to retain before evicting oldest.
+    max_closed_sessions: usize,
+    /// Daemon start time for computing elapsed seconds in closed sessions.
+    daemon_start: Instant,
 }
 
 impl std::fmt::Debug for SessionStore {
@@ -61,6 +72,8 @@ impl std::fmt::Debug for SessionStore {
         f.debug_struct("SessionStore")
             .field("sessions", &self.sessions)
             .field("subscriber_count", &self.update_tx.receiver_count())
+            .field("closed", &self.closed)
+            .field("max_closed_sessions", &self.max_closed_sessions)
             .finish()
     }
 }
@@ -87,6 +100,9 @@ impl SessionStore {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
             update_tx,
+            closed: Arc::new(RwLock::new(VecDeque::new())),
+            max_closed_sessions: DEFAULT_MAX_CLOSED_SESSIONS,
+            daemon_start: Instant::now(),
         }
     }
 
@@ -276,12 +292,14 @@ impl SessionStore {
         Ok(session)
     }
 
-    /// Gets existing session or creates new one if not found.
+    /// Gets existing session or creates new one if not found, and sets status.
     ///
     /// This method is used for lazy session creation on first SET command.
     /// Unlike `create_session()`, this method never fails - it always returns
-    /// a valid session. If a session with the given ID exists, it is returned.
-    /// Otherwise, a new session is created with the provided metadata.
+    /// a valid session. If a session with the given ID exists, its status is
+    /// updated. Otherwise, a new session is created with the provided metadata
+    /// and status. Both operations happen under a single lock acquisition,
+    /// eliminating TOCTOU races between create and update.
     ///
     /// # Arguments
     ///
@@ -289,39 +307,43 @@ impl SessionStore {
     /// * `agent_type` - Type of agent (e.g., ClaudeCode).
     /// * `working_dir` - Working directory path for this session.
     /// * `session_id` - Optional Claude Code session ID for resume capability.
+    /// * `status` - Status to set on the session.
     ///
     /// # Returns
     ///
-    /// The existing or newly created session.
+    /// The existing (updated) or newly created session.
     ///
     /// # Example
     ///
     /// ```
     /// use agent_console::daemon::store::SessionStore;
-    /// use agent_console::AgentType;
+    /// use agent_console::{AgentType, Status};
     /// use std::path::PathBuf;
     ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let store = SessionStore::new();
     ///
-    ///     // First call creates a new session
+    ///     // First call creates a new session with status
     ///     let session1 = store.get_or_create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
     ///         PathBuf::from("/home/user/project"),
     ///         Some("claude-session-abc".to_string()),
+    ///         Status::Working,
     ///     ).await;
     ///     assert_eq!(session1.id, "session-1");
+    ///     assert_eq!(session1.status, Status::Working);
     ///
-    ///     // Second call returns the existing session
+    ///     // Second call updates status on existing session
     ///     let session2 = store.get_or_create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
-    ///         PathBuf::from("/different/path"),  // Different path, but existing session returned
+    ///         PathBuf::from("/different/path"),
     ///         None,
+    ///         Status::Attention,
     ///     ).await;
-    ///     assert_eq!(session2.working_dir, PathBuf::from("/home/user/project"));  // Original path preserved
+    ///     assert_eq!(session2.status, Status::Attention);
     /// }
     /// ```
     pub async fn get_or_create_session(
@@ -330,17 +352,23 @@ impl SessionStore {
         agent_type: AgentType,
         working_dir: PathBuf,
         session_id: Option<String>,
+        status: Status,
     ) -> Session {
         let mut sessions = self.sessions.write().await;
 
-        // If session exists, return a clone
-        if let Some(existing) = sessions.get(&id) {
-            return existing.clone();
+        // If session exists, update status and return
+        if let Some(existing) = sessions.get_mut(&id) {
+            let old_status = existing.status;
+            existing.set_status(status);
+            let updated = existing.clone();
+            self.broadcast_status_change(old_status, &updated);
+            return updated;
         }
 
-        // Create new session
+        // Create new session with the requested status
         let mut session = Session::new(id.clone(), agent_type, working_dir);
         session.session_id = session_id;
+        session.set_status(status);
 
         // Insert and return clone
         sessions.insert(id, session.clone());
@@ -458,17 +486,63 @@ impl SessionStore {
     /// }
     /// ```
     pub async fn close_session(&self, id: &str) -> Option<Session> {
-        let mut sessions = self.sessions.write().await;
+        let closed_session = {
+            let mut sessions = self.sessions.write().await;
 
-        // Get mutable reference to session, close it, return clone
-        if let Some(session) = sessions.get_mut(id) {
-            let old_status = session.status;
-            session.closed = true;
-            session.set_status(Status::Closed);
-            let closed_session = session.clone();
+            if let Some(session) = sessions.get_mut(id) {
+                let old_status = session.status;
+                session.closed = true;
+                session.set_status(Status::Closed);
+                let result = session.clone();
+                self.broadcast_status_change(old_status, &result);
+                Some(result)
+            } else {
+                None
+            }
+        };
 
-            self.broadcast_status_change(old_status, &closed_session);
-            Some(closed_session)
+        // Store closed session metadata outside the sessions lock
+        if let Some(ref session) = closed_session {
+            let closed_meta = ClosedSession::from_session(session, self.daemon_start);
+            let mut closed_queue = self.closed.write().await;
+
+            // Deduplicate: remove existing entry for same session ID
+            closed_queue.retain(|c| c.session_id != id);
+            closed_queue.push_back(closed_meta);
+
+            // Enforce retention limit
+            while closed_queue.len() > self.max_closed_sessions {
+                closed_queue.pop_front();
+            }
+        }
+
+        closed_session
+    }
+
+    /// Returns closed sessions sorted by close time (most recent first).
+    pub async fn list_closed(&self) -> Vec<ClosedSession> {
+        let closed = self.closed.read().await;
+        let mut result: Vec<ClosedSession> = closed.iter().cloned().collect();
+        result.reverse(); // VecDeque has oldest first, we want most recent first
+        result
+    }
+
+    /// Retrieves a closed session by its session ID.
+    ///
+    /// Returns `None` if no closed session with the given ID exists.
+    pub async fn get_closed(&self, session_id: &str) -> Option<ClosedSession> {
+        let closed = self.closed.read().await;
+        closed.iter().find(|c| c.session_id == session_id).cloned()
+    }
+
+    /// Removes a closed session by its session ID.
+    ///
+    /// Used during resurrection to remove the session from the closed queue.
+    /// Returns `Some(ClosedSession)` if found and removed, `None` otherwise.
+    pub async fn remove_closed(&self, session_id: &str) -> Option<ClosedSession> {
+        let mut closed = self.closed.write().await;
+        if let Some(pos) = closed.iter().position(|c| c.session_id == session_id) {
+            closed.remove(pos)
         } else {
             None
         }

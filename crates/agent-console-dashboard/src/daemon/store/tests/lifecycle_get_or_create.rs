@@ -1,7 +1,7 @@
 //! Tests for SessionStore::get_or_create_session method.
 
 use super::{create_test_session, SessionStore};
-use crate::AgentType;
+use crate::{AgentType, Status};
 use std::path::PathBuf;
 
 #[tokio::test]
@@ -14,6 +14,7 @@ async fn test_get_or_create_session_creates_new() {
             AgentType::ClaudeCode,
             PathBuf::from("/home/user/project"),
             Some("claude-session-123".to_string()),
+            Status::Working,
         )
         .await;
 
@@ -21,6 +22,7 @@ async fn test_get_or_create_session_creates_new() {
     assert_eq!(session.agent_type, AgentType::ClaudeCode);
     assert_eq!(session.working_dir, PathBuf::from("/home/user/project"));
     assert_eq!(session.session_id, Some("claude-session-123".to_string()));
+    assert_eq!(session.status, Status::Working);
     assert!(!session.closed);
 
     let retrieved = store.get("new-session").await;
@@ -32,7 +34,7 @@ async fn test_get_or_create_session_creates_new() {
 }
 
 #[tokio::test]
-async fn test_get_or_create_session_returns_existing() {
+async fn test_get_or_create_session_returns_existing_and_updates_status() {
     let store = SessionStore::new();
 
     let original = store
@@ -41,8 +43,10 @@ async fn test_get_or_create_session_returns_existing() {
             AgentType::ClaudeCode,
             PathBuf::from("/original/path"),
             Some("original-session-id".to_string()),
+            Status::Working,
         )
         .await;
+    assert_eq!(original.status, Status::Working);
 
     let retrieved = store
         .get_or_create_session(
@@ -50,22 +54,19 @@ async fn test_get_or_create_session_returns_existing() {
             AgentType::ClaudeCode,
             PathBuf::from("/different/path"),
             Some("different-session-id".to_string()),
+            Status::Attention,
         )
         .await;
 
     assert_eq!(retrieved.id, "existing-session");
+    // Working dir and session_id preserved from original
     assert_eq!(retrieved.working_dir, PathBuf::from("/original/path"));
     assert_eq!(
         retrieved.session_id,
         Some("original-session-id".to_string())
     );
-
-    let from_store = store
-        .get("existing-session")
-        .await
-        .expect("session should exist");
-    assert_eq!(from_store.working_dir, original.working_dir);
-    assert_eq!(from_store.session_id, original.session_id);
+    // Status updated
+    assert_eq!(retrieved.status, Status::Attention);
 }
 
 #[tokio::test]
@@ -78,6 +79,7 @@ async fn test_get_or_create_session_without_session_id() {
             AgentType::ClaudeCode,
             PathBuf::from("/tmp/test"),
             None,
+            Status::Working,
         )
         .await;
 
@@ -98,11 +100,13 @@ async fn test_get_or_create_session_after_set() {
             AgentType::ClaudeCode,
             PathBuf::from("/new/path"),
             None,
+            Status::Attention,
         )
         .await;
 
     assert_eq!(session2.id, "test-id");
     assert_eq!(session2.working_dir, PathBuf::from("/home/user/test-id"));
+    assert_eq!(session2.status, Status::Attention);
 }
 
 #[tokio::test]
@@ -125,12 +129,14 @@ async fn test_get_or_create_session_after_create_session() {
             AgentType::ClaudeCode,
             PathBuf::from("/new/path"),
             Some("new-id".to_string()),
+            Status::Question,
         )
         .await;
 
     assert_eq!(session.id, "test-id");
     assert_eq!(session.working_dir, PathBuf::from("/original/path"));
     assert_eq!(session.session_id, Some("original-id".to_string()));
+    assert_eq!(session.status, Status::Question);
 }
 
 #[tokio::test]
@@ -144,6 +150,7 @@ async fn test_get_or_create_session_multiple_unique() {
                 AgentType::ClaudeCode,
                 PathBuf::from(format!("/path/{}", i)),
                 None,
+                Status::Working,
             )
             .await;
         assert_eq!(session.id, format!("session-{}", i));
@@ -163,6 +170,7 @@ async fn test_get_or_create_session_idempotent() {
             AgentType::ClaudeCode,
             PathBuf::from("/path/1"),
             None,
+            Status::Working,
         )
         .await;
 
@@ -172,6 +180,7 @@ async fn test_get_or_create_session_idempotent() {
             AgentType::ClaudeCode,
             PathBuf::from("/path/2"),
             None,
+            Status::Working,
         )
         .await;
 
@@ -181,9 +190,11 @@ async fn test_get_or_create_session_idempotent() {
             AgentType::ClaudeCode,
             PathBuf::from("/path/3"),
             None,
+            Status::Working,
         )
         .await;
 
+    // Working dir preserved from first call
     assert_eq!(session1.working_dir, PathBuf::from("/path/1"));
     assert_eq!(session2.working_dir, PathBuf::from("/path/1"));
     assert_eq!(session3.working_dir, PathBuf::from("/path/1"));

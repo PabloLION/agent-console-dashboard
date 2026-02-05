@@ -27,12 +27,12 @@ was deferred from v0 — this epic delivers that capability.
 
 ## Stories
 
-| Story ID | Title                           | Priority | Status |
-| -------- | ------------------------------- | -------- | ------ |
-| S013.01  | Create macOS launchd plist      | P1       | Draft  |
-| S013.02  | Create Linux systemd unit file  | P1       | Draft  |
-| S013.03  | Implement install/uninstall CLI | P2       | Draft  |
-| S013.04  | Document manual service setup   | P3       | Draft  |
+| Story ID                                                   | Title                           | Priority | Status |
+| ---------------------------------------------------------- | ------------------------------- | -------- | ------ |
+| [S013.01](../stories/S013.01-macos-launchd-plist.md)       | Create macOS launchd plist      | P1       | Draft  |
+| [S013.02](../stories/S013.02-linux-systemd-unit-file.md)   | Create Linux systemd unit file  | P1       | Draft  |
+| [S013.03](../stories/S013.03-install-uninstall-cli.md)     | Implement install/uninstall CLI | P2       | Draft  |
+| [S013.04](../stories/S013.04-manual-service-setup-docs.md) | Document manual service setup   | P3       | Draft  |
 
 ## Dependencies
 
@@ -46,7 +46,7 @@ was deferred from v0 — this epic delivers that capability.
 - [ ] `acd service install` registers the daemon as a user-level service
 - [ ] `acd service uninstall` removes the service registration
 - [ ] Daemon auto-starts on user login (macOS and Linux)
-- [ ] Daemon auto-restarts on crash with backoff delay
+- [ ] Daemon auto-restarts on crash with fixed 5-second restart delay
 - [ ] Service files use correct paths for binary, socket, and log file
 - [ ] Manual setup documented for users without install command
 - [ ] Manual test plan for install/uninstall on both platforms per
@@ -73,8 +73,13 @@ was deferred from v0 — this epic delivers that capability.
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>/Users/USERNAME</string>
+    </dict>
     <key>StandardErrorPath</key>
-    <string>/tmp/acd.log</string>
+    <string>/Users/USERNAME/.local/state/agent-console/acd.log</string>
 </dict>
 </plist>
 ```
@@ -122,6 +127,27 @@ fn install_service() { /* launchd */ }
 #[cfg(target_os = "linux")]
 fn install_service() { /* systemd */ }
 ```
+
+### Install Validation
+
+After `acd service install`, verify the service registered correctly:
+
+- **macOS:** Check `launchctl list | grep com.agent-console`
+- **Linux:** Check `systemctl --user is-enabled acd.service`
+
+Report success/failure to the user with next steps if registration failed.
+
+### Uninstall Behavior
+
+`acd service uninstall` stops the running daemon before removing the service
+file. Sequence: stop service → remove plist/unit file → confirm removal.
+
+### Log File Location
+
+Service log files use XDG State Directory:
+`$XDG_STATE_HOME/agent-console/acd.log` (default:
+`~/.local/state/agent-console/acd.log`). The directory is created on first
+daemon startup if it doesn't exist.
 
 ### Interaction with Auto-Start (Q2)
 

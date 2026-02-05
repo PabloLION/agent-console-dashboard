@@ -26,11 +26,13 @@ friction when switching between tasks or recovering from accidental closures.
 
 ## Stories
 
-| Story ID                                                   | Title                                           | Priority | Status |
-| ---------------------------------------------------------- | ----------------------------------------------- | -------- | ------ |
-| [S008.01](../stories/S008.01-closed-session-metadata.md)   | Store session metadata for closed sessions      | P1       | Draft  |
-| [S008.02](../stories/S008.02-resurrect-command.md)         | Implement RESURRECT command                     | P1       | Draft  |
-| [S008.03](../stories/S008.03-claude-resume-integration.md) | ~~claude --resume integration~~ (moved to E010) | —        | Moved  |
+| Story ID                                                 | Title                                      | Priority | Status |
+| -------------------------------------------------------- | ------------------------------------------ | -------- | ------ |
+| [S008.01](../stories/S008.01-closed-session-metadata.md) | Store session metadata for closed sessions | P1       | Draft  |
+| [S008.02](../stories/S008.02-resurrect-command.md)       | Implement RESURRECT command                | P1       | Draft  |
+
+> **Removed/Moved Stories:** S008.03 (claude --resume integration) was moved to
+> [E010 - Zellij Integration](./E010-zellij-integration.md) as S010.03.
 
 ## Dependencies
 
@@ -50,7 +52,8 @@ friction when switching between tasks or recovering from accidental closures.
 - [ ] Users can list previously closed sessions that are eligible for
       resurrection
 - [ ] RESURRECT command returns session metadata for frontends to act on
-- [ ] Sessions that have exceeded context limits are marked as not resumable
+- [ ] Session metadata is in-memory only, lost on daemon restart
+- [ ] Resumability is a user-settable flag (auto-detection not available)
 - [ ] Multiple closed sessions per directory are listed individually
 - [ ] Resurrection validates working directory still exists before proceeding
 - [ ] Unit tests for metadata storage; integration tests for RESURRECT command
