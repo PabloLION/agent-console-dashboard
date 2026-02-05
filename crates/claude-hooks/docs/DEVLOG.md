@@ -279,3 +279,92 @@ Claude Code actually uses an object-based format:
 **Remaining:**
 - acd-vnd: Fix dead code warnings
 - acd-9pq: Verify hook scripts exist at referenced paths
+
+### 2026-02-05: Architecture Review — acd-ojb Analysis
+
+Reviewed acd-ojb (P0) which bundled two changes:
+(1) auto-stop idle threshold, (2) actor model refactor.
+
+**Decision: Split into separate concerns.**
+
+#### Auto-stop idle timer
+
+Add `const AUTO_STOP_IDLE_SECS: u64 = 3600` as a hardcoded constant.
+Configurability deferred to acd-jnd (P4).
+
+#### Actor model refactor — deferred (acd-51l, P4)
+
+Amendment 2 proposed replacing `tokio::spawn` per connection +
+`Arc<RwLock<HashMap>>` with single-threaded actor + plain `HashMap`.
+
+**Analysis of current RwLock approach:**
+
+```text
+Hook/TUI client ──→ tokio::spawn ──→ handle_client()
+                                          │
+                         .read().await or .write().await
+                                          │
+                                          ▼
+                    SessionStore { Arc<RwLock<HashMap<String, Session>>> }
+```
+
+- Multiple readers proceed in parallel (RwLock allows concurrent reads)
+- Writer waits for all readers, then gets exclusive access
+- Arc enables shared ownership across spawned tasks
+
+**Analysis of actor model alternative:**
+
+```text
+Hook/TUI client ──→ tokio::spawn ──→ mpsc::send(Command)
+                                          │
+                                     queue (FIFO)
+                                          │
+                                          ▼
+                    Actor loop { owns HashMap directly, no locks }
+```
+
+- All operations (including reads) serialized through queue
+- No locks, no deadlock possible, no TOCTOU races
+- But: reads that could run in parallel now wait in line
+
+**Tradeoff summary:**
+
+| Concern | RwLock | Actor |
+|---------|--------|-------|
+| Memory safety | Rust guarantees | Same |
+| Logic races (TOCTOU) | 1 theoretical case found | Impossible |
+| Deadlocks | None found in actual code | Impossible |
+| Code boilerplate | Less (idiomatic Rust) | More (message enums, oneshot channels) |
+| Read throughput | Concurrent | Serialized |
+| Refactor risk | None (working code) | High (~1600 lines) |
+
+**Code audit results (2026-02-05):**
+
+Attempted to construct concrete TOCTOU and deadlock examples from
+the actual code:
+
+- *TOCTOU:* One theoretical case in `handle_set_command` (server.rs:419-442).
+  `get_or_create_session()` releases its lock before `update_session()`
+  acquires a new one. A concurrent `RM` between the two calls could
+  cause the "BUG" error on line 436. However: requires exact timing
+  of SET+RM on the same session, consequence is just an error message
+  (no data corruption), and is extremely unlikely at our scale.
+- *Deadlocks:* Could not construct any. `close_session()` releases
+  `sessions` lock (line 490) before acquiring `closed` lock (line 495).
+  No method in the codebase holds two locks simultaneously. Lock
+  nesting does not occur.
+
+**Decision rationale:** The amendment's reasoning ("eliminates all race
+conditions and RwLock complexity") overstated the risk for Rust code.
+Rust's type system prevents data races at compile time. The one TOCTOU
+found is inconsequential. No deadlocks are possible in the current code.
+RwLock is idiomatic Rust — the language's ownership model is designed
+for this pattern. The actor model would add boilerplate to solve problems
+that don't exist in practice.
+
+**Outcome:**
+
+- acd-ojb closed (original issue bundling idle timer + actor refactor)
+- acd-51l (P4): Actor model refactor deferred to backlog
+- acd-jnd (P4): Idle timeout configurability deferred to backlog
+- acd-2co (P1): Implement idle timer with hardcoded constant (3600s)
