@@ -6,6 +6,7 @@ use crate::tui::event::{handle_key_event, Action, Event, EventHandler};
 use crate::tui::ui::render_dashboard;
 use crate::tui::views::detail::render_detail;
 use crate::{AgentType, Session, Status};
+use claude_usage::UsageData;
 use crossterm::{
     event::EventStream,
     execute,
@@ -32,6 +33,20 @@ pub enum View {
     },
 }
 
+/// Messages received from the daemon via the SUB subscription.
+#[derive(Debug)]
+pub enum DaemonMessage {
+    /// A session status update.
+    SessionUpdate {
+        /// Session identifier.
+        session_id: String,
+        /// New session status.
+        status: Status,
+    },
+    /// Updated API usage data.
+    UsageUpdate(UsageData),
+}
+
 /// Core application state for the TUI.
 #[derive(Debug)]
 pub struct App {
@@ -49,6 +64,8 @@ pub struct App {
     pub view: View,
     /// Active layout preset index (1=default, 2=compact).
     pub layout_preset: u8,
+    /// Latest API usage data from the daemon, if available.
+    pub usage: Option<UsageData>,
 }
 
 impl App {
@@ -62,6 +79,7 @@ impl App {
             selected_index: None,
             view: View::Dashboard,
             layout_preset: 1,
+            usage: None,
         }
     }
 
@@ -190,7 +208,7 @@ impl App {
         let mut reader = EventStream::new();
 
         // Connect to daemon and subscribe to updates
-        let (update_tx, mut update_rx) = mpsc::channel::<(String, Status)>(64);
+        let (update_tx, mut update_rx) = mpsc::channel::<DaemonMessage>(64);
         let socket_path = self.socket_path.clone();
         tokio::spawn(async move {
             if let Err(e) = subscribe_to_daemon(&socket_path, update_tx).await {
@@ -200,8 +218,16 @@ impl App {
 
         loop {
             // Drain daemon updates before rendering
-            while let Ok((session_id, status)) = update_rx.try_recv() {
-                self.apply_update(&session_id, status);
+            while let Ok(msg) = update_rx.try_recv() {
+                match msg {
+                    DaemonMessage::SessionUpdate {
+                        session_id,
+                        status,
+                    } => self.apply_update(&session_id, status),
+                    DaemonMessage::UsageUpdate(data) => {
+                        self.usage = Some(data);
+                    }
+                }
             }
 
             // Render
@@ -274,7 +300,7 @@ impl App {
 /// then SUB to receive live updates. Sends parsed updates through the channel.
 async fn subscribe_to_daemon(
     socket_path: &PathBuf,
-    tx: mpsc::Sender<(String, Status)>,
+    tx: mpsc::Sender<DaemonMessage>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use crate::client::connect_with_auto_start;
 
@@ -301,7 +327,11 @@ async fn subscribe_to_daemon(
                     let parts: Vec<&str> = line.trim().split_whitespace().collect();
                     if parts.len() >= 2 {
                         if let Ok(status) = parts[1].parse::<Status>() {
-                            let _ = tx.send((parts[0].to_string(), status)).await;
+                            let msg = DaemonMessage::SessionUpdate {
+                                session_id: parts[0].to_string(),
+                                status,
+                            };
+                            let _ = tx.send(msg).await;
                         }
                     }
                 }
@@ -328,18 +358,44 @@ async fn subscribe_to_daemon(
         if bytes == 0 {
             break;
         }
-        let parts: Vec<&str> = line.trim().split_whitespace().collect();
-        // UPDATE <session_id> <status> <elapsed>
-        if parts.len() >= 3 && parts[0] == "UPDATE" {
-            if let Ok(status) = parts[2].parse::<Status>() {
-                if tx.send((parts[1].to_string(), status)).await.is_err() {
-                    break; // receiver dropped
-                }
+        let trimmed = line.trim();
+
+        if let Some(msg) = parse_daemon_line(trimmed) {
+            if tx.send(msg).await.is_err() {
+                break; // receiver dropped
             }
         }
     }
 
     Ok(())
+}
+
+/// Parses a single line from the daemon SUB stream into a `DaemonMessage`.
+///
+/// Returns `None` for unrecognized or malformed lines (WARN, etc.).
+fn parse_daemon_line(line: &str) -> Option<DaemonMessage> {
+    if let Some(json) = line.strip_prefix("USAGE ") {
+        match serde_json::from_str::<UsageData>(json) {
+            Ok(data) => return Some(DaemonMessage::UsageUpdate(data)),
+            Err(e) => {
+                tracing::warn!("failed to parse USAGE message: {}", e);
+                return None;
+            }
+        }
+    }
+
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    // UPDATE <session_id> <status> <elapsed>
+    if parts.len() >= 3 && parts[0] == "UPDATE" {
+        if let Ok(status) = parts[2].parse::<Status>() {
+            return Some(DaemonMessage::SessionUpdate {
+                session_id: parts[1].to_string(),
+                status,
+            });
+        }
+    }
+
+    None
 }
 
 /// Enables raw mode and switches to the alternate screen.
@@ -384,6 +440,7 @@ mod tests {
         assert!(app.selected_index.is_none());
         assert_eq!(app.view, View::Dashboard);
         assert_eq!(app.layout_preset, 1);
+        assert!(app.usage.is_none());
     }
 
     #[test]
@@ -651,5 +708,60 @@ mod tests {
     fn test_layout_preset_default() {
         let app = App::new(PathBuf::from("/tmp/test.sock"));
         assert_eq!(app.layout_preset, 1);
+    }
+
+    // --- parse_daemon_line tests ---
+
+    #[test]
+    fn test_parse_update_message() {
+        let msg = parse_daemon_line("UPDATE session-1 working 120");
+        match msg {
+            Some(DaemonMessage::SessionUpdate { session_id, status }) => {
+                assert_eq!(session_id, "session-1");
+                assert_eq!(status, Status::Working);
+            }
+            other => panic!("expected SessionUpdate, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_usage_message() {
+        let json = r#"USAGE {"five_hour":{"utilization":25.0},"seven_day":{"utilization":50.0}}"#;
+        let msg = parse_daemon_line(json);
+        match msg {
+            Some(DaemonMessage::UsageUpdate(data)) => {
+                assert!((data.five_hour.utilization - 25.0).abs() < f64::EPSILON);
+                assert!((data.seven_day.utilization - 50.0).abs() < f64::EPSILON);
+            }
+            other => panic!("expected UsageUpdate, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_unknown_line_returns_none() {
+        assert!(parse_daemon_line("WARN lagged 5").is_none());
+    }
+
+    #[test]
+    fn test_parse_empty_line_returns_none() {
+        assert!(parse_daemon_line("").is_none());
+    }
+
+    #[test]
+    fn test_parse_malformed_usage_returns_none() {
+        assert!(parse_daemon_line("USAGE {invalid json}").is_none());
+    }
+
+    #[test]
+    fn test_parse_update_invalid_status_returns_none() {
+        assert!(parse_daemon_line("UPDATE session-1 invalid_status 120").is_none());
+    }
+
+    // --- App usage field tests ---
+
+    #[test]
+    fn test_app_usage_starts_none() {
+        let app = App::new(PathBuf::from("/tmp/test.sock"));
+        assert!(app.usage.is_none());
     }
 }
