@@ -34,6 +34,7 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::broadcast;
 
 use crate::daemon::store::SessionStore;
+use crate::daemon::usage::UsageFetcher;
 use crate::{
     get_memory_usage_mb, AgentType, DaemonDump, HealthStatus, SessionCounts, SessionSnapshot,
     Status,
@@ -58,6 +59,8 @@ pub struct SocketServer {
     start_time: Instant,
     /// Count of currently active client connections.
     active_connections: Arc<AtomicUsize>,
+    /// Periodic usage data fetcher, shared with client handlers.
+    usage_fetcher: Option<Arc<UsageFetcher>>,
 }
 
 impl SocketServer {
@@ -85,7 +88,15 @@ impl SocketServer {
             store: SessionStore::new(),
             start_time: Instant::now(),
             active_connections: Arc::new(AtomicUsize::new(0)),
+            usage_fetcher: None,
         }
+    }
+
+    /// Sets the usage fetcher for this server.
+    ///
+    /// When set, SUB clients receive USAGE messages alongside session UPDATEs.
+    pub fn set_usage_fetcher(&mut self, fetcher: Arc<UsageFetcher>) {
+        self.usage_fetcher = Some(fetcher);
     }
 
     /// Returns the configured socket path.
@@ -191,6 +202,7 @@ impl SocketServer {
             start_time: self.start_time,
             active_connections: Arc::clone(&self.active_connections),
             socket_path: self.socket_path.clone(),
+            usage_fetcher: self.usage_fetcher.clone(),
         };
 
         loop {
@@ -256,6 +268,7 @@ impl SocketServer {
             start_time: self.start_time,
             active_connections: Arc::clone(&self.active_connections),
             socket_path: self.socket_path.clone(),
+            usage_fetcher: self.usage_fetcher.clone(),
         };
 
         loop {
@@ -315,6 +328,7 @@ struct DaemonState {
     start_time: Instant,
     active_connections: Arc<AtomicUsize>,
     socket_path: String,
+    usage_fetcher: Option<Arc<UsageFetcher>>,
 }
 
 /// Handles a single client connection.
@@ -375,8 +389,9 @@ async fn handle_client(
             "STATUS" => handle_status_command(state).await,
             "DUMP" => handle_dump_command(state).await,
             "SUB" => {
-                // Subscribe mode: send UPDATE notifications to client
-                handle_sub_command(&state.store, &mut writer).await?;
+                // Subscribe mode: send UPDATE and USAGE notifications to client
+                handle_sub_command(&state.store, state.usage_fetcher.as_ref(), &mut writer)
+                    .await?;
                 // After SUB returns (client disconnected or error), exit the loop
                 break;
             }
@@ -498,56 +513,141 @@ async fn handle_get_command(args: &[&str], store: &SessionStore) -> String {
 
 /// Handles the SUB command: SUB
 ///
-/// Subscribes to session updates and sends UPDATE notifications to the client.
-/// Format: UPDATE <session_id> <status> <elapsed_seconds>\n
+/// Subscribes to session updates and usage updates, sending both to the client.
+///
+/// Wire format:
+/// - Session updates: `UPDATE <session_id> <status> <elapsed_seconds>\n`
+/// - Usage updates: `USAGE <json>\n`
+/// - Lag warnings: `WARN lagged <count>\n`
+///
+/// On initial subscription, sends the current usage state (if available) as
+/// the first USAGE message so clients don't have to wait for the next fetch.
 ///
 /// This function runs until the client disconnects or an error occurs.
 async fn handle_sub_command(
     store: &SessionStore,
+    usage_fetcher: Option<&Arc<UsageFetcher>>,
     writer: &mut tokio::net::unix::OwnedWriteHalf,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     writer.write_all(b"OK subscribed\n").await?;
     writer.flush().await?;
 
-    let mut rx = store.subscribe();
+    let mut session_rx = store.subscribe();
 
-    tracing::debug!("Client subscribed to session updates");
+    // Subscribe to usage updates if fetcher is available
+    let mut usage_sub = usage_fetcher.map(|f| f.subscribe());
+
+    // Send current usage state as initial snapshot
+    if let Some(fetcher) = usage_fetcher {
+        let usage_state = fetcher.state();
+        let guard = usage_state.read().await;
+        if let super::usage::UsageState::Available(ref data) = *guard {
+            let json = serde_json::to_string(data).expect("failed to serialize UsageData");
+            let message = format!("USAGE {}\n", json);
+            writer.write_all(message.as_bytes()).await?;
+            writer.flush().await?;
+        }
+    }
+
+    tracing::debug!("Client subscribed to session and usage updates");
 
     loop {
-        match rx.recv().await {
-            Ok(update) => {
-                let message = format!(
-                    "UPDATE {} {} {}\n",
-                    update.session_id, update.status, update.elapsed_seconds
-                );
-                if let Err(e) = writer.write_all(message.as_bytes()).await {
-                    tracing::debug!("Subscriber disconnected (write failed): {}", e);
-                    break;
+        // If we have a usage subscription, select on both channels.
+        // Otherwise, only listen to session updates.
+        if let Some(ref mut usage) = usage_sub {
+            tokio::select! {
+                result = session_rx.recv() => {
+                    match result {
+                        Ok(update) => {
+                            let message = format!(
+                                "UPDATE {} {} {}\n",
+                                update.session_id, update.status, update.elapsed_seconds
+                            );
+                            if write_or_disconnect(writer, &message).await {
+                                break;
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Closed) => {
+                            tracing::debug!("Session subscriber channel closed");
+                            break;
+                        }
+                        Err(broadcast::error::RecvError::Lagged(count)) => {
+                            tracing::warn!("Session subscriber lagged, missed {} messages", count);
+                            let lag_message = format!("WARN lagged {}\n", count);
+                            if write_or_disconnect(writer, &lag_message).await {
+                                break;
+                            }
+                        }
+                    }
                 }
-                if let Err(e) = writer.flush().await {
-                    tracing::debug!("Subscriber disconnected (flush failed): {}", e);
-                    break;
+                result = usage.recv() => {
+                    match result {
+                        Ok(super::usage::UsageState::Available(data)) => {
+                            let json = serde_json::to_string(&data)
+                                .expect("failed to serialize UsageData");
+                            let message = format!("USAGE {}\n", json);
+                            if write_or_disconnect(writer, &message).await {
+                                break;
+                            }
+                        }
+                        Ok(super::usage::UsageState::Unavailable) => {
+                            // Don't send anything for unavailable state;
+                            // client keeps its last known good value.
+                        }
+                        Err(broadcast::error::RecvError::Closed) => {
+                            tracing::debug!("Usage subscriber channel closed");
+                            break;
+                        }
+                        Err(broadcast::error::RecvError::Lagged(count)) => {
+                            tracing::warn!("Usage subscriber lagged, missed {} messages", count);
+                        }
+                    }
                 }
             }
-            Err(broadcast::error::RecvError::Closed) => {
-                // Channel closed
-                tracing::debug!("Subscriber channel closed");
-                break;
-            }
-            Err(broadcast::error::RecvError::Lagged(count)) => {
-                tracing::warn!("Subscriber lagged, missed {} messages", count);
-                // Notify client of missed messages so they can refresh if needed
-                let lag_message = format!("WARN lagged {}\n", count);
-                if let Err(e) = writer.write_all(lag_message.as_bytes()).await {
-                    tracing::debug!("Failed to notify client of lag: {}", e);
+        } else {
+            // No usage fetcher — session-only mode (backwards-compatible)
+            match session_rx.recv().await {
+                Ok(update) => {
+                    let message = format!(
+                        "UPDATE {} {} {}\n",
+                        update.session_id, update.status, update.elapsed_seconds
+                    );
+                    if write_or_disconnect(writer, &message).await {
+                        break;
+                    }
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    tracing::debug!("Subscriber channel closed");
                     break;
                 }
-                let _ = writer.flush().await;
+                Err(broadcast::error::RecvError::Lagged(count)) => {
+                    tracing::warn!("Subscriber lagged, missed {} messages", count);
+                    let lag_message = format!("WARN lagged {}\n", count);
+                    if write_or_disconnect(writer, &lag_message).await {
+                        break;
+                    }
+                }
             }
         }
     }
 
     Ok(())
+}
+
+/// Writes a message to the client. Returns `true` if the client disconnected.
+async fn write_or_disconnect(
+    writer: &mut tokio::net::unix::OwnedWriteHalf,
+    message: &str,
+) -> bool {
+    if let Err(e) = writer.write_all(message.as_bytes()).await {
+        tracing::debug!("Subscriber disconnected (write failed): {}", e);
+        return true;
+    }
+    if let Err(e) = writer.flush().await {
+        tracing::debug!("Subscriber disconnected (flush failed): {}", e);
+        return true;
+    }
+    false
 }
 
 /// Handles the RESURRECT command: RESURRECT <session-id>

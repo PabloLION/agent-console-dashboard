@@ -16,6 +16,7 @@ pub use store::SessionStore;
 use crate::DaemonConfig;
 use fork::{daemon, Fork};
 use std::error::Error;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::signal;
 use tokio::signal::unix::{signal as unix_signal, SignalKind};
@@ -343,6 +344,16 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::broadcast::channel(1);
 
+        // Create and wire the usage fetcher
+        let usage_fetcher = Arc::new(usage::UsageFetcher::new());
+        server.set_usage_fetcher(Arc::clone(&usage_fetcher));
+
+        // Spawn the usage fetcher
+        let usage_shutdown_rx = shutdown_tx.subscribe();
+        let usage_handle = tokio::spawn(async move {
+            usage_fetcher.run(usage_shutdown_rx).await;
+        });
+
         // Spawn the accept loop
         let server_handle = tokio::spawn(async move {
             if let Err(e) = server.run_with_shutdown(shutdown_rx).await {
@@ -353,9 +364,10 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
         // Wait for shutdown signal
         wait_for_shutdown().await;
 
-        // Signal server to stop
+        // Signal all tasks to stop
         let _ = shutdown_tx.send(());
         let _ = server_handle.await;
+        let _ = usage_handle.await;
     });
 
     // Hooks remain installed after daemon stops (intentional)
