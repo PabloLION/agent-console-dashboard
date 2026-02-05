@@ -416,30 +416,18 @@ async fn handle_set_command(args: &[&str], store: &SessionStore) -> String {
         }
     };
 
-    // Get or create the session (lazy creation)
-    let _session = store
+    // Get or create the session and set status in one atomic operation
+    let session = store
         .get_or_create_session(
             session_id.to_string(),
             AgentType::ClaudeCode,
             working_dir,
             None, // session_id for resume capability not provided in basic command
+            status,
         )
         .await;
 
-    // Update the session status (this will notify subscribers if status changed)
-    match store.update_session(session_id, status).await {
-        Some(session) => {
-            format!("OK {} {}\n", session.id, session.status)
-        }
-        None => {
-            // This should never happen - log as error for investigation
-            tracing::error!(
-                "BUG: session '{}' not found immediately after get_or_create_session",
-                session_id
-            );
-            format!("ERR session not found: {}\n", session_id)
-        }
-    }
+    format!("OK {} {}\n", session.id, session.status)
 }
 
 /// Handles the RM command: RM <session_id>

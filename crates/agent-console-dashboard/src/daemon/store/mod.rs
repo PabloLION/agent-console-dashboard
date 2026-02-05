@@ -292,12 +292,14 @@ impl SessionStore {
         Ok(session)
     }
 
-    /// Gets existing session or creates new one if not found.
+    /// Gets existing session or creates new one if not found, and sets status.
     ///
     /// This method is used for lazy session creation on first SET command.
     /// Unlike `create_session()`, this method never fails - it always returns
-    /// a valid session. If a session with the given ID exists, it is returned.
-    /// Otherwise, a new session is created with the provided metadata.
+    /// a valid session. If a session with the given ID exists, its status is
+    /// updated. Otherwise, a new session is created with the provided metadata
+    /// and status. Both operations happen under a single lock acquisition,
+    /// eliminating TOCTOU races between create and update.
     ///
     /// # Arguments
     ///
@@ -305,39 +307,43 @@ impl SessionStore {
     /// * `agent_type` - Type of agent (e.g., ClaudeCode).
     /// * `working_dir` - Working directory path for this session.
     /// * `session_id` - Optional Claude Code session ID for resume capability.
+    /// * `status` - Status to set on the session.
     ///
     /// # Returns
     ///
-    /// The existing or newly created session.
+    /// The existing (updated) or newly created session.
     ///
     /// # Example
     ///
     /// ```
     /// use agent_console::daemon::store::SessionStore;
-    /// use agent_console::AgentType;
+    /// use agent_console::{AgentType, Status};
     /// use std::path::PathBuf;
     ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let store = SessionStore::new();
     ///
-    ///     // First call creates a new session
+    ///     // First call creates a new session with status
     ///     let session1 = store.get_or_create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
     ///         PathBuf::from("/home/user/project"),
     ///         Some("claude-session-abc".to_string()),
+    ///         Status::Working,
     ///     ).await;
     ///     assert_eq!(session1.id, "session-1");
+    ///     assert_eq!(session1.status, Status::Working);
     ///
-    ///     // Second call returns the existing session
+    ///     // Second call updates status on existing session
     ///     let session2 = store.get_or_create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
-    ///         PathBuf::from("/different/path"),  // Different path, but existing session returned
+    ///         PathBuf::from("/different/path"),
     ///         None,
+    ///         Status::Attention,
     ///     ).await;
-    ///     assert_eq!(session2.working_dir, PathBuf::from("/home/user/project"));  // Original path preserved
+    ///     assert_eq!(session2.status, Status::Attention);
     /// }
     /// ```
     pub async fn get_or_create_session(
@@ -346,17 +352,23 @@ impl SessionStore {
         agent_type: AgentType,
         working_dir: PathBuf,
         session_id: Option<String>,
+        status: Status,
     ) -> Session {
         let mut sessions = self.sessions.write().await;
 
-        // If session exists, return a clone
-        if let Some(existing) = sessions.get(&id) {
-            return existing.clone();
+        // If session exists, update status and return
+        if let Some(existing) = sessions.get_mut(&id) {
+            let old_status = existing.status;
+            existing.set_status(status);
+            let updated = existing.clone();
+            self.broadcast_status_change(old_status, &updated);
+            return updated;
         }
 
-        // Create new session
+        // Create new session with the requested status
         let mut session = Session::new(id.clone(), agent_type, working_dir);
         session.session_id = session_id;
+        session.set_status(status);
 
         // Insert and return clone
         sessions.insert(id, session.clone());
