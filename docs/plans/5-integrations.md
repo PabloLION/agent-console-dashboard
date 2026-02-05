@@ -25,16 +25,20 @@ Example `stop.sh`:
 
 ```bash
 #!/bin/bash
-PROJECT=$(basename "$PWD")
-agent-console set "$PROJECT" attention
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+[ -z "$SESSION_ID" ] && exit 0
+acd set "$SESSION_ID" attention || true
 ```
 
 Example `user-prompt-submit.sh`:
 
 ```bash
 #!/bin/bash
-PROJECT=$(basename "$PWD")
-agent-console set "$PROJECT" working
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+[ -z "$SESSION_ID" ] && exit 0
+acd set "$SESSION_ID" working || true
 ```
 
 ### Hook Registration
