@@ -186,7 +186,7 @@ fn install_acd_hooks() {
     if !has_stop {
         let stop_hook = HookHandler {
             r#type: "command".to_string(),
-            command: format!("{}/stop.sh $SESSION_ID $ARGS", hooks_dir.display()),
+            command: format!("{}/stop.sh", hooks_dir.display()),
             timeout: Some(600),
             r#async: None,
             status_message: None,
@@ -202,7 +202,7 @@ fn install_acd_hooks() {
     if !has_start {
         let start_hook = HookHandler {
             r#type: "command".to_string(),
-            command: format!("{}/start.sh $SESSION_ID $ARGS", hooks_dir.display()),
+            command: format!("{}/start.sh", hooks_dir.display()),
             timeout: Some(600),
             r#async: None,
             status_message: None,
@@ -218,7 +218,7 @@ fn install_acd_hooks() {
     if !has_prompt {
         let prompt_hook = HookHandler {
             r#type: "command".to_string(),
-            command: format!("{}/user-prompt-submit.sh $SESSION_ID $ARGS", hooks_dir.display()),
+            command: format!("{}/user-prompt-submit.sh", hooks_dir.display()),
             timeout: Some(600),
             r#async: None,
             status_message: None,
@@ -251,7 +251,7 @@ fn uninstall_acd_hooks() {
     info!(hooks_dir = %hooks_dir.display(), "uninstalling ACD hooks");
 
     // Uninstall Stop hook
-    let stop_cmd = format!("{}/stop.sh $SESSION_ID $ARGS", hooks_dir.display());
+    let stop_cmd = format!("{}/stop.sh", hooks_dir.display());
     if let Err(e) = claude_hooks::uninstall(HookEvent::Stop, &stop_cmd) {
         warn!(error = %e, "failed to uninstall Stop hook (may not exist)");
     } else {
@@ -259,7 +259,7 @@ fn uninstall_acd_hooks() {
     }
 
     // Uninstall SessionStart hook
-    let start_cmd = format!("{}/start.sh $SESSION_ID $ARGS", hooks_dir.display());
+    let start_cmd = format!("{}/start.sh", hooks_dir.display());
     if let Err(e) = claude_hooks::uninstall(HookEvent::SessionStart, &start_cmd) {
         warn!(error = %e, "failed to uninstall SessionStart hook (may not exist)");
     } else {
@@ -267,7 +267,7 @@ fn uninstall_acd_hooks() {
     }
 
     // Uninstall UserPromptSubmit hook
-    let prompt_cmd = format!("{}/user-prompt-submit.sh $SESSION_ID $ARGS", hooks_dir.display());
+    let prompt_cmd = format!("{}/user-prompt-submit.sh", hooks_dir.display());
     if let Err(e) = claude_hooks::uninstall(HookEvent::UserPromptSubmit, &prompt_cmd) {
         warn!(error = %e, "failed to uninstall UserPromptSubmit hook (may not exist)");
     } else {
@@ -695,9 +695,10 @@ mod tests {
             // Verify command contains /hooks/ directory
             assert!(cmd.contains("/hooks/"), "hook command should reference hooks directory: {}", cmd);
 
-            // Verify command contains SESSION_ID and ARGS placeholders
-            assert!(cmd.contains("$SESSION_ID"), "hook command should have $SESSION_ID: {}", cmd);
-            assert!(cmd.contains("$ARGS"), "hook command should have $ARGS: {}", cmd);
+            // Verify command does NOT contain stale shell variable placeholders
+            // Claude Code passes data via JSON stdin, not shell variables
+            assert!(!cmd.contains("$SESSION_ID"), "hook command should not have $SESSION_ID (data comes via JSON stdin): {}", cmd);
+            assert!(!cmd.contains("$ARGS"), "hook command should not have $ARGS (data comes via JSON stdin): {}", cmd);
 
             // Verify command ends with correct script based on event
             match entry.event {
@@ -801,7 +802,7 @@ mod tests {
         // Pre-install only Stop hook (partial state)
         let stop_handler = HookHandler {
             r#type: "command".to_string(),
-            command: "/some/path/hooks/stop.sh $SESSION_ID $ARGS".to_string(),
+            command: "/some/path/hooks/stop.sh".to_string(),
             timeout: Some(600),
             r#async: None,
             status_message: None,
@@ -826,7 +827,7 @@ mod tests {
         let stop_hook = entries.iter().find(|e| e.event == HookEvent::Stop).expect("Stop");
         assert_eq!(
             stop_hook.handler.command,
-            "/some/path/hooks/stop.sh $SESSION_ID $ARGS",
+            "/some/path/hooks/stop.sh",
             "Stop hook should keep original command"
         );
     }
