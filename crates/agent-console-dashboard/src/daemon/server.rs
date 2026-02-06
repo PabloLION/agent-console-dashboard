@@ -24,7 +24,7 @@
 //! ```
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -34,9 +34,11 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::broadcast;
 
 use crate::daemon::store::SessionStore;
-use crate::{
-    get_memory_usage_mb, AgentType, DaemonDump, HealthStatus, SessionCounts, SessionSnapshot,
-    Status,
+use crate::daemon::usage::UsageFetcher;
+
+use super::handlers::{
+    handle_dump_command, handle_get_command, handle_list_command, handle_resurrect_command,
+    handle_rm_command, handle_set_command, handle_status_command, handle_sub_command, DaemonState,
 };
 
 /// Unix socket server for daemon IPC.
@@ -58,6 +60,8 @@ pub struct SocketServer {
     start_time: Instant,
     /// Count of currently active client connections.
     active_connections: Arc<AtomicUsize>,
+    /// Periodic usage data fetcher, shared with client handlers.
+    usage_fetcher: Option<Arc<UsageFetcher>>,
 }
 
 impl SocketServer {
@@ -85,7 +89,15 @@ impl SocketServer {
             store: SessionStore::new(),
             start_time: Instant::now(),
             active_connections: Arc::new(AtomicUsize::new(0)),
+            usage_fetcher: None,
         }
+    }
+
+    /// Sets the usage fetcher for this server.
+    ///
+    /// When set, SUB clients receive USAGE messages alongside session UPDATEs.
+    pub fn set_usage_fetcher(&mut self, fetcher: Arc<UsageFetcher>) {
+        self.usage_fetcher = Some(fetcher);
     }
 
     /// Returns the configured socket path.
@@ -191,6 +203,7 @@ impl SocketServer {
             start_time: self.start_time,
             active_connections: Arc::clone(&self.active_connections),
             socket_path: self.socket_path.clone(),
+            usage_fetcher: self.usage_fetcher.clone(),
         };
 
         loop {
@@ -256,6 +269,7 @@ impl SocketServer {
             start_time: self.start_time,
             active_connections: Arc::clone(&self.active_connections),
             socket_path: self.socket_path.clone(),
+            usage_fetcher: self.usage_fetcher.clone(),
         };
 
         loop {
@@ -306,15 +320,6 @@ impl Drop for SocketServer {
             }
         }
     }
-}
-
-/// Shared daemon state passed to each client handler.
-#[derive(Clone)]
-struct DaemonState {
-    store: SessionStore,
-    start_time: Instant,
-    active_connections: Arc<AtomicUsize>,
-    socket_path: String,
 }
 
 /// Handles a single client connection.
@@ -375,8 +380,9 @@ async fn handle_client(
             "STATUS" => handle_status_command(state).await,
             "DUMP" => handle_dump_command(state).await,
             "SUB" => {
-                // Subscribe mode: send UPDATE notifications to client
-                handle_sub_command(&state.store, &mut writer).await?;
+                // Subscribe mode: send UPDATE and USAGE notifications to client
+                handle_sub_command(&state.store, state.usage_fetcher.as_ref(), &mut writer)
+                    .await?;
                 // After SUB returns (client disconnected or error), exit the loop
                 break;
             }
@@ -388,280 +394,6 @@ async fn handle_client(
     }
 
     Ok(())
-}
-
-/// Handles the SET command: SET <session_id> <status> [working_dir]
-///
-/// Creates a new session if it doesn't exist, or updates the status if it does.
-async fn handle_set_command(args: &[&str], store: &SessionStore) -> String {
-    if args.len() < 2 {
-        return "ERR SET requires: <session_id> <status> [working_dir]\n".to_string();
-    }
-
-    let session_id = args[0];
-    let status_str = args[1];
-    let working_dir = if args.len() > 2 {
-        PathBuf::from(args[2])
-    } else {
-        PathBuf::from("unknown")
-    };
-
-    let status: Status = match status_str.parse() {
-        Ok(s) => s,
-        Err(_) => {
-            return format!(
-                "ERR invalid status: {} (expected: working, attention, question, closed)\n",
-                status_str
-            );
-        }
-    };
-
-    // Get or create the session and set status in one atomic operation
-    let session = store
-        .get_or_create_session(
-            session_id.to_string(),
-            AgentType::ClaudeCode,
-            working_dir,
-            None, // session_id for resume capability not provided in basic command
-            status,
-        )
-        .await;
-
-    format!("OK {} {}\n", session.id, session.status)
-}
-
-/// Handles the RM command: RM <session_id>
-///
-/// Closes the session (marks as closed, doesn't remove from store).
-async fn handle_rm_command(args: &[&str], store: &SessionStore) -> String {
-    if args.is_empty() {
-        return "ERR RM requires: <session_id>\n".to_string();
-    }
-
-    let session_id = args[0];
-
-    match store.close_session(session_id).await {
-        Some(session) => {
-            format!("OK {} closed\n", session.id)
-        }
-        None => {
-            format!("ERR session not found: {}\n", session_id)
-        }
-    }
-}
-
-/// Handles the LIST command: LIST
-///
-/// Returns all sessions in the format: OK\n<session_id> <status> <elapsed_seconds>\n...
-async fn handle_list_command(store: &SessionStore) -> String {
-    let sessions = store.list_all().await;
-
-    if sessions.is_empty() {
-        return "OK\n".to_string();
-    }
-
-    let mut response = String::from("OK\n");
-    for session in sessions {
-        let elapsed = session.since.elapsed().as_secs();
-        response.push_str(&format!("{} {} {}\n", session.id, session.status, elapsed));
-    }
-
-    response
-}
-
-/// Handles the GET command: GET <session_id>
-///
-/// Returns a single session in the format: OK <session_id> <status> <elapsed_seconds> <working_dir>
-async fn handle_get_command(args: &[&str], store: &SessionStore) -> String {
-    if args.is_empty() {
-        return "ERR GET requires: <session_id>\n".to_string();
-    }
-
-    let session_id = args[0];
-
-    match store.get(session_id).await {
-        Some(session) => {
-            let elapsed = session.since.elapsed().as_secs();
-            format!(
-                "OK {} {} {} {}\n",
-                session.id,
-                session.status,
-                elapsed,
-                session.working_dir.display()
-            )
-        }
-        None => {
-            format!("ERR session not found: {}\n", session_id)
-        }
-    }
-}
-
-/// Handles the SUB command: SUB
-///
-/// Subscribes to session updates and sends UPDATE notifications to the client.
-/// Format: UPDATE <session_id> <status> <elapsed_seconds>\n
-///
-/// This function runs until the client disconnects or an error occurs.
-async fn handle_sub_command(
-    store: &SessionStore,
-    writer: &mut tokio::net::unix::OwnedWriteHalf,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    writer.write_all(b"OK subscribed\n").await?;
-    writer.flush().await?;
-
-    let mut rx = store.subscribe();
-
-    tracing::debug!("Client subscribed to session updates");
-
-    loop {
-        match rx.recv().await {
-            Ok(update) => {
-                let message = format!(
-                    "UPDATE {} {} {}\n",
-                    update.session_id, update.status, update.elapsed_seconds
-                );
-                if let Err(e) = writer.write_all(message.as_bytes()).await {
-                    tracing::debug!("Subscriber disconnected (write failed): {}", e);
-                    break;
-                }
-                if let Err(e) = writer.flush().await {
-                    tracing::debug!("Subscriber disconnected (flush failed): {}", e);
-                    break;
-                }
-            }
-            Err(broadcast::error::RecvError::Closed) => {
-                // Channel closed
-                tracing::debug!("Subscriber channel closed");
-                break;
-            }
-            Err(broadcast::error::RecvError::Lagged(count)) => {
-                tracing::warn!("Subscriber lagged, missed {} messages", count);
-                // Notify client of missed messages so they can refresh if needed
-                let lag_message = format!("WARN lagged {}\n", count);
-                if let Err(e) = writer.write_all(lag_message.as_bytes()).await {
-                    tracing::debug!("Failed to notify client of lag: {}", e);
-                    break;
-                }
-                let _ = writer.flush().await;
-            }
-        }
-    }
-
-    Ok(())
-}
-
-/// Handles the RESURRECT command: RESURRECT <session-id>
-///
-/// Validates that the session exists, is resumable, and its working directory
-/// still exists. On success, returns resurrection metadata and removes the
-/// session from the closed queue. On failure, returns an error with reason.
-///
-/// Format: OK <json>\n or ERR <message>\n
-async fn handle_resurrect_command(args: &[&str], store: &SessionStore) -> String {
-    if args.is_empty() {
-        return "ERR RESURRECT requires: <session-id>\n".to_string();
-    }
-
-    let session_id = args[0];
-
-    // Look up the closed session
-    let closed = match store.get_closed(session_id).await {
-        Some(c) => c,
-        None => {
-            return format!(
-                "ERR SESSION_NOT_FOUND No closed session with ID: {}\n",
-                session_id
-            );
-        }
-    };
-
-    // Check if resumable
-    if !closed.resumable {
-        let reason = closed
-            .not_resumable_reason
-            .as_deref()
-            .unwrap_or("session cannot be resumed");
-        return format!("ERR NOT_RESUMABLE {}\n", reason);
-    }
-
-    // Validate working directory exists
-    if !closed.working_dir.exists() {
-        return format!(
-            "ERR WORKING_DIR_MISSING Working directory no longer exists: {}\n",
-            closed.working_dir.display()
-        );
-    }
-
-    // Build resurrection metadata
-    let info = serde_json::json!({
-        "session_id": closed.session_id,
-        "working_dir": closed.working_dir,
-        "command": format!("claude --resume {}", closed.session_id),
-    });
-
-    // Remove from closed sessions
-    store.remove_closed(session_id).await;
-
-    format!("OK {}\n", info)
-}
-
-/// Handles the STATUS command: STATUS
-///
-/// Returns daemon health information as JSON.
-/// Format: OK <json>\n
-async fn handle_status_command(state: &DaemonState) -> String {
-    let sessions = state.store.list_all().await;
-    let active_count = sessions.iter().filter(|s| !s.closed).count();
-    let closed_count = sessions.iter().filter(|s| s.closed).count();
-
-    let health = HealthStatus {
-        uptime_seconds: state.start_time.elapsed().as_secs(),
-        sessions: SessionCounts {
-            active: active_count,
-            closed: closed_count,
-        },
-        connections: state.active_connections.load(Ordering::Relaxed),
-        memory_mb: get_memory_usage_mb(),
-        socket_path: state.socket_path.clone(),
-    };
-
-    let json = serde_json::to_string(&health).expect("failed to serialize HealthStatus");
-    format!("OK {}\n", json)
-}
-
-/// Handles the DUMP command: DUMP
-///
-/// Returns a full daemon state snapshot as JSON.
-/// Format: OK <json>\n
-async fn handle_dump_command(state: &DaemonState) -> String {
-    let sessions = state.store.list_all().await;
-    let active_count = sessions.iter().filter(|s| !s.closed).count();
-    let closed_count = sessions.iter().filter(|s| s.closed).count();
-
-    let snapshots: Vec<SessionSnapshot> = sessions
-        .iter()
-        .map(|s| SessionSnapshot {
-            id: s.id.clone(),
-            status: s.status.to_string(),
-            working_dir: s.working_dir.display().to_string(),
-            elapsed_seconds: s.since.elapsed().as_secs(),
-            closed: s.closed,
-        })
-        .collect();
-
-    let dump = DaemonDump {
-        uptime_seconds: state.start_time.elapsed().as_secs(),
-        socket_path: state.socket_path.clone(),
-        sessions: snapshots,
-        session_counts: SessionCounts {
-            active: active_count,
-            closed: closed_count,
-        },
-        connections: state.active_connections.load(Ordering::Relaxed),
-    };
-
-    let json = serde_json::to_string(&dump).expect("failed to serialize DaemonDump");
-    format!("OK {}\n", json)
 }
 
 #[cfg(test)]

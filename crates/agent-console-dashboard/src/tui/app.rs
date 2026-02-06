@@ -3,9 +3,11 @@
 //! Manages terminal setup/teardown, panic hooks, and the core render loop.
 
 use crate::tui::event::{handle_key_event, Action, Event, EventHandler};
+use crate::tui::subscription::{subscribe_to_daemon, DaemonMessage};
 use crate::tui::ui::render_dashboard;
 use crate::tui::views::detail::render_detail;
 use crate::{AgentType, Session, Status};
+use claude_usage::UsageData;
 use crossterm::{
     event::EventStream,
     execute,
@@ -15,7 +17,6 @@ use ratatui::prelude::{CrosstermBackend, Terminal};
 use std::io::{self, stdout};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
 
 /// Active view state for the TUI.
@@ -49,6 +50,8 @@ pub struct App {
     pub view: View,
     /// Active layout preset index (1=default, 2=compact).
     pub layout_preset: u8,
+    /// Latest API usage data from the daemon, if available.
+    pub usage: Option<UsageData>,
 }
 
 impl App {
@@ -62,6 +65,7 @@ impl App {
             selected_index: None,
             view: View::Dashboard,
             layout_preset: 1,
+            usage: None,
         }
     }
 
@@ -190,7 +194,7 @@ impl App {
         let mut reader = EventStream::new();
 
         // Connect to daemon and subscribe to updates
-        let (update_tx, mut update_rx) = mpsc::channel::<(String, Status)>(64);
+        let (update_tx, mut update_rx) = mpsc::channel::<DaemonMessage>(64);
         let socket_path = self.socket_path.clone();
         tokio::spawn(async move {
             if let Err(e) = subscribe_to_daemon(&socket_path, update_tx).await {
@@ -200,8 +204,16 @@ impl App {
 
         loop {
             // Drain daemon updates before rendering
-            while let Ok((session_id, status)) = update_rx.try_recv() {
-                self.apply_update(&session_id, status);
+            while let Ok(msg) = update_rx.try_recv() {
+                match msg {
+                    DaemonMessage::SessionUpdate {
+                        session_id,
+                        status,
+                    } => self.apply_update(&session_id, status),
+                    DaemonMessage::UsageUpdate(data) => {
+                        self.usage = Some(data);
+                    }
+                }
             }
 
             // Render
@@ -270,78 +282,6 @@ impl App {
     }
 }
 
-/// Connects to the daemon via Unix socket, sends LIST to get initial state,
-/// then SUB to receive live updates. Sends parsed updates through the channel.
-async fn subscribe_to_daemon(
-    socket_path: &PathBuf,
-    tx: mpsc::Sender<(String, Status)>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use crate::client::connect_with_auto_start;
-
-    let client = connect_with_auto_start(socket_path).await?;
-    let stream = client.into_stream();
-    let (reader, mut writer) = stream.into_split();
-    let mut reader = BufReader::new(reader);
-
-    // Fetch initial session list
-    writer.write_all(b"LIST\n").await?;
-    writer.flush().await?;
-
-    let mut line = String::new();
-    reader.read_line(&mut line).await?; // "OK\n" header
-    if line.trim() == "OK" {
-        // Read session lines until empty line or next command
-        loop {
-            line.clear();
-            // Use a short timeout to detect end of LIST response
-            match tokio::time::timeout(Duration::from_millis(100), reader.read_line(&mut line)).await
-            {
-                Ok(Ok(0)) => break,
-                Ok(Ok(_)) => {
-                    let parts: Vec<&str> = line.trim().split_whitespace().collect();
-                    if parts.len() >= 2 {
-                        if let Ok(status) = parts[1].parse::<Status>() {
-                            let _ = tx.send((parts[0].to_string(), status)).await;
-                        }
-                    }
-                }
-                _ => break,
-            }
-        }
-    }
-
-    // Now subscribe for live updates — need a new connection since LIST consumed the first
-    let client = connect_with_auto_start(socket_path).await?;
-    let stream = client.into_stream();
-    let (reader, mut writer) = stream.into_split();
-    let mut reader = BufReader::new(reader);
-
-    writer.write_all(b"SUB\n").await?;
-    writer.flush().await?;
-
-    line.clear();
-    reader.read_line(&mut line).await?; // "OK subscribed\n"
-
-    loop {
-        line.clear();
-        let bytes = reader.read_line(&mut line).await?;
-        if bytes == 0 {
-            break;
-        }
-        let parts: Vec<&str> = line.trim().split_whitespace().collect();
-        // UPDATE <session_id> <status> <elapsed>
-        if parts.len() >= 3 && parts[0] == "UPDATE" {
-            if let Ok(status) = parts[2].parse::<Status>() {
-                if tx.send((parts[1].to_string(), status)).await.is_err() {
-                    break; // receiver dropped
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
 /// Enables raw mode and switches to the alternate screen.
 fn setup_terminal() -> io::Result<()> {
     enable_raw_mode()?;
@@ -384,6 +324,7 @@ mod tests {
         assert!(app.selected_index.is_none());
         assert_eq!(app.view, View::Dashboard);
         assert_eq!(app.layout_preset, 1);
+        assert!(app.usage.is_none());
     }
 
     #[test]
@@ -651,5 +592,13 @@ mod tests {
     fn test_layout_preset_default() {
         let app = App::new(PathBuf::from("/tmp/test.sock"));
         assert_eq!(app.layout_preset, 1);
+    }
+
+    // --- App usage field tests ---
+
+    #[test]
+    fn test_app_usage_starts_none() {
+        let app = App::new(PathBuf::from("/tmp/test.sock"));
+        assert!(app.usage.is_none());
     }
 }
