@@ -15,14 +15,21 @@ pub mod usage;
 pub use server::SocketServer;
 pub use store::SessionStore;
 
-use crate::DaemonConfig;
+use crate::{DaemonConfig, Status};
 use fork::{daemon, Fork};
 use std::error::Error;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
 use tokio::signal;
 use tokio::signal::unix::{signal as unix_signal, SignalKind};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
+
+/// Duration of inactivity (no non-closed sessions) before the daemon auto-stops.
+const AUTO_STOP_IDLE_SECS: u64 = 3600;
+
+/// How often the idle check runs.
+const IDLE_CHECK_INTERVAL_SECS: u64 = 60;
 
 /// Result type alias for daemon operations.
 pub type DaemonResult<T> = Result<T, Box<dyn Error>>;
@@ -53,6 +60,47 @@ async fn wait_for_shutdown() {
             } else {
                 info!("received SIGINT (Ctrl+C), shutting down");
             }
+        }
+    }
+}
+
+/// Periodically checks for active (non-closed) sessions and returns when the
+/// daemon has been idle for `timeout`.
+///
+/// The timer starts immediately — if no session connects before the timeout
+/// expires, the daemon shuts down.
+async fn idle_check_loop(store: &SessionStore, timeout: Duration) {
+    let mut idle_since: Option<Instant> = Some(Instant::now());
+    let mut interval =
+        tokio::time::interval(Duration::from_secs(IDLE_CHECK_INTERVAL_SECS));
+
+    loop {
+        interval.tick().await;
+
+        let sessions = store.list_all().await;
+        let active_count = sessions
+            .iter()
+            .filter(|s| s.status != Status::Closed)
+            .count();
+
+        if active_count > 0 {
+            if idle_since.is_some() {
+                info!(active_count, "sessions active, idle timer reset");
+            }
+            idle_since = None;
+        } else if idle_since.is_none() {
+            idle_since = Some(Instant::now());
+            info!("no active sessions, idle timer started");
+        } else {
+            let elapsed = idle_since.expect("just checked is_some above").elapsed();
+            if elapsed >= timeout {
+                return;
+            }
+            debug!(
+                remaining_secs = (timeout - elapsed).as_secs(),
+                "idle check: auto-stop in {} seconds",
+                (timeout - elapsed).as_secs()
+            );
         }
     }
 }
@@ -169,6 +217,9 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
         let usage_fetcher = Arc::new(usage::UsageFetcher::new());
         server.set_usage_fetcher(Arc::clone(&usage_fetcher));
 
+        // Clone the store for the idle check loop before moving server
+        let store = server.store().clone();
+
         // Spawn the usage fetcher
         let usage_shutdown_rx = shutdown_tx.subscribe();
         let usage_handle = tokio::spawn(async move {
@@ -182,8 +233,14 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
             }
         });
 
-        // Wait for shutdown signal
-        wait_for_shutdown().await;
+        // Wait for shutdown signal or idle timeout
+        let idle_timeout = Duration::from_secs(AUTO_STOP_IDLE_SECS);
+        tokio::select! {
+            _ = wait_for_shutdown() => {}
+            _ = idle_check_loop(&store, idle_timeout) => {
+                info!("no active sessions for {} seconds, auto-stopping", AUTO_STOP_IDLE_SECS);
+            }
+        }
 
         // Signal all tasks to stop
         let _ = shutdown_tx.send(());
@@ -219,4 +276,5 @@ mod tests {
         assert!(config.daemonize);
         assert_eq!(config.socket_path, PathBuf::from("/tmp/test.sock"));
     }
+
 }
