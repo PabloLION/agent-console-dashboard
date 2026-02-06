@@ -74,16 +74,13 @@ impl UsageFetcher {
 
     /// Subscribes to usage updates.
     ///
-    /// Increments the subscriber count atomically. The returned
-    /// [`UsageSubscription`] decrements the count on drop.
+    /// Returns a [`UsageSubscription`] whose constructor atomically increments
+    /// the subscriber count. The count is decremented on drop.
     pub fn subscribe(&self) -> UsageSubscription {
-        self.subscriber_count.fetch_add(1, Ordering::SeqCst);
-        let count = self.subscriber_count.load(Ordering::SeqCst);
-        info!(subscriber_count = count, "usage subscriber added");
-        UsageSubscription {
-            rx: self.update_tx.subscribe(),
-            counter: Arc::clone(&self.subscriber_count),
-        }
+        UsageSubscription::new(
+            self.update_tx.subscribe(),
+            Arc::clone(&self.subscriber_count),
+        )
     }
 
     /// Returns the current subscriber count.
@@ -160,6 +157,9 @@ impl Default for UsageFetcher {
 }
 
 /// RAII subscription handle that decrements subscriber count on drop.
+///
+/// The counter is incremented in `new()` and decremented in `drop()`, keeping
+/// the increment and guard creation inseparable.
 pub struct UsageSubscription {
     /// Broadcast receiver for usage updates.
     rx: broadcast::Receiver<UsageState>,
@@ -168,6 +168,14 @@ pub struct UsageSubscription {
 }
 
 impl UsageSubscription {
+    /// Creates a new subscription, atomically incrementing the subscriber count.
+    fn new(rx: broadcast::Receiver<UsageState>, counter: Arc<AtomicUsize>) -> Self {
+        counter.fetch_add(1, Ordering::SeqCst);
+        let count = counter.load(Ordering::SeqCst);
+        info!(subscriber_count = count, "usage subscriber added");
+        Self { rx, counter }
+    }
+
     /// Receives the next usage update.
     pub async fn recv(&mut self) -> Result<UsageState, broadcast::error::RecvError> {
         self.rx.recv().await

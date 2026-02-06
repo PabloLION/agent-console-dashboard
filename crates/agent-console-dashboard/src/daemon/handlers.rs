@@ -167,8 +167,9 @@ pub(super) async fn handle_sub_command(
         if let Some(data) = snapshot {
             let json = serde_json::to_string(&data).expect("failed to serialize UsageData");
             let message = format!("USAGE {}\n", json);
-            writer.write_all(message.as_bytes()).await?;
-            writer.flush().await?;
+            if write_or_disconnect(writer, &message).await {
+                return Ok(());
+            }
         }
     }
 
