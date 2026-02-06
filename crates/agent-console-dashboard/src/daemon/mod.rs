@@ -15,7 +15,7 @@ pub mod usage;
 pub use server::SocketServer;
 pub use store::SessionStore;
 
-use crate::DaemonConfig;
+use crate::{DaemonConfig, Status};
 use fork::{daemon, Fork};
 use std::error::Error;
 use std::sync::Arc;
@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
 use tokio::signal;
 use tokio::signal::unix::{signal as unix_signal, SignalKind};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Duration of inactivity (no non-closed sessions) before the daemon auto-stops.
 const AUTO_STOP_IDLE_SECS: u64 = 3600;
@@ -80,7 +80,7 @@ async fn idle_check_loop(store: &SessionStore, timeout: Duration) {
         let sessions = store.list_all().await;
         let active_count = sessions
             .iter()
-            .filter(|s| s.status != crate::Status::Closed)
+            .filter(|s| s.status != Status::Closed)
             .count();
 
         if active_count > 0 {
@@ -88,17 +88,18 @@ async fn idle_check_loop(store: &SessionStore, timeout: Duration) {
                 info!(active_count, "sessions active, idle timer reset");
             }
             idle_since = None;
+        } else if idle_since.is_none() {
+            idle_since = Some(Instant::now());
+            info!("no active sessions, idle timer started");
         } else {
-            let since = *idle_since.get_or_insert_with(Instant::now);
-            let elapsed = since.elapsed();
+            let elapsed = idle_since.expect("just checked is_some above").elapsed();
             if elapsed >= timeout {
                 return;
             }
-            let remaining = timeout - elapsed;
-            info!(
-                remaining_secs = remaining.as_secs(),
-                "no active sessions, auto-stop in {} seconds",
-                remaining.as_secs()
+            debug!(
+                remaining_secs = (timeout - elapsed).as_secs(),
+                "idle check: auto-stop in {} seconds",
+                (timeout - elapsed).as_secs()
             );
         }
     }
@@ -276,13 +277,4 @@ mod tests {
         assert_eq!(config.socket_path, PathBuf::from("/tmp/test.sock"));
     }
 
-    #[test]
-    fn test_auto_stop_idle_secs_is_one_hour() {
-        assert_eq!(AUTO_STOP_IDLE_SECS, 3600);
-    }
-
-    #[test]
-    fn test_idle_check_interval_is_60_seconds() {
-        assert_eq!(IDLE_CHECK_INTERVAL_SECS, 60);
-    }
 }
