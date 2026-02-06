@@ -105,6 +105,11 @@ impl SocketServer {
         &self.socket_path
     }
 
+    /// Returns a reference to the session store.
+    pub fn store(&self) -> &SessionStore {
+        &self.store
+    }
+
     /// Returns the daemon start time.
     pub fn start_time(&self) -> Instant {
         self.start_time
