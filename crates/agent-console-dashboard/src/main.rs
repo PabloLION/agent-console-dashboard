@@ -294,6 +294,7 @@ fn run_set_command(
 #[derive(serde::Deserialize)]
 struct HookInput {
     session_id: String,
+    cwd: Option<String>,
 }
 
 /// Reads Claude Code hook JSON from stdin, extracts session_id, and forwards
@@ -311,7 +312,8 @@ fn run_claude_hook_command(socket: &PathBuf, status: Status) -> ExitCode {
         }
     };
 
-    let result = run_set_command(socket, &input.session_id, &status.to_string(), None);
+    let working_dir = input.cwd.as_deref().map(std::path::Path::new);
+    let result = run_set_command(socket, &input.session_id, &status.to_string(), working_dir);
 
     match result {
         ExitCode::SUCCESS => {
@@ -321,10 +323,14 @@ fn run_claude_hook_command(socket: &PathBuf, status: Status) -> ExitCode {
         _ => {
             // Daemon not running or SET failed — don't block Claude Code.
             // Output a systemMessage so the condition is visible.
-            println!(
-                r#"{{"continue": true, "systemMessage": "acd daemon not reachable, session {} not tracked"}}"#,
-                input.session_id
-            );
+            let response = serde_json::json!({
+                "continue": true,
+                "systemMessage": format!(
+                    "acd daemon not reachable, session {} not tracked",
+                    input.session_id
+                ),
+            });
+            println!("{}", response);
             ExitCode::SUCCESS
         }
     }

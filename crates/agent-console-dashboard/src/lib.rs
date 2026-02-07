@@ -215,6 +215,10 @@ impl Session {
         // Update current status and timestamp
         self.status = new_status;
         self.since = now;
+
+        if new_status == Status::Closed {
+            self.closed = true;
+        }
     }
 }
 
