@@ -11,5 +11,3 @@ lto = true
 codegen-units = 1
 strip = true
 
-[workspace.metadata.husky]
-# cargo-husky configuration preserved for git hooks

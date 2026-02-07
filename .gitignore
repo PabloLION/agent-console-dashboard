@@ -38,4 +38,4 @@ logs/security/
 .claude-plugin/
 
 # Personal notes (per-developer, not shared)
-.gitignored/
+.git-ignored/
