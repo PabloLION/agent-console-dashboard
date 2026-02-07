@@ -19,6 +19,22 @@ repos:
       - id: markdownlint
         args: ["--config", ".markdownlint.json"]
 
+  # Rust - Formatting and Linting
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all --
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --workspace -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
