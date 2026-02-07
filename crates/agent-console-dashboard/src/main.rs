@@ -5,7 +5,7 @@
 
 use agent_console::{
     daemon::run_daemon, format_uptime, service, tui::app::App, DaemonConfig, DaemonDump,
-    HealthStatus,
+    HealthStatus, Status,
 };
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -92,6 +92,15 @@ enum Commands {
         daemonize: bool,
 
         /// Socket path for IPC communication
+        #[arg(long, default_value = "/tmp/agent-console.sock")]
+        socket: PathBuf,
+    },
+
+    /// Handle Claude Code hook events (reads JSON from stdin)
+    ClaudeHook {
+        /// Status to set: working, attention
+        status: Status,
+        /// Daemon socket path
         #[arg(long, default_value = "/tmp/agent-console.sock")]
         socket: PathBuf,
     },
@@ -224,6 +233,9 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
+        Commands::ClaudeHook { status, socket } => {
+            return run_claude_hook_command(&socket, status);
+        }
     }
 
     ExitCode::SUCCESS
@@ -272,6 +284,49 @@ fn run_set_command(
     } else {
         eprintln!("{}", trimmed);
         ExitCode::FAILURE
+    }
+}
+
+/// JSON payload from Claude Code hook stdin.
+///
+/// Only fields we need are declared; unknown fields are silently ignored
+/// so future Claude Code versions don't break us.
+#[derive(serde::Deserialize)]
+struct HookInput {
+    session_id: String,
+}
+
+/// Reads Claude Code hook JSON from stdin, extracts session_id, and forwards
+/// to the daemon as a SET command.
+///
+/// Exit codes per Claude Code hook spec:
+/// - 0: success (outputs `{"continue": true}` on stdout)
+/// - 2: blocking error (malformed JSON — outputs error on stderr)
+fn run_claude_hook_command(socket: &PathBuf, status: Status) -> ExitCode {
+    let input: HookInput = match serde_json::from_reader(std::io::stdin()) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("acd claude-hook: failed to parse JSON from stdin: {}", e);
+            return ExitCode::from(2);
+        }
+    };
+
+    let result = run_set_command(socket, &input.session_id, &status.to_string(), None);
+
+    match result {
+        ExitCode::SUCCESS => {
+            println!(r#"{{"continue": true}}"#);
+            ExitCode::SUCCESS
+        }
+        _ => {
+            // Daemon not running or SET failed — don't block Claude Code.
+            // Output a systemMessage so the condition is visible.
+            println!(
+                r#"{{"continue": true, "systemMessage": "acd daemon not reachable, session {} not tracked"}}"#,
+                input.session_id
+            );
+            ExitCode::SUCCESS
+        }
     }
 }
 
@@ -630,6 +685,63 @@ mod tests {
     fn test_unknown_flag_fails() {
         // Verify unknown flag fails to parse
         let result = Cli::try_parse_from(["agent-console", "daemon", "--unknown-flag"]);
+        assert!(result.is_err());
+    }
+
+    // -- ClaudeHook subcommand ------------------------------------------------
+
+    #[test]
+    fn test_claude_hook_working_parses() {
+        let cli = Cli::try_parse_from(["agent-console", "claude-hook", "working"])
+            .expect("claude-hook working should parse");
+        match cli.command {
+            Commands::ClaudeHook { status, socket } => {
+                assert_eq!(status, agent_console::Status::Working);
+                assert_eq!(socket, PathBuf::from("/tmp/agent-console.sock"));
+            }
+            _ => panic!("expected ClaudeHook command"),
+        }
+    }
+
+    #[test]
+    fn test_claude_hook_attention_parses() {
+        let cli = Cli::try_parse_from(["agent-console", "claude-hook", "attention"])
+            .expect("claude-hook attention should parse");
+        match cli.command {
+            Commands::ClaudeHook { status, .. } => {
+                assert_eq!(status, agent_console::Status::Attention);
+            }
+            _ => panic!("expected ClaudeHook command"),
+        }
+    }
+
+    #[test]
+    fn test_claude_hook_custom_socket() {
+        let cli = Cli::try_parse_from([
+            "agent-console",
+            "claude-hook",
+            "working",
+            "--socket",
+            "/custom/path.sock",
+        ])
+        .expect("claude-hook with custom socket should parse");
+        match cli.command {
+            Commands::ClaudeHook { socket, .. } => {
+                assert_eq!(socket, PathBuf::from("/custom/path.sock"));
+            }
+            _ => panic!("expected ClaudeHook command"),
+        }
+    }
+
+    #[test]
+    fn test_claude_hook_requires_status() {
+        let result = Cli::try_parse_from(["agent-console", "claude-hook"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_claude_hook_invalid_status_fails() {
+        let result = Cli::try_parse_from(["agent-console", "claude-hook", "invalid"]);
         assert!(result.is_err());
     }
 
