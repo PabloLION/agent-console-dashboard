@@ -323,10 +323,14 @@ fn run_claude_hook_command(socket: &PathBuf, status: Status) -> ExitCode {
         _ => {
             // Daemon not running or SET failed — don't block Claude Code.
             // Output a systemMessage so the condition is visible.
-            println!(
-                r#"{{"continue": true, "systemMessage": "acd daemon not reachable, session {} not tracked"}}"#,
-                input.session_id
-            );
+            let response = serde_json::json!({
+                "continue": true,
+                "systemMessage": format!(
+                    "acd daemon not reachable, session {} not tracked",
+                    input.session_id
+                ),
+            });
+            println!("{}", response);
             ExitCode::SUCCESS
         }
     }
