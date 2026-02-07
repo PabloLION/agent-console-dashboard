@@ -71,8 +71,8 @@ pub fn write_settings_atomic(value: Value) -> Result<()> {
     }
 
     // Write to temp file
-    let json = serde_json::to_string_pretty(&value)
-        .map_err(|e| SettingsError::Parse(e.to_string()))?;
+    let json =
+        serde_json::to_string_pretty(&value).map_err(|e| SettingsError::Parse(e.to_string()))?;
 
     fs::write(&temp_path, json).map_err(SettingsError::Io)?;
 
@@ -118,7 +118,7 @@ pub fn add_hook(
         .expect("hooks should be object");
 
     // Get event name as string
-    let event_name = serde_json::to_value(&event)
+    let event_name = serde_json::to_value(event)
         .expect("event serialization failed")
         .as_str()
         .expect("event should serialize to string")
@@ -157,22 +157,22 @@ pub fn add_hook(
 /// * `event` - The hook event to match
 /// * `command` - The command string to match
 pub fn remove_hook(mut value: Value, event: HookEvent, command: &str) -> Value {
-    let hooks_obj = match value
-        .get_mut("hooks")
-        .and_then(|h| h.as_object_mut())
-    {
+    let hooks_obj = match value.get_mut("hooks").and_then(|h| h.as_object_mut()) {
         Some(obj) => obj,
         None => return value, // No hooks object, nothing to remove
     };
 
     // Get event name as string
-    let event_name = serde_json::to_value(&event)
+    let event_name = serde_json::to_value(event)
         .expect("event serialization failed")
         .as_str()
         .expect("event should serialize to string")
         .to_string();
 
-    let event_array = match hooks_obj.get_mut(&event_name).and_then(|e| e.as_array_mut()) {
+    let event_array = match hooks_obj
+        .get_mut(&event_name)
+        .and_then(|e| e.as_array_mut())
+    {
         Some(arr) => arr,
         None => return value, // Event not found, nothing to remove
     };
@@ -183,9 +183,9 @@ pub fn remove_hook(mut value: Value, event: HookEvent, command: &str) -> Value {
         match hooks {
             Some(hooks_arr) => {
                 // Keep if no hook matches the command
-                !hooks_arr.iter().any(|h| {
-                    h.get("command").and_then(|c| c.as_str()) == Some(command)
-                })
+                !hooks_arr
+                    .iter()
+                    .any(|h| h.get("command").and_then(|c| c.as_str()) == Some(command))
             }
             None => true, // Keep malformed entries
         }
@@ -287,7 +287,10 @@ mod tests {
         let inner_hooks = group.get("hooks").expect("hooks should exist");
         let inner_arr = inner_hooks.as_array().expect("should be array");
         assert_eq!(inner_arr.len(), 1);
-        assert_eq!(inner_arr[0].get("command").expect("cmd").as_str(), Some("/path/to/stop.sh"));
+        assert_eq!(
+            inner_arr[0].get("command").expect("cmd").as_str(),
+            Some("/path/to/stop.sh")
+        );
     }
 
     #[test]
@@ -304,14 +307,22 @@ mod tests {
             status_message: None,
         };
 
-        let result = add_hook(settings, HookEvent::PreToolUse, handler, Some("Bash".to_string()));
+        let result = add_hook(
+            settings,
+            HookEvent::PreToolUse,
+            handler,
+            Some("Bash".to_string()),
+        );
 
         let hooks = result.get("hooks").expect("hooks");
         let pre_tool_use = hooks.get("PreToolUse").expect("PreToolUse");
         let groups = pre_tool_use.as_array().expect("array");
 
         assert_eq!(groups.len(), 1);
-        assert_eq!(groups[0].get("matcher").expect("matcher").as_str(), Some("Bash"));
+        assert_eq!(
+            groups[0].get("matcher").expect("matcher").as_str(),
+            Some("Bash")
+        );
     }
 
     #[test]
@@ -338,7 +349,13 @@ mod tests {
 
         let result = add_hook(settings, HookEvent::Stop, handler, None);
 
-        let stop_array = result.get("hooks").unwrap().get("Stop").unwrap().as_array().unwrap();
+        let stop_array = result
+            .get("hooks")
+            .unwrap()
+            .get("Stop")
+            .unwrap()
+            .as_array()
+            .unwrap();
         assert_eq!(stop_array.len(), 2, "should have 2 matcher groups");
     }
 
@@ -365,11 +382,23 @@ mod tests {
 
         let result = remove_hook(settings, HookEvent::Stop, "/path/to/stop.sh");
 
-        let stop_array = result.get("hooks").unwrap().get("Stop").unwrap().as_array().unwrap();
+        let stop_array = result
+            .get("hooks")
+            .unwrap()
+            .get("Stop")
+            .unwrap()
+            .as_array()
+            .unwrap();
         assert_eq!(stop_array.len(), 0, "Stop array should be empty");
 
         // SessionStart should be preserved
-        let start_array = result.get("hooks").unwrap().get("SessionStart").unwrap().as_array().unwrap();
+        let start_array = result
+            .get("hooks")
+            .unwrap()
+            .get("SessionStart")
+            .unwrap()
+            .as_array()
+            .unwrap();
         assert_eq!(start_array.len(), 1, "SessionStart should be preserved");
     }
 
@@ -394,11 +423,20 @@ mod tests {
 
         let result = remove_hook(settings, HookEvent::Stop, "/path/to/stop.sh");
 
-        let stop_array = result.get("hooks").unwrap().get("Stop").unwrap().as_array().unwrap();
+        let stop_array = result
+            .get("hooks")
+            .unwrap()
+            .get("Stop")
+            .unwrap()
+            .as_array()
+            .unwrap();
         assert_eq!(stop_array.len(), 1, "should have 1 remaining group");
 
         let remaining = &stop_array[0].get("hooks").unwrap().as_array().unwrap()[0];
-        assert_eq!(remaining.get("command").unwrap().as_str(), Some("/different/hook.sh"));
+        assert_eq!(
+            remaining.get("command").unwrap().as_str(),
+            Some("/different/hook.sh")
+        );
     }
 
     #[test]

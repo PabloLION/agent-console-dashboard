@@ -123,8 +123,7 @@ log_level = "debug"
 log_file = "/var/log/acd.log"
 "#;
         let path = PathBuf::from("test.toml");
-        let config =
-            ConfigLoader::parse_toml(toml_str, &path).expect("valid TOML should parse");
+        let config = ConfigLoader::parse_toml(toml_str, &path).expect("valid TOML should parse");
         assert!(!config.agents.claude_code.enabled);
         assert_eq!(config.daemon.idle_timeout, "30m");
     }
@@ -183,8 +182,7 @@ log_level = "debug"
     fn load_from_path_valid_file() {
         let dir = tempfile::tempdir().expect("failed to create temp dir");
         let file = dir.path().join("config.toml");
-        fs::write(&file, "[daemon]\nlog_level = \"trace\"\n")
-            .expect("failed to write temp file");
+        fs::write(&file, "[daemon]\nlog_level = \"trace\"\n").expect("failed to write temp file");
         let config = ConfigLoader::load_from_path(&file).expect("should load");
         assert_eq!(
             config.daemon.log_level,

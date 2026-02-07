@@ -109,7 +109,8 @@ pub fn install(
     }
 
     // 5. Add hook to settings
-    let updated_settings = settings::add_hook(settings_value, event, handler.clone(), matcher.clone());
+    let updated_settings =
+        settings::add_hook(settings_value, event, handler.clone(), matcher.clone());
 
     // 6. Write settings atomically
     settings::write_settings_atomic(updated_settings)?;
@@ -137,10 +138,11 @@ pub fn install(
 
     // 9. Write registry (log warning on failure, don't fail operation)
     if let Err(e) = registry::write_registry(updated_registry) {
-        log::warn!("Failed to write registry after successful settings write: {}", e);
         log::warn!(
-            "Hook installed but not tracked. Remove manually from settings.json if needed."
+            "Failed to write registry after successful settings write: {}",
+            e
         );
+        log::warn!("Hook installed but not tracked. Remove manually from settings.json if needed.");
     }
 
     Ok(())
@@ -207,7 +209,10 @@ pub fn uninstall(event: HookEvent, command: &str) -> Result<()> {
 
     // 8. Write registry (log warning on failure, don't fail operation)
     if let Err(e) = registry::write_registry(updated_registry) {
-        log::warn!("Failed to write registry after successful settings write: {}", e);
+        log::warn!(
+            "Failed to write registry after successful settings write: {}",
+            e
+        );
         log::warn!("Hook removed but registry dirty. May show as managed until registry fixed.");
     }
 
@@ -450,12 +455,16 @@ mod integration_tests {
             r#async: None,
             status_message: None,
         };
-        install(HookEvent::SessionStart, start_handler, None, "test").expect("SessionStart install should succeed");
+        install(HookEvent::SessionStart, start_handler, None, "test")
+            .expect("SessionStart install should succeed");
 
         // List should show both hooks
         let entries = list().expect("List should succeed");
         assert_eq!(entries.len(), 2, "Should have 2 hooks");
-        assert!(entries.iter().all(|e| e.managed), "All hooks should be managed");
+        assert!(
+            entries.iter().all(|e| e.managed),
+            "All hooks should be managed"
+        );
 
         // Verify both events are present
         let events: Vec<HookEvent> = entries.iter().map(|e| e.event).collect();
@@ -485,7 +494,8 @@ mod integration_tests {
             r#async: None,
             status_message: None,
         };
-        install(HookEvent::SessionStart, start_handler, None, "test").expect("SessionStart install should succeed");
+        install(HookEvent::SessionStart, start_handler, None, "test")
+            .expect("SessionStart install should succeed");
 
         // Uninstall Stop hook
         uninstall(HookEvent::Stop, "/path/to/stop.sh").expect("Uninstall should succeed");
@@ -637,8 +647,13 @@ mod integration_tests {
             status_message: None,
         };
 
-        install(HookEvent::PreToolUse, handler, Some("Bash".to_string()), "test")
-            .expect("Install should succeed");
+        install(
+            HookEvent::PreToolUse,
+            handler,
+            Some("Bash".to_string()),
+            "test",
+        )
+        .expect("Install should succeed");
 
         // List should show the hook
         let entries = list().expect("List should succeed");

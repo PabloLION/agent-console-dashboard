@@ -66,7 +66,10 @@ pub fn render_detail(
     let elapsed_str = format_duration(elapsed.as_secs());
     lines.push(Line::from(vec![
         Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{}", session.status), Style::default().fg(status_color)),
+        Span::styled(
+            format!("{}", session.status),
+            Style::default().fg(status_color),
+        ),
         Span::raw(format!(" ({})", elapsed_str)),
     ]));
 
@@ -128,9 +131,15 @@ pub fn render_detail(
             let ts = format_transition_time(transition.timestamp, now);
             lines.push(Line::from(vec![
                 Span::raw(format!("  {}  ", ts)),
-                Span::styled(format!("{}", transition.from), Style::default().fg(status_color_for(transition.from))),
+                Span::styled(
+                    format!("{}", transition.from),
+                    Style::default().fg(status_color_for(transition.from)),
+                ),
                 Span::raw(" → "),
-                Span::styled(format!("{}", transition.to), Style::default().fg(status_color_for(transition.to))),
+                Span::styled(
+                    format!("{}", transition.to),
+                    Style::default().fg(status_color_for(transition.to)),
+                ),
             ]));
         }
 
@@ -274,8 +283,7 @@ mod tests {
     #[test]
     fn test_render_detail_no_panic_normal() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let session = make_session("test-1");
         terminal
             .draw(|frame| {
@@ -287,8 +295,7 @@ mod tests {
     #[test]
     fn test_render_detail_no_panic_narrow() {
         let backend = ratatui::backend::TestBackend::new(25, 10);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let session = make_session("test-narrow");
         terminal
             .draw(|frame| {
@@ -300,8 +307,7 @@ mod tests {
     #[test]
     fn test_render_detail_no_panic_too_small() {
         let backend = ratatui::backend::TestBackend::new(10, 5);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let session = make_session("test-tiny");
         terminal
             .draw(|frame| {
@@ -313,8 +319,7 @@ mod tests {
     #[test]
     fn test_render_detail_with_history() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let mut session = make_session("test-history");
         let now = Instant::now();
         for i in 0..8 {
@@ -335,8 +340,7 @@ mod tests {
     #[test]
     fn test_render_detail_closed_session() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let mut session = make_session("test-closed");
         session.status = Status::Closed;
         terminal
@@ -349,10 +353,10 @@ mod tests {
     #[test]
     fn test_render_detail_long_working_dir() {
         let backend = ratatui::backend::TestBackend::new(60, 20);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let mut session = make_session("test-long-wd");
-        session.working_dir = PathBuf::from("/very/deeply/nested/path/to/some/project/directory/that/is/quite/long");
+        session.working_dir =
+            PathBuf::from("/very/deeply/nested/path/to/some/project/directory/that/is/quite/long");
         terminal
             .draw(|frame| {
                 render_detail(frame, &session, frame.area(), 0, Instant::now());
@@ -363,8 +367,7 @@ mod tests {
     #[test]
     fn test_render_detail_history_scroll() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let mut session = make_session("test-scroll");
         let now = Instant::now();
         for i in 0..10 {

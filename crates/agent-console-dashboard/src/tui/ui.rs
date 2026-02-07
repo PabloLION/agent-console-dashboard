@@ -32,7 +32,7 @@ pub fn render_dashboard(frame: &mut Frame, app: &App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1), // header
-            Constraint::Min(1),   // session list
+            Constraint::Min(1),    // session list
             Constraint::Length(1), // footer
         ])
         .split(area);
@@ -94,8 +94,7 @@ mod tests {
     #[test]
     fn test_render_dashboard_empty_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let app = make_app();
         terminal
             .draw(|frame| render_dashboard(frame, &app))
@@ -105,8 +104,7 @@ mod tests {
     #[test]
     fn test_render_dashboard_with_sessions_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let mut app = make_app_with_sessions(5);
         app.selected_index = Some(2);
         terminal
@@ -117,8 +115,7 @@ mod tests {
     #[test]
     fn test_render_dashboard_narrow_no_panic() {
         let backend = ratatui::backend::TestBackend::new(30, 10);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let app = make_app_with_sessions(3);
         terminal
             .draw(|frame| render_dashboard(frame, &app))
@@ -128,8 +125,7 @@ mod tests {
     #[test]
     fn test_render_dashboard_wide_no_panic() {
         let backend = ratatui::backend::TestBackend::new(200, 50);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let app = make_app_with_sessions(10);
         terminal
             .draw(|frame| render_dashboard(frame, &app))
@@ -139,8 +135,7 @@ mod tests {
     #[test]
     fn test_render_dashboard_minimal_height_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 3);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let app = make_app_with_sessions(5);
         terminal
             .draw(|frame| render_dashboard(frame, &app))
@@ -150,8 +145,7 @@ mod tests {
     #[test]
     fn test_render_dashboard_single_row_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 1);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let app = make_app();
         terminal
             .draw(|frame| render_dashboard(frame, &app))
@@ -161,8 +155,7 @@ mod tests {
     #[test]
     fn test_render_dashboard_many_sessions_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let mut app = make_app_with_sessions(100);
         app.selected_index = Some(50);
         terminal

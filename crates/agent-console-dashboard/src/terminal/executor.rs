@@ -37,13 +37,9 @@ pub fn execute_in_terminal(
     let env = TerminalEnvironment::detect();
     match env {
         TerminalEnvironment::Zellij => execute_zellij_pane(cmd, args, working_dir),
-        TerminalEnvironment::Tmux | TerminalEnvironment::Plain => {
-            Ok(ExecutionResult::DisplayCommand(build_command_string(
-                cmd,
-                args,
-                working_dir,
-            )))
-        }
+        TerminalEnvironment::Tmux | TerminalEnvironment::Plain => Ok(
+            ExecutionResult::DisplayCommand(build_command_string(cmd, args, working_dir)),
+        ),
     }
 }
 
@@ -113,7 +109,11 @@ mod tests {
     fn test_build_command_string_multiple_args() {
         let result = build_command_string(
             "git",
-            &["commit".to_string(), "-m".to_string(), "message".to_string()],
+            &[
+                "commit".to_string(),
+                "-m".to_string(),
+                "message".to_string(),
+            ],
             None,
         );
         assert_eq!(result, "git commit -m message");
@@ -203,12 +203,8 @@ mod tests {
         std::env::remove_var("TMUX");
         std::env::remove_var("ZELLIJ");
 
-        let result = execute_in_terminal(
-            "cmd",
-            &["arg1".to_string()],
-            Some(Path::new("/path")),
-        )
-        .expect("should not fail");
+        let result = execute_in_terminal("cmd", &["arg1".to_string()], Some(Path::new("/path")))
+            .expect("should not fail");
         match result {
             ExecutionResult::DisplayCommand(cmd) => {
                 assert_eq!(cmd, "cd /path && cmd arg1");

@@ -180,10 +180,7 @@ mod tests {
         with_env(&[("XDG_CONFIG_HOME", None)], || {
             let dir = config_dir();
             let home = dirs::home_dir().expect("could not determine home directory");
-            assert_eq!(
-                dir,
-                home.join("Library/Application Support/agent-console")
-            );
+            assert_eq!(dir, home.join("Library/Application Support/agent-console"));
         });
     }
 
@@ -284,7 +281,10 @@ mod tests {
     fn test_ensure_config_dir_creates_at_xdg_path() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         with_env(
-            &[("XDG_CONFIG_HOME", Some(tmp.path().to_str().expect("non-utf8 tmpdir")))],
+            &[(
+                "XDG_CONFIG_HOME",
+                Some(tmp.path().to_str().expect("non-utf8 tmpdir")),
+            )],
             || {
                 let result = ensure_config_dir().expect("ensure_config_dir failed");
                 assert_eq!(result, tmp.path().join("agent-console"));

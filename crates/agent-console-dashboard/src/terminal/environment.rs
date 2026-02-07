@@ -60,7 +60,9 @@ mod tests {
         let detected = TerminalEnvironment::detect();
         // Should be one of the three variants
         match detected {
-            TerminalEnvironment::Zellij | TerminalEnvironment::Tmux | TerminalEnvironment::Plain => {
+            TerminalEnvironment::Zellij
+            | TerminalEnvironment::Tmux
+            | TerminalEnvironment::Plain => {
                 // Expected variants
             }
         }

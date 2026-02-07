@@ -70,8 +70,7 @@ async fn wait_for_shutdown() {
 /// expires, the daemon shuts down.
 async fn idle_check_loop(store: &SessionStore, timeout: Duration) {
     let mut idle_since: Option<Instant> = Some(Instant::now());
-    let mut interval =
-        tokio::time::interval(Duration::from_secs(IDLE_CHECK_INTERVAL_SECS));
+    let mut interval = tokio::time::interval(Duration::from_secs(IDLE_CHECK_INTERVAL_SECS));
 
     loop {
         interval.tick().await;
@@ -271,5 +270,4 @@ mod tests {
         assert!(config.daemonize);
         assert_eq!(config.socket_path, PathBuf::from("/tmp/test.sock"));
     }
-
 }

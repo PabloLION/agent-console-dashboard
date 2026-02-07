@@ -307,13 +307,10 @@ fn test_install_with_large_settings_file() {
 
     // Add 500 custom keys
     for i in 0..500 {
-        settings
-            .as_object_mut()
-            .expect("Should be object")
-            .insert(
-                format!("customKey{}", i),
-                serde_json::json!(format!("value{}", i)),
-            );
+        settings.as_object_mut().expect("Should be object").insert(
+            format!("customKey{}", i),
+            serde_json::json!(format!("value{}", i)),
+        );
     }
 
     fs::write(

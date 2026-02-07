@@ -259,10 +259,7 @@ pub(super) async fn handle_sub_command(
 }
 
 /// Writes a message to the client. Returns `true` if the client disconnected.
-async fn write_or_disconnect(
-    writer: &mut tokio::net::unix::OwnedWriteHalf,
-    message: &str,
-) -> bool {
+async fn write_or_disconnect(writer: &mut tokio::net::unix::OwnedWriteHalf, message: &str) -> bool {
     if let Err(e) = writer.write_all(message.as_bytes()).await {
         tracing::debug!("Subscriber disconnected (write failed): {}", e);
         return true;

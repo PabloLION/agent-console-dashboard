@@ -31,8 +31,7 @@ use tracing_subscriber::{fmt, EnvFilter};
 /// Panics if a global subscriber has already been set (should only be
 /// called once, at daemon startup).
 pub fn init() {
-    let filter = EnvFilter::try_from_env("ACD_LOG")
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_env("ACD_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
 
     fmt()
         .with_env_filter(filter)

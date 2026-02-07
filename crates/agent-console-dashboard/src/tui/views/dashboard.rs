@@ -367,8 +367,7 @@ mod tests {
     #[test]
     fn test_render_session_list_empty_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         terminal
             .draw(|frame| {
                 let area = frame.area();
@@ -380,8 +379,7 @@ mod tests {
     #[test]
     fn test_render_session_list_single_session_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let sessions = vec![make_session("session-1", Status::Working)];
         terminal
             .draw(|frame| {
@@ -394,8 +392,7 @@ mod tests {
     #[test]
     fn test_render_session_list_many_sessions_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let sessions: Vec<Session> = (0..50)
             .map(|i| make_session(&format!("session-{}", i), Status::Working))
             .collect();
@@ -410,8 +407,7 @@ mod tests {
     #[test]
     fn test_render_session_list_narrow_terminal_no_panic() {
         let backend = ratatui::backend::TestBackend::new(20, 10);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let sessions = vec![make_session("narrow-test", Status::Attention)];
         terminal
             .draw(|frame| {
@@ -424,8 +420,7 @@ mod tests {
     #[test]
     fn test_render_session_list_wide_terminal_no_panic() {
         let backend = ratatui::backend::TestBackend::new(200, 50);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let sessions = vec![
             make_session("wide-1", Status::Working),
             make_session("wide-2", Status::Question),
@@ -441,8 +436,7 @@ mod tests {
     #[test]
     fn test_render_session_list_selected_out_of_bounds_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal =
-            ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let sessions = vec![make_session("only-one", Status::Closed)];
         terminal
             .draw(|frame| {

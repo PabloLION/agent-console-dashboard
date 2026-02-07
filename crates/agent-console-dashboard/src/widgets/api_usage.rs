@@ -274,7 +274,11 @@ mod tests {
         let w = ApiUsageWidget::new();
         let line = w.render(29, &ctx);
         let text = line.to_string();
-        assert!(text.starts_with('['), "width 29 should use compact: '{}'", text);
+        assert!(
+            text.starts_with('['),
+            "width 29 should use compact: '{}'",
+            text
+        );
     }
 
     #[test]
@@ -354,8 +358,16 @@ mod tests {
     fn test_format_reset_time_minutes_only() {
         let future = Utc::now() + chrono::Duration::minutes(45);
         let formatted = format_reset_time(future);
-        assert!(!formatted.contains('h'), "should not contain 'h': '{}'", formatted);
-        assert!(formatted.contains('m'), "should contain 'm': '{}'", formatted);
+        assert!(
+            !formatted.contains('h'),
+            "should not contain 'h': '{}'",
+            formatted
+        );
+        assert!(
+            formatted.contains('m'),
+            "should contain 'm': '{}'",
+            formatted
+        );
     }
 
     // --- Edge cases ---

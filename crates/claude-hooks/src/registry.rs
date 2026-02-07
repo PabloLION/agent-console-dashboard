@@ -282,8 +282,7 @@ mod tests {
 
         let stripped_str = String::from_utf8(stripped_bytes).expect("Invalid UTF-8");
 
-        let registry: Registry =
-            serde_json::from_str(&stripped_str).expect("Failed to parse JSON");
+        let registry: Registry = serde_json::from_str(&stripped_str).expect("Failed to parse JSON");
         assert_eq!(registry.schema_version, 1);
         assert_eq!(registry.agent_name, "claude-code");
     }
@@ -324,7 +323,11 @@ mod tests {
         // Fresh HOME, no registry file exists
         let result = read_registry();
         assert!(result.is_ok());
-        assert_eq!(result.expect("should be ok").len(), 0, "should return empty vec");
+        assert_eq!(
+            result.expect("should be ok").len(),
+            0,
+            "should return empty vec"
+        );
     }
 
     #[test]

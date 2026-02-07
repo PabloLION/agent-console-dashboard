@@ -84,7 +84,10 @@ mod tests {
             message: "expected `=`".to_string(),
         };
         let msg = err.to_string();
-        assert!(msg.contains("5:12"), "ParseError should include line:column");
+        assert!(
+            msg.contains("5:12"),
+            "ParseError should include line:column"
+        );
         assert!(
             msg.contains("expected `=`"),
             "ParseError should include the message"
@@ -134,8 +137,7 @@ mod tests {
 
     #[test]
     fn read_error_source_chain() {
-        let io_err =
-            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
+        let io_err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
         let err = ConfigError::ReadError {
             path: PathBuf::from("/secret"),
             source: io_err,

@@ -1,5 +1,5 @@
-use std::path::Path;
 use crate::terminal::{execute_in_terminal, ExecutionResult, TerminalEnvironment, TerminalError};
+use std::path::Path;
 
 /// Result of a resurrection attempt.
 #[derive(Debug)]
@@ -20,10 +20,7 @@ pub fn resurrect_session(
     session_id: &str,
     working_dir: &Path,
 ) -> Result<ResurrectionResult, TerminalError> {
-    let args = vec![
-        "--resume".to_string(),
-        session_id.to_string(),
-    ];
+    let args = vec!["--resume".to_string(), session_id.to_string()];
 
     match execute_in_terminal("claude", &args, Some(working_dir))? {
         ExecutionResult::Executed => Ok(ResurrectionResult::ExecutedInPane),

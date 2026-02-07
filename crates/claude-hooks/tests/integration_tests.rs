@@ -245,8 +245,13 @@ fn test_install_with_all_optional_fields() {
         status_message: Some("Running...".to_string()),
     };
 
-    install(HookEvent::PostToolUse, handler, Some("*.rs".to_string()), "test")
-        .expect("Install should succeed");
+    install(
+        HookEvent::PostToolUse,
+        handler,
+        Some("*.rs".to_string()),
+        "test",
+    )
+    .expect("Install should succeed");
 
     // Verify all fields preserved
     let entries = list().expect("List should succeed");
@@ -324,8 +329,9 @@ fn test_roundtrip_preserves_settings_keys() {
     uninstall(HookEvent::Stop, "/path/to/test.sh").expect("Uninstall should succeed");
 
     // Verify all non-hook keys preserved
-    let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
-        .expect("Read failed");
+    let content =
+        fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
+            .expect("Read failed");
     let final_settings: serde_json::Value = serde_json::from_str(&content).expect("Parse failed");
 
     assert_eq!(final_settings["cleanupPeriodDays"], 7);

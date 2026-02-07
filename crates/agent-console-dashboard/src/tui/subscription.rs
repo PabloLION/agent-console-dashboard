@@ -48,7 +48,8 @@ pub async fn subscribe_to_daemon(
         loop {
             line.clear();
             // Use a short timeout to detect end of LIST response
-            match tokio::time::timeout(Duration::from_millis(100), reader.read_line(&mut line)).await
+            match tokio::time::timeout(Duration::from_millis(100), reader.read_line(&mut line))
+                .await
             {
                 Ok(Ok(0)) => break,
                 Ok(Ok(_)) => {

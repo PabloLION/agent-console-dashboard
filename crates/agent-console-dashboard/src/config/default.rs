@@ -138,9 +138,7 @@ pub fn create_default_config(force: bool) -> Result<PathBuf, ConfigError> {
 
     if path.exists() {
         if !force {
-            return Err(ConfigError::AlreadyExists {
-                path: path.clone(),
-            });
+            return Err(ConfigError::AlreadyExists { path: path.clone() });
         }
         // Back up existing file
         let backup_path = path.with_extension("toml.backup");
@@ -262,17 +260,13 @@ mod tests {
     fn if_missing_creates_file() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         let expected_path = tmp.path().join("agent-console/config.toml");
-        with_xdg_config(
-            tmp.path().to_str().expect("non-utf8 tmpdir"),
-            || {
-                let created = create_default_config_if_missing()
-                    .expect("should succeed");
-                assert!(created, "should report file was created");
-                assert!(expected_path.exists(), "config file should exist on disk");
-                let content = fs::read_to_string(&expected_path).expect("should read");
-                assert_eq!(content, DEFAULT_CONFIG_TEMPLATE);
-            },
-        );
+        with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
+            let created = create_default_config_if_missing().expect("should succeed");
+            assert!(created, "should report file was created");
+            assert!(expected_path.exists(), "config file should exist on disk");
+            let content = fs::read_to_string(&expected_path).expect("should read");
+            assert_eq!(content, DEFAULT_CONFIG_TEMPLATE);
+        });
     }
 
     #[test]
@@ -285,14 +279,10 @@ mod tests {
         let config_file = config_dir.join("config.toml");
         fs::write(&config_file, DEFAULT_CONFIG_TEMPLATE).expect("write initial config");
 
-        with_xdg_config(
-            tmp.path().to_str().expect("non-utf8 tmpdir"),
-            || {
-                let created = create_default_config_if_missing()
-                    .expect("should succeed");
-                assert!(!created, "should report file was NOT created");
-            },
-        );
+        with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
+            let created = create_default_config_if_missing().expect("should succeed");
+            assert!(!created, "should report file was NOT created");
+        });
     }
 
     // -- create_default_config ----------------------------------------------
@@ -300,60 +290,50 @@ mod tests {
     #[test]
     fn create_without_force_returns_already_exists() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
-        with_xdg_config(
-            tmp.path().to_str().expect("non-utf8 tmpdir"),
-            || {
-                // Create initial file
-                create_default_config(false).expect("first call should succeed");
-                // Try again without force
-                let err = create_default_config(false)
-                    .expect_err("should fail with AlreadyExists");
-                match err {
-                    ConfigError::AlreadyExists { .. } => {}
-                    other => panic!("expected AlreadyExists, got: {other:?}"),
-                }
-            },
-        );
+        with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
+            // Create initial file
+            create_default_config(false).expect("first call should succeed");
+            // Try again without force
+            let err = create_default_config(false).expect_err("should fail with AlreadyExists");
+            match err {
+                ConfigError::AlreadyExists { .. } => {}
+                other => panic!("expected AlreadyExists, got: {other:?}"),
+            }
+        });
     }
 
     #[test]
     fn create_with_force_creates_backup() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
-        with_xdg_config(
-            tmp.path().to_str().expect("non-utf8 tmpdir"),
-            || {
-                // Create initial file with custom content
-                let path = create_default_config(false).expect("first call should succeed");
-                fs::write(&path, "# custom content\n").expect("overwrite for test");
+        with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
+            // Create initial file with custom content
+            let path = create_default_config(false).expect("first call should succeed");
+            fs::write(&path, "# custom content\n").expect("overwrite for test");
 
-                // Force overwrite
-                let new_path = create_default_config(true).expect("force should succeed");
-                assert_eq!(new_path, path);
+            // Force overwrite
+            let new_path = create_default_config(true).expect("force should succeed");
+            assert_eq!(new_path, path);
 
-                // Backup should exist
-                let backup = path.with_extension("toml.backup");
-                assert!(backup.exists(), "backup file should exist");
-                let backup_content = fs::read_to_string(&backup).expect("read backup");
-                assert_eq!(backup_content, "# custom content\n");
+            // Backup should exist
+            let backup = path.with_extension("toml.backup");
+            assert!(backup.exists(), "backup file should exist");
+            let backup_content = fs::read_to_string(&backup).expect("read backup");
+            assert_eq!(backup_content, "# custom content\n");
 
-                // New file should be template
-                let content = fs::read_to_string(&path).expect("read new");
-                assert_eq!(content, DEFAULT_CONFIG_TEMPLATE);
-            },
-        );
+            // New file should be template
+            let content = fs::read_to_string(&path).expect("read new");
+            assert_eq!(content, DEFAULT_CONFIG_TEMPLATE);
+        });
     }
 
     #[test]
     fn create_returns_correct_path() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         let expected = tmp.path().join("agent-console/config.toml");
-        with_xdg_config(
-            tmp.path().to_str().expect("non-utf8 tmpdir"),
-            || {
-                let path = create_default_config(false).expect("should succeed");
-                assert_eq!(path, expected);
-            },
-        );
+        with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
+            let path = create_default_config(false).expect("should succeed");
+            assert_eq!(path, expected);
+        });
     }
 
     // -- Permissions --------------------------------------------------------
@@ -364,20 +344,13 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         let expected_path = tmp.path().join("agent-console/config.toml");
-        with_xdg_config(
-            tmp.path().to_str().expect("non-utf8 tmpdir"),
-            || {
-                create_default_config_if_missing().expect("should succeed");
-                let mode = fs::metadata(&expected_path)
-                    .expect("metadata")
-                    .permissions()
-                    .mode();
-                assert_eq!(
-                    mode & 0o777,
-                    0o600,
-                    "file should be owner-only read/write"
-                );
-            },
-        );
+        with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
+            create_default_config_if_missing().expect("should succeed");
+            let mode = fs::metadata(&expected_path)
+                .expect("metadata")
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o600, "file should be owner-only read/write");
+        });
     }
 }

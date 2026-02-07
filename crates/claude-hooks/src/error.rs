@@ -123,7 +123,10 @@ mod tests {
             display.contains("settings.json.tmp.20260203-143022"),
             "Error should contain temp path"
         );
-        assert!(display.contains("Safety copy"), "Error should mention safety copy");
+        assert!(
+            display.contains("Safety copy"),
+            "Error should mention safety copy"
+        );
     }
 
     #[test]
@@ -147,7 +150,10 @@ mod tests {
             command: "/path/to/start.sh".to_string(),
         };
         let display = format!("{}", err);
-        assert!(display.contains("SessionStart"), "Error should contain event");
+        assert!(
+            display.contains("SessionStart"),
+            "Error should contain event"
+        );
         assert!(
             display.contains("/path/to/start.sh"),
             "Error should contain command"

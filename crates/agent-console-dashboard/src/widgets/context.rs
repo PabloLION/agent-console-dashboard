@@ -91,8 +91,7 @@ impl<'a> WidgetContext<'a> {
 
     /// Returns the currently selected session, if the index is valid.
     pub fn selected_session(&self) -> Option<&'a Session> {
-        self.selected_index
-            .and_then(|i| self.sessions.get(i))
+        self.selected_index.and_then(|i| self.sessions.get(i))
     }
 }
 

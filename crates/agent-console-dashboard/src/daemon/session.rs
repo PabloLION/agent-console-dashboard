@@ -143,8 +143,7 @@ mod tests {
         let closed = ClosedSession::from_session(&session, daemon_start);
 
         let json = serde_json::to_string(&closed).expect("should serialize");
-        let deserialized: ClosedSession =
-            serde_json::from_str(&json).expect("should deserialize");
+        let deserialized: ClosedSession = serde_json::from_str(&json).expect("should deserialize");
 
         assert_eq!(deserialized.session_id, "s4");
         assert!(deserialized.resumable);

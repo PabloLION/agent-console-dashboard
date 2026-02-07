@@ -83,7 +83,10 @@ async fn test_create_session_already_exists_error() {
         other => panic!("Expected SessionExists error, got: {:?}", other),
     }
 
-    let retrieved = store.get("duplicate-id").await.expect("session should exist");
+    let retrieved = store
+        .get("duplicate-id")
+        .await
+        .expect("session should exist");
     assert_eq!(retrieved.working_dir, PathBuf::from("/path/1"));
 }
 

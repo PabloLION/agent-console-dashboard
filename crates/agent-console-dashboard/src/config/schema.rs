@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 /// [integrations]
 /// [daemon]
 /// ```
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(default)]
 pub struct Config {
     /// TUI appearance and behavior settings.
@@ -32,17 +32,6 @@ pub struct Config {
     pub integrations: IntegrationsConfig,
     /// Daemon process settings.
     pub daemon: TomlDaemonConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            tui: TuiConfig::default(),
-            agents: AgentsConfig::default(),
-            integrations: IntegrationsConfig::default(),
-            daemon: TomlDaemonConfig::default(),
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -95,20 +84,12 @@ pub enum LayoutPreset {
 /// Agent-level configuration container.
 ///
 /// Each supported agent has its own sub-section (e.g. `[agents.claude-code]`).
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(default)]
 pub struct AgentsConfig {
     /// Claude Code agent settings.
     #[serde(rename = "claude-code")]
     pub claude_code: ClaudeCodeConfig,
-}
-
-impl Default for AgentsConfig {
-    fn default() -> Self {
-        Self {
-            claude_code: ClaudeCodeConfig::default(),
-        }
-    }
 }
 
 /// Configuration for the Claude Code agent integration.
@@ -137,19 +118,11 @@ impl Default for ClaudeCodeConfig {
 // ---------------------------------------------------------------------------
 
 /// Third-party integration configuration.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(default)]
 pub struct IntegrationsConfig {
     /// Zellij terminal multiplexer integration.
     pub zellij: ZellijConfig,
-}
-
-impl Default for IntegrationsConfig {
-    fn default() -> Self {
-        Self {
-            zellij: ZellijConfig::default(),
-        }
-    }
 }
 
 /// Zellij integration configuration.

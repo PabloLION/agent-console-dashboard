@@ -139,8 +139,8 @@ fn main() -> ExitCode {
 
     match cli.command {
         Commands::Tui { socket } => {
-            let rt = tokio::runtime::Runtime::new()
-                .expect("failed to create tokio runtime for TUI");
+            let rt =
+                tokio::runtime::Runtime::new().expect("failed to create tokio runtime for TUI");
             if let Err(e) = rt.block_on(async {
                 let mut app = App::new(socket);
                 app.run().await
@@ -172,29 +172,25 @@ fn main() -> ExitCode {
         Commands::Config { action } => {
             use agent_console::config::{default, loader::ConfigLoader, xdg};
             let result = match action {
-                ConfigAction::Init { force } => {
-                    match default::create_default_config(force) {
-                        Ok(path) => {
-                            println!("Created configuration at {}", path.display());
-                            Ok(())
-                        }
-                        Err(e) => Err(e),
+                ConfigAction::Init { force } => match default::create_default_config(force) {
+                    Ok(path) => {
+                        println!("Created configuration at {}", path.display());
+                        Ok(())
                     }
-                }
+                    Err(e) => Err(e),
+                },
                 ConfigAction::Path => {
                     println!("{}", xdg::config_path().display());
                     Ok(())
                 }
-                ConfigAction::Validate => {
-                    match ConfigLoader::load_default() {
-                        Ok(config) => {
-                            println!("Configuration is valid");
-                            println!("{config:#?}");
-                            Ok(())
-                        }
-                        Err(e) => Err(e),
+                ConfigAction::Validate => match ConfigLoader::load_default() {
+                    Ok(config) => {
+                        println!("Configuration is valid");
+                        println!("{config:#?}");
+                        Ok(())
                     }
-                }
+                    Err(e) => Err(e),
+                },
             };
             if let Err(e) = result {
                 eprintln!("Config error: {e}");
@@ -790,9 +786,8 @@ mod tests {
 
     #[test]
     fn test_dump_with_custom_socket() {
-        let cli =
-            Cli::try_parse_from(["agent-console", "dump", "--socket", "/custom/dump.sock"])
-                .expect("dump --socket should parse");
+        let cli = Cli::try_parse_from(["agent-console", "dump", "--socket", "/custom/dump.sock"])
+            .expect("dump --socket should parse");
         match cli.command {
             Commands::Dump { socket, .. } => {
                 assert_eq!(socket, PathBuf::from("/custom/dump.sock"));
@@ -857,9 +852,8 @@ mod tests {
 
     #[test]
     fn test_resurrect_quiet_flag() {
-        let cli =
-            Cli::try_parse_from(["agent-console", "resurrect", "session-abc", "--quiet"])
-                .expect("resurrect --quiet should parse");
+        let cli = Cli::try_parse_from(["agent-console", "resurrect", "session-abc", "--quiet"])
+            .expect("resurrect --quiet should parse");
         match cli.command {
             Commands::Resurrect { quiet, .. } => {
                 assert!(quiet);
@@ -889,9 +883,7 @@ mod tests {
     #[test]
     fn test_service_subcommand_in_help() {
         let cmd = Cli::command();
-        let service_cmd = cmd
-            .get_subcommands()
-            .find(|sc| sc.get_name() == "service");
+        let service_cmd = cmd.get_subcommands().find(|sc| sc.get_name() == "service");
         assert!(service_cmd.is_some(), "service subcommand should exist");
     }
 
@@ -958,9 +950,7 @@ mod tests {
     #[test]
     fn test_config_subcommand_in_help() {
         let cmd = Cli::command();
-        let config_cmd = cmd
-            .get_subcommands()
-            .find(|sc| sc.get_name() == "config");
+        let config_cmd = cmd.get_subcommands().find(|sc| sc.get_name() == "config");
         assert!(config_cmd.is_some(), "config subcommand should exist");
     }
 }

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// Claude Code hook events
 ///
 /// Matches Claude's event names exactly when serialized.
-/// See: https://docs.anthropic.com/en/docs/claude-code/hooks
+/// See: <https://docs.anthropic.com/en/docs/claude-code/hooks>
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum HookEvent {
     /// Session begins or resumes
@@ -267,7 +267,10 @@ mod tests {
             }],
         };
         let json = serde_json::to_string(&group).expect("serialization failed");
-        assert!(!json.contains("matcher"), "matcher should be omitted when None");
+        assert!(
+            !json.contains("matcher"),
+            "matcher should be omitted when None"
+        );
         let deserialized: MatcherGroup =
             serde_json::from_str(&json).expect("deserialization failed");
         assert_eq!(group, deserialized);

@@ -88,10 +88,7 @@ struct SessionEntry {
 /// Uses the last path component if the ID looks like a path,
 /// otherwise returns the ID itself.
 fn extract_name(id: &str) -> String {
-    id.rsplit('/')
-        .next()
-        .unwrap_or(id)
-        .to_string()
+    id.rsplit('/').next().unwrap_or(id).to_string()
 }
 
 /// Formats a [`Duration`] as a human-readable elapsed string.
@@ -132,9 +129,10 @@ fn status_span(entry: &SessionEntry) -> Span<'static> {
         crate::Status::Attention => {
             Span::styled(format_duration(entry.elapsed), Style::default().fg(color))
         }
-        crate::Status::Question => {
-            Span::styled(format!("? {}", format_duration(entry.elapsed)), Style::default().fg(color))
-        }
+        crate::Status::Question => Span::styled(
+            format!("? {}", format_duration(entry.elapsed)),
+            Style::default().fg(color),
+        ),
         crate::Status::Closed => Span::styled("×".to_string(), Style::default().fg(color)),
     }
 }
@@ -287,7 +285,10 @@ mod tests {
         let w = SessionStatusWidget::new();
         let line = w.render(80, &ctx);
         let text = line.to_string();
-        assert!(text.contains("proj-a: "), "expected name prefix, got: {text}");
+        assert!(
+            text.contains("proj-a: "),
+            "expected name prefix, got: {text}"
+        );
         assert!(text.contains('●'), "expected working symbol, got: {text}");
     }
 
@@ -438,7 +439,10 @@ mod tests {
         let w = SessionStatusWidget::new();
         let line = w.render(80, &ctx);
         let text = line.to_string();
-        assert!(text.contains("2m 34s"), "expected elapsed time, got: {text}");
+        assert!(
+            text.contains("2m 34s"),
+            "expected elapsed time, got: {text}"
+        );
     }
 
     // -- Default trait --

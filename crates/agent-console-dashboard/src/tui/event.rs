@@ -95,9 +95,7 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
     // Global: quit always works
     match key.code {
         KeyCode::Char('q') => return Action::Quit,
-        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            return Action::Quit
-        }
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => return Action::Quit,
         _ => {}
     }
 
@@ -181,8 +179,7 @@ fn handle_detail_key(app: &App, key: KeyEvent, session_index: usize) -> Action {
 /// Returns true if the key event should trigger application quit.
 pub fn should_quit(key: KeyEvent) -> bool {
     matches!(key.code, KeyCode::Char('q'))
-        || (key.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key.code, KeyCode::Char('c')))
+        || (key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')))
 }
 
 #[cfg(test)]
@@ -216,7 +213,10 @@ mod tests {
 
     #[test]
     fn test_should_quit_on_q() {
-        assert!(should_quit(make_key(KeyCode::Char('q'), KeyModifiers::NONE)));
+        assert!(should_quit(make_key(
+            KeyCode::Char('q'),
+            KeyModifiers::NONE
+        )));
     }
 
     #[test]
@@ -229,7 +229,10 @@ mod tests {
 
     #[test]
     fn test_should_not_quit_on_other_keys() {
-        assert!(!should_quit(make_key(KeyCode::Char('a'), KeyModifiers::NONE)));
+        assert!(!should_quit(make_key(
+            KeyCode::Char('a'),
+            KeyModifiers::NONE
+        )));
         assert!(!should_quit(make_key(KeyCode::Enter, KeyModifiers::NONE)));
         assert!(!should_quit(make_key(KeyCode::Esc, KeyModifiers::NONE)));
     }
@@ -306,8 +309,10 @@ mod tests {
     #[test]
     fn test_handle_key_ctrl_c_quits() {
         let mut app = make_app_with_sessions(1);
-        let action =
-            handle_key_event(&mut app, make_key(KeyCode::Char('c'), KeyModifiers::CONTROL));
+        let action = handle_key_event(
+            &mut app,
+            make_key(KeyCode::Char('c'), KeyModifiers::CONTROL),
+        );
         assert_eq!(action, Action::Quit);
     }
 

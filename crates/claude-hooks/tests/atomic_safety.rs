@@ -79,8 +79,9 @@ fn test_settings_roundtrip_preserves_all_keys() {
     uninstall(HookEvent::Stop, "/path/to/test.sh").expect("Uninstall should succeed");
 
     // Verify all keys preserved
-    let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
-        .expect("Read failed");
+    let content =
+        fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
+            .expect("Read failed");
     let final_settings: serde_json::Value = serde_json::from_str(&content).expect("Parse failed");
 
     // Top-level keys
@@ -105,7 +106,10 @@ fn test_settings_roundtrip_preserves_all_keys() {
     assert!(plugins.contains(&serde_json::json!("plugin1")));
 
     // Deep nesting
-    assert_eq!(final_settings["nestedObject"]["level1"]["level2"], "deep value");
+    assert_eq!(
+        final_settings["nestedObject"]["level1"]["level2"],
+        "deep value"
+    );
 
     // Array of objects
     let array_of_objects = final_settings["arrayOfObjects"]
@@ -116,8 +120,15 @@ fn test_settings_roundtrip_preserves_all_keys() {
     assert_eq!(array_of_objects[1]["value"], 2);
 
     // Hooks should be empty object after uninstall
-    let hooks = final_settings["hooks"].as_object().expect("Should be object");
-    assert!(hooks.is_empty() || hooks.values().all(|v| v.as_array().map(|a| a.is_empty()).unwrap_or(true)));
+    let hooks = final_settings["hooks"]
+        .as_object()
+        .expect("Should be object");
+    assert!(
+        hooks.is_empty()
+            || hooks
+                .values()
+                .all(|v| v.as_array().map(|a| a.is_empty()).unwrap_or(true))
+    );
 }
 
 #[test]
@@ -161,11 +172,14 @@ fn test_install_preserves_existing_hook_order() {
     install(HookEvent::PreToolUse, handler, None, "test").expect("Install should succeed");
 
     // Verify structure preserved and new hook added
-    let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
-        .expect("Read failed");
+    let content =
+        fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
+            .expect("Read failed");
     let final_settings: serde_json::Value = serde_json::from_str(&content).expect("Parse failed");
 
-    let hooks = final_settings["hooks"].as_object().expect("Should be object");
+    let hooks = final_settings["hooks"]
+        .as_object()
+        .expect("Should be object");
     assert!(hooks.contains_key("SessionStart"));
     assert!(hooks.contains_key("Stop"));
     assert!(hooks.contains_key("PreToolUse"));
@@ -193,8 +207,9 @@ fn test_uninstall_preserves_remaining_hook_order() {
     uninstall(HookEvent::Stop, "/second.sh").expect("Uninstall should succeed");
 
     // Verify remaining hooks
-    let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
-        .expect("Read failed");
+    let content =
+        fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
+            .expect("Read failed");
     let final_settings: serde_json::Value = serde_json::from_str(&content).expect("Parse failed");
 
     // Count hooks in Stop event
@@ -291,8 +306,9 @@ fn test_json_formatting_preserved() {
     install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
 
     // Verify output is still pretty-formatted
-    let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
-        .expect("Read failed");
+    let content =
+        fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
+            .expect("Read failed");
 
     // Check for indentation (pretty-print uses 2 spaces)
     assert!(content.contains("  "), "Output should be pretty-formatted");
@@ -335,8 +351,9 @@ fn test_unicode_and_special_chars_preserved() {
     uninstall(HookEvent::Stop, "/path/to/test.sh").expect("Uninstall should succeed");
 
     // Verify special chars preserved
-    let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
-        .expect("Read failed");
+    let content =
+        fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
+            .expect("Read failed");
     let final_settings: serde_json::Value = serde_json::from_str(&content).expect("Parse failed");
 
     assert!(final_settings["env"]["UNICODE"]
@@ -348,11 +365,15 @@ fn test_unicode_and_special_chars_preserved() {
         .expect("Should be string")
         .contains("🌍"));
     assert_eq!(
-        final_settings["env"]["SPECIAL"].as_str().expect("Should be string"),
+        final_settings["env"]["SPECIAL"]
+            .as_str()
+            .expect("Should be string"),
         "quotes\"and\\backslashes"
     );
     assert_eq!(
-        final_settings["env"]["NEWLINES"].as_str().expect("Should be string"),
+        final_settings["env"]["NEWLINES"]
+            .as_str()
+            .expect("Should be string"),
         "line1\nline2\ttab"
     );
 }
@@ -388,8 +409,9 @@ fn test_empty_strings_and_nulls_preserved() {
     uninstall(HookEvent::Stop, "/path/to/test.sh").expect("Uninstall should succeed");
 
     // Verify values preserved
-    let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
-        .expect("Read failed");
+    let content =
+        fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
+            .expect("Read failed");
     let final_settings: serde_json::Value = serde_json::from_str(&content).expect("Parse failed");
 
     assert_eq!(final_settings["emptyString"], "");
@@ -411,10 +433,10 @@ fn test_large_settings_file_handled() {
 
     // Add 100 custom keys
     for i in 0..100 {
-        settings
-            .as_object_mut()
-            .expect("Should be object")
-            .insert(format!("customKey{}", i), serde_json::json!(format!("value{}", i)));
+        settings.as_object_mut().expect("Should be object").insert(
+            format!("customKey{}", i),
+            serde_json::json!(format!("value{}", i)),
+        );
     }
 
     fs::write(
@@ -434,8 +456,9 @@ fn test_large_settings_file_handled() {
     install(HookEvent::Stop, handler, None, "test").expect("Install should succeed");
 
     // Verify all keys still present
-    let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
-        .expect("Read failed");
+    let content =
+        fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
+            .expect("Read failed");
     let final_settings: serde_json::Value = serde_json::from_str(&content).expect("Parse failed");
 
     for i in 0..100 {
@@ -466,8 +489,9 @@ fn test_concurrent_operations_sequential() {
     }
 
     // Verify all hooks present
-    let content = fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
-        .expect("Read failed");
+    let content =
+        fs::read_to_string(env::var("HOME").expect("HOME not set") + "/.claude/settings.json")
+            .expect("Read failed");
     let final_settings: serde_json::Value = serde_json::from_str(&content).expect("Parse failed");
 
     // Count hooks in Stop event

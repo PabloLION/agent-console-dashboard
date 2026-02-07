@@ -386,8 +386,7 @@ async fn handle_client(
             "DUMP" => handle_dump_command(state).await,
             "SUB" => {
                 // Subscribe mode: send UPDATE and USAGE notifications to client
-                handle_sub_command(&state.store, state.usage_fetcher.as_ref(), &mut writer)
-                    .await?;
+                handle_sub_command(&state.store, state.usage_fetcher.as_ref(), &mut writer).await?;
                 // After SUB returns (client disconnected or error), exit the loop
                 break;
             }

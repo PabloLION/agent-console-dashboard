@@ -90,8 +90,7 @@ fn main() {
     let marketplace_path = plugin_dir.join("marketplace.json");
     let marketplace_content = serde_json::to_string_pretty(&marketplace_json)
         .expect("failed to serialize marketplace.json");
-    fs::write(&marketplace_path, &marketplace_content)
-        .expect("failed to write marketplace.json");
+    fs::write(&marketplace_path, &marketplace_content).expect("failed to write marketplace.json");
 
     // Version sync check: read back generated plugin.json and verify version matches
     let generated: serde_json::Value =

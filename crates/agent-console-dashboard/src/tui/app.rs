@@ -206,10 +206,9 @@ impl App {
             // Drain daemon updates before rendering
             while let Ok(msg) = update_rx.try_recv() {
                 match msg {
-                    DaemonMessage::SessionUpdate {
-                        session_id,
-                        status,
-                    } => self.apply_update(&session_id, status),
+                    DaemonMessage::SessionUpdate { session_id, status } => {
+                        self.apply_update(&session_id, status)
+                    }
                     DaemonMessage::UsageUpdate(data) => {
                         self.usage = Some(data);
                     }
@@ -444,7 +443,9 @@ mod tests {
     #[test]
     fn test_selected_session_returns_correct() {
         let app = make_app_with_sessions(3);
-        let session = app.selected_session().expect("should have selected session");
+        let session = app
+            .selected_session()
+            .expect("should have selected session");
         assert_eq!(session.id, "session-0");
     }
 
@@ -459,7 +460,9 @@ mod tests {
         let mut app = make_app_with_sessions(5);
         app.select_next();
         app.select_next();
-        let session = app.selected_session().expect("should have selected session");
+        let session = app
+            .selected_session()
+            .expect("should have selected session");
         assert_eq!(session.id, "session-2");
     }
 

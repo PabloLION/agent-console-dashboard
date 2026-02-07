@@ -3,7 +3,9 @@
 //! Tests sync issues, corrupt files, missing data
 //! Validates error handling and recovery scenarios
 
-use claude_hooks::{install, list, uninstall, Error, HookError, HookEvent, HookHandler, SettingsError};
+use claude_hooks::{
+    install, list, uninstall, Error, HookError, HookEvent, HookHandler, SettingsError,
+};
 use serial_test::serial;
 use std::env;
 use std::fs;
@@ -58,7 +60,10 @@ fn test_hook_in_registry_but_not_in_settings() {
 
     // Uninstall should succeed (cleans registry without error)
     let result = uninstall(HookEvent::Stop, "/path/to/test.sh");
-    assert!(result.is_ok(), "Uninstall should succeed even if not in settings");
+    assert!(
+        result.is_ok(),
+        "Uninstall should succeed even if not in settings"
+    );
 
     // Verify registry cleaned
     let entries = list().expect("List should succeed");
@@ -138,7 +143,11 @@ fn test_missing_hooks_object() {
     // List should return empty result (resilient design)
     let result = list();
     assert!(result.is_ok(), "List should succeed with missing hooks");
-    assert_eq!(result.expect("should be ok").len(), 0, "Should return empty list");
+    assert_eq!(
+        result.expect("should be ok").len(),
+        0,
+        "Should return empty list"
+    );
 }
 
 #[test]
@@ -159,8 +168,15 @@ fn test_hooks_not_an_object() {
 
     // List should return empty result (resilient design - skips invalid hooks)
     let result = list();
-    assert!(result.is_ok(), "List should succeed with invalid hooks type");
-    assert_eq!(result.expect("should be ok").len(), 0, "Should return empty list");
+    assert!(
+        result.is_ok(),
+        "List should succeed with invalid hooks type"
+    );
+    assert_eq!(
+        result.expect("should be ok").len(),
+        0,
+        "Should return empty list"
+    );
 }
 
 #[test]
@@ -173,7 +189,10 @@ fn test_settings_file_not_found() {
 
     // Operations should fail with IO error
     let result = list();
-    assert!(result.is_err(), "List should fail when settings.json missing");
+    assert!(
+        result.is_err(),
+        "List should fail when settings.json missing"
+    );
 
     match result.unwrap_err() {
         Error::Settings(SettingsError::Io(_)) => {
@@ -245,7 +264,10 @@ fn test_install_duplicate_via_settings() {
     };
 
     let result = install(HookEvent::Stop, handler, None, "test");
-    assert!(result.is_err(), "Install should fail if already in settings");
+    assert!(
+        result.is_err(),
+        "Install should fail if already in settings"
+    );
 
     match result.unwrap_err() {
         Error::Hook(HookError::AlreadyExists { .. }) => {
@@ -262,7 +284,10 @@ fn test_uninstall_nonexistent_hook() {
 
     // Try to uninstall hook that doesn't exist
     let result = uninstall(HookEvent::Stop, "/nonexistent/hook.sh");
-    assert!(result.is_err(), "Uninstall should fail for nonexistent hook");
+    assert!(
+        result.is_err(),
+        "Uninstall should fail for nonexistent hook"
+    );
 
     match result.unwrap_err() {
         Error::Hook(HookError::NotManaged { event, command }) => {
@@ -332,7 +357,11 @@ fn test_malformed_hook_in_settings() {
     // List should return empty result (resilient design - skips malformed entries)
     let result = list();
     assert!(result.is_ok(), "List should succeed with malformed hook");
-    assert_eq!(result.expect("should be ok").len(), 0, "Should return empty list");
+    assert_eq!(
+        result.expect("should be ok").len(),
+        0,
+        "Should return empty list"
+    );
 }
 
 #[test]
@@ -361,7 +390,11 @@ fn test_invalid_event_in_settings() {
     // List should return empty result (resilient design - skips unknown events)
     let result = list();
     assert!(result.is_ok(), "List should succeed with invalid event");
-    assert_eq!(result.expect("should be ok").len(), 0, "Should return empty list");
+    assert_eq!(
+        result.expect("should be ok").len(),
+        0,
+        "Should return empty list"
+    );
 }
 
 #[test]
@@ -452,7 +485,10 @@ fn test_registry_dir_not_exist() {
     };
 
     let result = install(HookEvent::Stop, handler, None, "test");
-    assert!(result.is_ok(), "Install should create registry dir if missing");
+    assert!(
+        result.is_ok(),
+        "Install should create registry dir if missing"
+    );
 }
 
 #[test]
@@ -470,7 +506,8 @@ fn test_multiple_same_command_different_events() {
         r#async: None,
         status_message: None,
     };
-    install(HookEvent::SessionStart, handler1, None, "test").expect("SessionStart install should succeed");
+    install(HookEvent::SessionStart, handler1, None, "test")
+        .expect("SessionStart install should succeed");
 
     let handler2 = HookHandler {
         r#type: "command".to_string(),

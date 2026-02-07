@@ -55,7 +55,10 @@ impl Widget for WorkingDirWidget {
         let w = width as usize;
 
         if context.sessions.is_empty() {
-            return Line::styled("(no sessions)", Style::default().add_modifier(Modifier::DIM));
+            return Line::styled(
+                "(no sessions)",
+                Style::default().add_modifier(Modifier::DIM),
+            );
         }
 
         // Use selected session, or default to first session.
@@ -221,7 +224,10 @@ mod tests {
     fn test_format_path_truncate_left() {
         let path = PathBuf::from("/very/long/deeply/nested/directory/structure");
         let result = format_path(&path, 25);
-        assert!(result.starts_with("…/"), "expected …/ prefix, got: {result}");
+        assert!(
+            result.starts_with("…/"),
+            "expected …/ prefix, got: {result}"
+        );
         assert!(
             result.len() <= 25,
             "expected <= 25 chars, got {} for: {result}",
@@ -269,7 +275,10 @@ mod tests {
     fn test_format_path_one_over() {
         let path = PathBuf::from("/usr/local");
         let result = format_path(&path, 9);
-        assert!(result.starts_with("…/"), "expected …/ prefix, got: {result}");
+        assert!(
+            result.starts_with("…/"),
+            "expected …/ prefix, got: {result}"
+        );
         assert!(result.len() <= 9, "expected <= 9 chars, got: {result}");
     }
 

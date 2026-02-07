@@ -1,16 +1,16 @@
 //! Widget system for the agent console dashboard.
 //!
-//! This module defines the [`Widget`] trait that all dashboard widgets must
-//! implement, and the [`WidgetRegistry`] for dynamic widget creation.
+//! This module defines the `Widget` trait that all dashboard widgets must
+//! implement, and the `WidgetRegistry` for dynamic widget creation.
 //!
 //! # Architecture
 //!
 //! Widgets are small, composable UI components that render a single line
 //! of content in the dashboard status bar. Each widget receives a
-//! [`WidgetContext`] containing shared application state and renders
-//! itself into a ratatui [`Line`].
+//! `WidgetContext` containing shared application state and renders
+//! itself into a ratatui `Line`.
 //!
-//! The [`WidgetRegistry`] maps widget identifiers to factory functions,
+//! The `WidgetRegistry` maps widget identifiers to factory functions,
 //! allowing dynamic widget creation from configuration or user input.
 //!
 //! # Example
@@ -187,10 +187,22 @@ fn placeholder_factory(id: &'static str) -> WidgetFactory {
         "session-status" => || Box::new(session_status::SessionStatusWidget::new()),
         "working-dir" => working_dir::WorkingDirWidget::create,
         "api-usage" => api_usage::create,
-        "state-history" => || Box::new(PlaceholderWidget { widget_id: "state-history" }),
+        "state-history" => || {
+            Box::new(PlaceholderWidget {
+                widget_id: "state-history",
+            })
+        },
         "clock" => || Box::new(PlaceholderWidget { widget_id: "clock" }),
-        "spacer" => || Box::new(PlaceholderWidget { widget_id: "spacer" }),
-        _ => || Box::new(PlaceholderWidget { widget_id: "unknown" }),
+        "spacer" => || {
+            Box::new(PlaceholderWidget {
+                widget_id: "spacer",
+            })
+        },
+        _ => || {
+            Box::new(PlaceholderWidget {
+                widget_id: "unknown",
+            })
+        },
     }
 }
 
@@ -314,18 +326,14 @@ mod tests {
     fn test_placeholder_widget_render() {
         let sessions: Vec<Session> = vec![];
         let ctx = WidgetContext::new(&sessions);
-        let w = PlaceholderWidget {
-            widget_id: "clock",
-        };
+        let w = PlaceholderWidget { widget_id: "clock" };
         let line = w.render(80, &ctx);
         assert_eq!(line.to_string(), "[clock]");
     }
 
     #[test]
     fn test_placeholder_widget_min_width() {
-        let w = PlaceholderWidget {
-            widget_id: "clock",
-        };
+        let w = PlaceholderWidget { widget_id: "clock" };
         // "clock" = 5 chars + 2 brackets + 1 padding = 8
         assert_eq!(w.min_width(), 8);
     }

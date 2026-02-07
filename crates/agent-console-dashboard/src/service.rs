@@ -31,7 +31,10 @@ pub fn install_service() -> Result<(), Box<dyn std::error::Error>> {
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
-        Err("Platform not supported. Only macOS (launchd) and Linux (systemd) are supported.".into())
+        Err(
+            "Platform not supported. Only macOS (launchd) and Linux (systemd) are supported."
+                .into(),
+        )
     }
 }
 
@@ -47,7 +50,10 @@ pub fn uninstall_service() -> Result<(), Box<dyn std::error::Error>> {
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
-        Err("Platform not supported. Only macOS (launchd) and Linux (systemd) are supported.".into())
+        Err(
+            "Platform not supported. Only macOS (launchd) and Linux (systemd) are supported."
+                .into(),
+        )
     }
 }
 
@@ -63,7 +69,10 @@ pub fn service_status() -> Result<(), Box<dyn std::error::Error>> {
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
-        Err("Platform not supported. Only macOS (launchd) and Linux (systemd) are supported.".into())
+        Err(
+            "Platform not supported. Only macOS (launchd) and Linux (systemd) are supported."
+                .into(),
+        )
     }
 }
 
@@ -156,9 +165,7 @@ fn uninstall_macos() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(target_os = "macos")]
 fn status_macos() -> Result<(), Box<dyn std::error::Error>> {
-    let output = Command::new("launchctl")
-        .args(["list"])
-        .output()?;
+    let output = Command::new("launchctl").args(["list"]).output()?;
 
     if !output.status.success() {
         return Err("launchctl list failed".into());
