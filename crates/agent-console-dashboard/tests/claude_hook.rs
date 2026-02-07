@@ -7,7 +7,7 @@
 mod claude_hook {
     use assert_cmd::Command;
     use predicates::prelude::*;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::process::Stdio;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::TempDir;
@@ -15,6 +15,18 @@ mod claude_hook {
     static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     const ACD_BIN: &str = env!("CARGO_BIN_EXE_acd");
+
+    /// RAII guard that kills the daemon process on drop (even on panic).
+    struct DaemonGuard {
+        child: std::process::Child,
+    }
+
+    impl Drop for DaemonGuard {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
 
     /// Returns a unique socket path inside the given temp dir.
     fn test_socket(temp_dir: &TempDir) -> PathBuf {
@@ -27,7 +39,7 @@ mod claude_hook {
     }
 
     /// Spawn the daemon in the background, wait for the socket to appear.
-    fn start_daemon(socket: &PathBuf) -> std::process::Child {
+    fn start_daemon(socket: &Path) -> DaemonGuard {
         let child = std::process::Command::new(ACD_BIN)
             .args(["daemon", "--socket", socket.to_str().expect("valid path")])
             .stdout(Stdio::null())
@@ -38,7 +50,7 @@ mod claude_hook {
         // Wait for socket to appear (max ~2 s)
         for _ in 0..200 {
             if socket.exists() {
-                return child;
+                return DaemonGuard { child };
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
@@ -46,7 +58,7 @@ mod claude_hook {
     }
 
     /// Run `acd dump` and parse the JSON output.
-    fn dump(socket: &PathBuf) -> serde_json::Value {
+    fn dump(socket: &Path) -> serde_json::Value {
         let output = acd_cmd()
             .args(["dump", "--socket", socket.to_str().expect("valid path")])
             .output()
@@ -56,7 +68,7 @@ mod claude_hook {
     }
 
     /// Run `acd claude-hook <status>` with the given JSON on stdin.
-    fn claude_hook(socket: &PathBuf, status: &str, stdin_json: &str) -> assert_cmd::assert::Assert {
+    fn claude_hook(socket: &Path, status: &str, stdin_json: &str) -> assert_cmd::assert::Assert {
         acd_cmd()
             .args([
                 "claude-hook",
@@ -76,7 +88,7 @@ mod claude_hook {
     fn hook_creates_session_with_working_status() {
         let tmp = TempDir::new().expect("temp dir");
         let sock = test_socket(&tmp);
-        let mut daemon = start_daemon(&sock);
+        let _daemon = start_daemon(&sock);
 
         let hook_json = r#"{"session_id":"sess-1","cwd":"/home/user/project"}"#;
         claude_hook(&sock, "working", hook_json)
@@ -90,15 +102,13 @@ mod claude_hook {
         let s = &sessions[0];
         assert_eq!(s["id"], "sess-1");
         assert_eq!(s["status"], "working");
-
-        daemon.kill().ok();
     }
 
     #[test]
     fn hook_forwards_cwd_as_working_dir() {
         let tmp = TempDir::new().expect("temp dir");
         let sock = test_socket(&tmp);
-        let mut daemon = start_daemon(&sock);
+        let _daemon = start_daemon(&sock);
 
         let hook_json = r#"{"session_id":"sess-wd","cwd":"/home/user/my-project"}"#;
         claude_hook(&sock, "working", hook_json).success();
@@ -109,15 +119,30 @@ mod claude_hook {
             s["working_dir"], "/home/user/my-project",
             "working_dir should match the cwd from hook JSON stdin"
         );
+    }
 
-        daemon.kill().ok();
+    #[test]
+    fn hook_without_cwd_defaults_to_dot() {
+        let tmp = TempDir::new().expect("temp dir");
+        let sock = test_socket(&tmp);
+        let _daemon = start_daemon(&sock);
+
+        let hook_json = r#"{"session_id":"sess-no-cwd"}"#;
+        claude_hook(&sock, "working", hook_json).success();
+
+        let state = dump(&sock);
+        let s = &state["sessions"][0];
+        assert_eq!(
+            s["working_dir"], ".",
+            "working_dir should default to '.' when cwd is absent"
+        );
     }
 
     #[test]
     fn hook_transitions_status() {
         let tmp = TempDir::new().expect("temp dir");
         let sock = test_socket(&tmp);
-        let mut daemon = start_daemon(&sock);
+        let _daemon = start_daemon(&sock);
 
         let hook_json = r#"{"session_id":"sess-tr","cwd":"/project"}"#;
 
@@ -130,15 +155,13 @@ mod claude_hook {
         claude_hook(&sock, "attention", hook_json).success();
         let state = dump(&sock);
         assert_eq!(state["sessions"][0]["status"], "attention");
-
-        daemon.kill().ok();
     }
 
     #[test]
     fn hook_multiple_sessions() {
         let tmp = TempDir::new().expect("temp dir");
         let sock = test_socket(&tmp);
-        let mut daemon = start_daemon(&sock);
+        let _daemon = start_daemon(&sock);
 
         claude_hook(
             &sock,
@@ -163,57 +186,35 @@ mod claude_hook {
             .collect();
         assert!(ids.contains(&"multi-1"));
         assert!(ids.contains(&"multi-2"));
-
-        daemon.kill().ok();
     }
 
     #[test]
     fn hook_invalid_json_exits_with_code_2() {
         let tmp = TempDir::new().expect("temp dir");
         let sock = test_socket(&tmp);
-        let mut daemon = start_daemon(&sock);
+        let _daemon = start_daemon(&sock);
 
-        acd_cmd()
-            .args([
-                "claude-hook",
-                "--socket",
-                sock.to_str().expect("valid path"),
-                "working",
-            ])
-            .write_stdin("not json at all")
-            .assert()
+        claude_hook(&sock, "working", "not json at all")
             .code(2)
             .stderr(predicate::str::contains("failed to parse JSON"));
-
-        daemon.kill().ok();
     }
 
     #[test]
     fn hook_missing_session_id_exits_with_code_2() {
         let tmp = TempDir::new().expect("temp dir");
         let sock = test_socket(&tmp);
-        let mut daemon = start_daemon(&sock);
+        let _daemon = start_daemon(&sock);
 
-        acd_cmd()
-            .args([
-                "claude-hook",
-                "--socket",
-                sock.to_str().expect("valid path"),
-                "working",
-            ])
-            .write_stdin(r#"{"cwd":"/some/path"}"#)
-            .assert()
+        claude_hook(&sock, "working", r#"{"cwd":"/some/path"}"#)
             .code(2)
             .stderr(predicate::str::contains("failed to parse JSON"));
-
-        daemon.kill().ok();
     }
 
     #[test]
     fn hook_unknown_fields_are_ignored() {
         let tmp = TempDir::new().expect("temp dir");
         let sock = test_socket(&tmp);
-        let mut daemon = start_daemon(&sock);
+        let _daemon = start_daemon(&sock);
 
         let hook_json =
             r#"{"session_id":"sess-uf","cwd":"/proj","unknown_field":"value","extra":42}"#;
@@ -223,15 +224,13 @@ mod claude_hook {
 
         let state = dump(&sock);
         assert_eq!(state["sessions"][0]["id"], "sess-uf");
-
-        daemon.kill().ok();
     }
 
     #[test]
     fn set_closed_marks_session_closed() {
         let tmp = TempDir::new().expect("temp dir");
         let sock = test_socket(&tmp);
-        let mut daemon = start_daemon(&sock);
+        let _daemon = start_daemon(&sock);
 
         // Create session
         claude_hook(
@@ -260,15 +259,13 @@ mod claude_hook {
             s["closed"], true,
             "closed flag should be true when status is closed"
         );
-
-        daemon.kill().ok();
     }
 
     #[test]
     fn dump_session_counts_are_correct() {
         let tmp = TempDir::new().expect("temp dir");
         let sock = test_socket(&tmp);
-        let mut daemon = start_daemon(&sock);
+        let _daemon = start_daemon(&sock);
 
         // Create 2 sessions
         claude_hook(
@@ -287,23 +284,19 @@ mod claude_hook {
         let state = dump(&sock);
         assert_eq!(state["session_counts"]["active"], 2);
         assert_eq!(state["session_counts"]["closed"], 0);
-
-        daemon.kill().ok();
     }
 
     #[test]
     fn status_command_shows_running() {
         let tmp = TempDir::new().expect("temp dir");
         let sock = test_socket(&tmp);
-        let mut daemon = start_daemon(&sock);
+        let _daemon = start_daemon(&sock);
 
         acd_cmd()
             .args(["status", "--socket", sock.to_str().expect("valid path")])
             .assert()
             .success()
             .stdout(predicate::str::contains("running"));
-
-        daemon.kill().ok();
     }
 
     #[test]
