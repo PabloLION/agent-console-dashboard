@@ -294,6 +294,7 @@ fn run_set_command(
 #[derive(serde::Deserialize)]
 struct HookInput {
     session_id: String,
+    cwd: Option<String>,
 }
 
 /// Reads Claude Code hook JSON from stdin, extracts session_id, and forwards
@@ -311,7 +312,8 @@ fn run_claude_hook_command(socket: &PathBuf, status: Status) -> ExitCode {
         }
     };
 
-    let result = run_set_command(socket, &input.session_id, &status.to_string(), None);
+    let working_dir = input.cwd.as_deref().map(std::path::Path::new);
+    let result = run_set_command(socket, &input.session_id, &status.to_string(), working_dir);
 
     match result {
         ExitCode::SUCCESS => {
