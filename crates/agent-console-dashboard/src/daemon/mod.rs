@@ -4,7 +4,6 @@
 //! main entry point for running the daemon.
 
 mod handlers;
-pub mod hooks;
 pub mod logging;
 pub mod server;
 pub mod session;
@@ -188,9 +187,8 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
         "agent console daemon starting"
     );
 
-    // Install hooks (idempotent - skips if already exist)
-    // Hooks persist across daemon restarts; only removed when ACD is uninstalled
-    hooks::install();
+    // Hooks are managed by the Claude Code plugin system (.claude-plugin/plugin.json).
+    // Plugin installation is handled by `acd service install` or `claude plugin install`.
 
     // Create Tokio runtime AFTER daemonization
     // Using current_thread runtime for simpler daemon workloads
@@ -247,9 +245,6 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
         let _ = server_handle.await;
         let _ = usage_handle.await;
     });
-
-    // Hooks remain installed after daemon stops (intentional)
-    // Use `acd uninstall-hooks` to remove them when removing ACD entirely
 
     info!("daemon stopped");
     Ok(())
