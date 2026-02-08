@@ -121,7 +121,7 @@ fn hook_forwards_cwd_as_working_dir() {
 }
 
 #[test]
-fn hook_without_cwd_defaults_to_dot() {
+fn hook_without_cwd_defaults_to_unknown() {
     let tmp = TempDir::new().expect("temp dir");
     let sock = test_socket(&tmp);
     let _daemon = start_daemon(&sock);
@@ -132,8 +132,8 @@ fn hook_without_cwd_defaults_to_dot() {
     let state = dump(&sock);
     let s = &state["sessions"][0];
     assert_eq!(
-        s["working_dir"], ".",
-        "working_dir should default to '.' when cwd is absent"
+        s["working_dir"], "<unknown>",
+        "working_dir should default to '<unknown>' when cwd is absent"
     );
 }
 

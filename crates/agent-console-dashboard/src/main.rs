@@ -258,9 +258,10 @@ fn run_set_command(
     let mut writer = stream.try_clone().expect("failed to clone unix stream");
     let mut reader = BufReader::new(stream);
 
-    let wd = working_dir
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|| ".".to_string());
+    let wd = working_dir.map(|p| p.display().to_string()).unwrap_or_else(|| {
+        eprintln!("Warning: cwd missing from hook input, using \"<unknown>\"");
+        "<unknown>".to_string()
+    });
     let cmd = format!("SET {} {} {}\n", session_id, status, wd);
 
     if writer.write_all(cmd.as_bytes()).is_err() || writer.flush().is_err() {
@@ -476,7 +477,7 @@ fn run_resurrect_command(socket: &PathBuf, session_id: &str, quiet: bool) -> Exi
         match serde_json::from_str::<serde_json::Value>(json_str) {
             Ok(info) => {
                 let sid = info["session_id"].as_str().unwrap_or(session_id);
-                let wd = info["working_dir"].as_str().unwrap_or(".");
+                let wd = info["working_dir"].as_str().unwrap_or("<unknown>");
                 let cmd = info["command"].as_str().unwrap_or("claude --resume");
                 if quiet {
                     println!("cd {} && {}", wd, cmd);
