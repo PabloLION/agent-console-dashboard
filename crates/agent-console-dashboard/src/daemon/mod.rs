@@ -14,7 +14,7 @@ pub mod usage;
 pub use server::SocketServer;
 pub use store::SessionStore;
 
-use crate::{DaemonConfig, Status};
+use crate::DaemonConfig;
 use fork::{daemon, Fork};
 use std::error::Error;
 use std::sync::Arc;
@@ -75,15 +75,11 @@ async fn idle_check_loop(store: &SessionStore, timeout: Duration) {
     loop {
         interval.tick().await;
 
-        let sessions = store.list_all().await;
-        let active_count = sessions
-            .iter()
-            .filter(|s| s.status != Status::Closed)
-            .count();
+        let has_active = store.has_active_sessions().await;
 
-        if active_count > 0 {
+        if has_active {
             if idle_since.is_some() {
-                info!(active_count, "sessions active, idle timer reset");
+                info!("sessions active, idle timer reset");
             }
             idle_since = None;
         } else if idle_since.is_none() {

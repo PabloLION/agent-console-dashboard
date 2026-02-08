@@ -210,6 +210,15 @@ impl SessionStore {
         sessions.remove(id)
     }
 
+    /// Returns `true` if any session has a non-closed status.
+    ///
+    /// This is cheaper than `list_all()` because it only reads the lock
+    /// and short-circuits on the first active session without cloning.
+    pub async fn has_active_sessions(&self) -> bool {
+        let sessions = self.sessions.read().await;
+        sessions.values().any(|s| s.status != Status::Closed)
+    }
+
     /// Returns all sessions currently in the store.
     ///
     /// Sessions are cloned when returned (the store owns the data).
