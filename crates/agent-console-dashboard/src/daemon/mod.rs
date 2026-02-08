@@ -14,7 +14,7 @@ pub mod usage;
 pub use server::SocketServer;
 pub use store::SessionStore;
 
-use crate::DaemonConfig;
+use crate::{DaemonConfig, INACTIVE_SESSION_THRESHOLD};
 use fork::{daemon, Fork};
 use std::error::Error;
 use std::sync::Arc;
@@ -29,8 +29,6 @@ const AUTO_STOP_IDLE_SECS: u64 = 3600;
 
 /// How often the idle check runs.
 const IDLE_CHECK_INTERVAL_SECS: u64 = 60;
-
-use crate::INACTIVE_SESSION_THRESHOLD;
 
 /// Result type alias for daemon operations.
 pub type DaemonResult<T> = Result<T, Box<dyn Error>>;
@@ -76,8 +74,6 @@ async fn idle_check_loop(store: &SessionStore, timeout: Duration) {
     loop {
         interval.tick().await;
 
-        // Inactive sessions (no hook activity for > threshold) are excluded
-        // from the active count so they don't block daemon auto-shutdown.
         let has_active = store.has_active_sessions(INACTIVE_SESSION_THRESHOLD).await;
 
         if has_active {

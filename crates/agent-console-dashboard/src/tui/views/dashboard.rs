@@ -84,30 +84,25 @@ const WIDE_THRESHOLD: u16 = 80;
 /// - `>80` cols: full with session ID prefix
 pub fn format_session_line<'a>(session: &Session, width: u16) -> Line<'a> {
     let inactive = session.is_inactive(INACTIVE_SESSION_THRESHOLD);
-    let color = if inactive {
-        Color::DarkGray
+    let (color, symbol, dim, status_text) = if inactive {
+        (
+            Color::DarkGray,
+            "◌",
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::DIM),
+            "inactive".to_string(),
+        )
     } else {
-        status_color(session.status)
-    };
-    let symbol = if inactive {
-        "◌"
-    } else {
-        status_symbol(session.status)
-    };
-    let dim = if inactive {
-        Style::default()
-            .fg(Color::DarkGray)
-            .add_modifier(Modifier::DIM)
-    } else {
-        Style::default()
+        (
+            status_color(session.status),
+            status_symbol(session.status),
+            Style::default(),
+            session.status.to_string(),
+        )
     };
     let elapsed = format_elapsed(session.since);
     let name = truncate_string(&session.id, 20);
-    let status_text = if inactive {
-        "inactive".to_string()
-    } else {
-        session.status.to_string()
-    };
 
     if width < NARROW_THRESHOLD {
         // Narrow: symbol + name only
