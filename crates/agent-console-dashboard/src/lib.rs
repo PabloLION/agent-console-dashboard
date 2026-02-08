@@ -690,7 +690,10 @@ mod tests {
 
         // Re-activate the session
         session.set_status(Status::Working);
-        assert!(!session.closed, "closed flag should be cleared on re-activation");
+        assert!(
+            !session.closed,
+            "closed flag should be cleared on re-activation"
+        );
         assert_eq!(session.status, Status::Working);
     }
 

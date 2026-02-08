@@ -40,7 +40,10 @@ async fn counts_inactive_sessions() {
 
     // Session is NOT closed — still in store with original status
     let session = store.get("old-1").await.expect("session still in store");
-    assert!(!session.closed, "inactive sessions should not be auto-closed");
+    assert!(
+        !session.closed,
+        "inactive sessions should not be auto-closed"
+    );
 }
 
 #[tokio::test]

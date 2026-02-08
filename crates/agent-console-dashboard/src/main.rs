@@ -313,7 +313,12 @@ fn run_claude_hook_command(socket: &PathBuf, status: Status) -> ExitCode {
     };
 
     let working_dir = std::path::Path::new(&input.cwd);
-    let result = run_set_command(socket, &input.session_id, &status.to_string(), Some(working_dir));
+    let result = run_set_command(
+        socket,
+        &input.session_id,
+        &status.to_string(),
+        Some(working_dir),
+    );
 
     match result {
         ExitCode::SUCCESS => {
