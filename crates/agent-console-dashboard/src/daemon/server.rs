@@ -12,7 +12,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use agent_console::daemon::SocketServer;
+//! use agent_console_dashboard::daemon::SocketServer;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -77,7 +77,7 @@ impl SocketServer {
     /// # Example
     ///
     /// ```
-    /// use agent_console::daemon::SocketServer;
+    /// use agent_console_dashboard::daemon::SocketServer;
     ///
     /// let server = SocketServer::new("/tmp/my-daemon.sock".to_string());
     /// ```
@@ -245,7 +245,7 @@ impl SocketServer {
     ///
     /// ```no_run
     /// use tokio::sync::broadcast;
-    /// use agent_console::daemon::SocketServer;
+    /// use agent_console_dashboard::daemon::SocketServer;
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

@@ -186,7 +186,7 @@ impl Session {
     /// # Example
     ///
     /// ```
-    /// use agent_console::{Session, Status, AgentType};
+    /// use agent_console_dashboard::{Session, Status, AgentType};
     /// use std::path::PathBuf;
     ///
     /// let mut session = Session::new(

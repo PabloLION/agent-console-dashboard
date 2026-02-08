@@ -155,7 +155,7 @@ pub fn daemonize_process(nochdir: bool, noclose: bool) -> DaemonResult<()> {
 /// # Example
 ///
 /// ```no_run
-/// use agent_console::{DaemonConfig, daemon::run_daemon};
+/// use agent_console_dashboard::{DaemonConfig, daemon::run_daemon};
 /// use std::path::PathBuf;
 ///
 /// let config = DaemonConfig::new(

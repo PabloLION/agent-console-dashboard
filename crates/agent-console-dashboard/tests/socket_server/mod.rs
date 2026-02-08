@@ -40,7 +40,7 @@ mod notification;
 pub(crate) mod common {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use agent_console::daemon::SocketServer;
+    use agent_console_dashboard::daemon::SocketServer;
     use tempfile::TempDir;
     use tokio::sync::broadcast;
 

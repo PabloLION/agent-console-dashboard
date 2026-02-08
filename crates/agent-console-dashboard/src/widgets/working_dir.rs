@@ -20,9 +20,9 @@
 //! # Example
 //!
 //! ```
-//! use agent_console::widgets::working_dir::WorkingDirWidget;
-//! use agent_console::widgets::{Widget, WidgetContext};
-//! use agent_console::Session;
+//! use agent_console_dashboard::widgets::working_dir::WorkingDirWidget;
+//! use agent_console_dashboard::widgets::{Widget, WidgetContext};
+//! use agent_console_dashboard::Session;
 //!
 //! let widget = WorkingDirWidget;
 //! assert_eq!(widget.id(), "working-dir");

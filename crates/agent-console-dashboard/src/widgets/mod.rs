@@ -16,8 +16,8 @@
 //! # Example
 //!
 //! ```
-//! use agent_console::widgets::{Widget, WidgetContext, WidgetRegistry};
-//! use agent_console::Session;
+//! use agent_console_dashboard::widgets::{Widget, WidgetContext, WidgetRegistry};
+//! use agent_console_dashboard::Session;
 //! use ratatui::text::Line;
 //!
 //! let registry = WidgetRegistry::new();
@@ -82,7 +82,7 @@ pub type WidgetFactory = fn() -> Box<dyn Widget>;
 /// # Example
 ///
 /// ```
-/// use agent_console::widgets::WidgetRegistry;
+/// use agent_console_dashboard::widgets::WidgetRegistry;
 ///
 /// let registry = WidgetRegistry::new();
 /// assert!(registry.create("clock").is_some());

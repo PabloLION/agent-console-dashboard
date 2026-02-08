@@ -35,8 +35,8 @@ const DEFAULT_MAX_CLOSED_SESSIONS: usize = 20;
 /// # Example
 ///
 /// ```
-/// use agent_console::daemon::store::SessionStore;
-/// use agent_console::{Session, AgentType};
+/// use agent_console_dashboard::daemon::store::SessionStore;
+/// use agent_console_dashboard::{Session, AgentType};
 /// use std::path::PathBuf;
 ///
 /// #[tokio::main]
@@ -91,7 +91,7 @@ impl SessionStore {
     /// # Example
     ///
     /// ```
-    /// use agent_console::daemon::store::SessionStore;
+    /// use agent_console_dashboard::daemon::store::SessionStore;
     ///
     /// let store = SessionStore::new();
     /// ```
@@ -141,7 +141,7 @@ impl SessionStore {
     /// # Example
     ///
     /// ```
-    /// use agent_console::daemon::store::SessionStore;
+    /// use agent_console_dashboard::daemon::store::SessionStore;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -255,8 +255,8 @@ impl SessionStore {
     /// # Example
     ///
     /// ```
-    /// use agent_console::daemon::store::SessionStore;
-    /// use agent_console::AgentType;
+    /// use agent_console_dashboard::daemon::store::SessionStore;
+    /// use agent_console_dashboard::AgentType;
     /// use std::path::PathBuf;
     ///
     /// #[tokio::main]
@@ -327,8 +327,8 @@ impl SessionStore {
     /// # Example
     ///
     /// ```
-    /// use agent_console::daemon::store::SessionStore;
-    /// use agent_console::{AgentType, Status};
+    /// use agent_console_dashboard::daemon::store::SessionStore;
+    /// use agent_console_dashboard::{AgentType, Status};
     /// use std::path::PathBuf;
     ///
     /// #[tokio::main]
@@ -404,8 +404,8 @@ impl SessionStore {
     /// # Example
     ///
     /// ```
-    /// use agent_console::daemon::store::SessionStore;
-    /// use agent_console::{AgentType, Status};
+    /// use agent_console_dashboard::daemon::store::SessionStore;
+    /// use agent_console_dashboard::{AgentType, Status};
     /// use std::path::PathBuf;
     ///
     /// #[tokio::main]
@@ -463,8 +463,8 @@ impl SessionStore {
     /// # Example
     ///
     /// ```
-    /// use agent_console::daemon::store::SessionStore;
-    /// use agent_console::{AgentType, Status};
+    /// use agent_console_dashboard::daemon::store::SessionStore;
+    /// use agent_console_dashboard::{AgentType, Status};
     /// use std::path::PathBuf;
     ///
     /// #[tokio::main]
@@ -590,8 +590,8 @@ impl SessionStore {
     /// # Example
     ///
     /// ```
-    /// use agent_console::daemon::store::SessionStore;
-    /// use agent_console::AgentType;
+    /// use agent_console_dashboard::daemon::store::SessionStore;
+    /// use agent_console_dashboard::AgentType;
     /// use std::path::PathBuf;
     ///
     /// #[tokio::main]

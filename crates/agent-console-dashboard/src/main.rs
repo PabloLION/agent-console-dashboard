@@ -3,7 +3,7 @@
 //! This binary provides the command-line interface for the Agent Console daemon.
 //! It supports running in foreground or daemonized mode with configurable socket paths.
 
-use agent_console::{
+use agent_console_dashboard::{
     daemon::run_daemon, format_uptime, service, tui::app::App, DaemonConfig, DaemonDump,
     HealthStatus, Status,
 };
@@ -170,7 +170,7 @@ fn main() -> ExitCode {
             return run_resurrect_command(&socket, &session_id, quiet);
         }
         Commands::Config { action } => {
-            use agent_console::config::{default, loader::ConfigLoader, xdg};
+            use agent_console_dashboard::config::{default, loader::ConfigLoader, xdg};
             let result = match action {
                 ConfigAction::Init { force } => match default::create_default_config(force) {
                     Ok(path) => {
@@ -707,7 +707,7 @@ mod tests {
             .expect("claude-hook working should parse");
         match cli.command {
             Commands::ClaudeHook { status, socket } => {
-                assert_eq!(status, agent_console::Status::Working);
+                assert_eq!(status, agent_console_dashboard::Status::Working);
                 assert_eq!(socket, PathBuf::from("/tmp/agent-console.sock"));
             }
             _ => panic!("expected ClaudeHook command"),
@@ -720,7 +720,7 @@ mod tests {
             .expect("claude-hook attention should parse");
         match cli.command {
             Commands::ClaudeHook { status, .. } => {
-                assert_eq!(status, agent_console::Status::Attention);
+                assert_eq!(status, agent_console_dashboard::Status::Attention);
             }
             _ => panic!("expected ClaudeHook command"),
         }

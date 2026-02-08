@@ -22,8 +22,8 @@ use std::time::Instant;
 /// # Example
 ///
 /// ```
-/// use agent_console::widgets::context::WidgetContext;
-/// use agent_console::Session;
+/// use agent_console_dashboard::widgets::context::WidgetContext;
+/// use agent_console_dashboard::Session;
 ///
 /// let sessions = vec![Session::default()];
 /// let ctx = WidgetContext {
@@ -60,8 +60,8 @@ impl<'a> WidgetContext<'a> {
     /// # Example
     ///
     /// ```
-    /// use agent_console::widgets::context::WidgetContext;
-    /// use agent_console::Session;
+    /// use agent_console_dashboard::widgets::context::WidgetContext;
+    /// use agent_console_dashboard::Session;
     ///
     /// let sessions = vec![Session::default()];
     /// let ctx = WidgetContext::new(&sessions);

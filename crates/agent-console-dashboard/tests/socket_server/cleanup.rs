@@ -1,7 +1,7 @@
 //! Stale socket cleanup and socket file cleanup tests for Unix Socket Server.
 
 use super::common::{start_server_with_shutdown, unique_socket_path};
-use agent_console::daemon::SocketServer;
+use agent_console_dashboard::daemon::SocketServer;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;

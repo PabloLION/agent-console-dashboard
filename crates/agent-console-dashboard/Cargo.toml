@@ -1,12 +1,12 @@
 [package]
-name = "agent-console"
+name = "agent-console-dashboard"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.74"
 description = "Agent Console Dashboard daemon"
 
 [lib]
-name = "agent_console"
+name = "agent_console_dashboard"
 path = "src/lib.rs"
 
 [[bin]]

@@ -3,7 +3,7 @@
 version = 3
 
 [[package]]
-name = "agent-console"
+name = "agent-console-dashboard"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
