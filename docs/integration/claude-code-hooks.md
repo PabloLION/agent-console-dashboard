@@ -71,17 +71,25 @@ field so Claude Code isn't blocked but the condition is visible.
 
 ### Hook JSON Stdin Format
 
-Claude Code passes JSON via stdin to hook commands. Common fields:
+Claude Code passes JSON via stdin to hook commands. All hooks receive these
+common fields (per the [hooks reference]):
 
-| Field             | Type   | Description                     |
-| ----------------- | ------ | ------------------------------- |
-| `session_id`      | string | Unique session identifier       |
-| `cwd`             | string | Current working directory       |
-| `transcript_path` | string | Path to conversation transcript |
-| `hook_event_name` | string | Which hook fired (e.g., `Stop`) |
+| Field             | Type   | Required | Description                             |
+| ----------------- | ------ | -------- | --------------------------------------- |
+| `session_id`      | string | yes      | Unique session identifier               |
+| `cwd`             | string | yes      | Working directory when hook is invoked  |
+| `transcript_path` | string | yes      | Path to conversation transcript         |
+| `permission_mode` | string | yes      | Current permission mode                 |
+| `hook_event_name` | string | yes      | Which hook fired (e.g., `Stop`)         |
 
-ACD only parses `session_id`. Unknown fields are silently ignored for
+All five common fields are **always present** — they are not optional. Some hook
+events send additional fields (e.g., `tool_name` for `PreToolUse`), but ACD does
+not use those.
+
+ACD parses `session_id` and `cwd`. Unknown fields are silently ignored for
 forward-compatibility with future Claude Code versions.
+
+[hooks reference]: https://code.claude.com/docs/en/hooks
 
 ## Version Sync
 
@@ -112,7 +120,7 @@ claude plugin marketplace remove PabloLION/agent-console-dashboard
 
 - Confirm the daemon is running: `acd status`
 - Test the hook subcommand manually:
-  `echo '{"session_id":"test"}' | acd claude-hook attention`
+  `echo '{"session_id":"test","cwd":"/tmp"}' | acd claude-hook attention`
 - Check daemon logs for errors
 
 ### Manual Testing
@@ -122,10 +130,10 @@ claude plugin marketplace remove PabloLION/agent-console-dashboard
 acd daemon &
 
 # Simulate a Stop hook
-echo '{"session_id":"test-session"}' | acd claude-hook attention
+echo '{"session_id":"test-session","cwd":"/tmp"}' | acd claude-hook attention
 
 # Simulate a UserPromptSubmit hook
-echo '{"session_id":"test-session"}' | acd claude-hook working
+echo '{"session_id":"test-session","cwd":"/tmp"}' | acd claude-hook working
 
 # Verify session appeared
 acd status
