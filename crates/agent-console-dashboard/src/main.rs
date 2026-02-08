@@ -4,8 +4,8 @@
 //! It supports running in foreground or daemonized mode with configurable socket paths.
 
 use agent_console_dashboard::{
-    daemon::run_daemon, format_uptime, tui::app::App, DaemonConfig, DaemonDump, HealthStatus,
-    Status,
+    client::connect_with_lazy_start, daemon::run_daemon, format_uptime, tui::app::App,
+    DaemonConfig, DaemonDump, HealthStatus, Status,
 };
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -202,7 +202,18 @@ fn main() -> ExitCode {
             }
         }
         Commands::ClaudeHook { status, socket } => {
-            return run_claude_hook_command(&socket, status);
+            // Parse stdin synchronously before creating async runtime
+            let input: HookInput = match serde_json::from_reader(std::io::stdin()) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("acd claude-hook: failed to parse JSON from stdin: {}", e);
+                    return ExitCode::from(2);
+                }
+            };
+
+            let rt = tokio::runtime::Runtime::new()
+                .expect("failed to create tokio runtime for hook");
+            return rt.block_on(run_claude_hook_async(&socket, status, &input));
         }
     }
 
@@ -269,48 +280,80 @@ struct HookInput {
     cwd: String,
 }
 
-/// Reads Claude Code hook JSON from stdin, extracts session_id, and forwards
-/// to the daemon as a SET command.
+/// Connects to daemon via lazy-start (spawning if needed), sends SET command.
 ///
 /// Exit codes per Claude Code hook spec:
 /// - 0: success (outputs `{"continue": true}` on stdout)
-/// - 2: blocking error (malformed JSON — outputs error on stderr)
-fn run_claude_hook_command(socket: &PathBuf, status: Status) -> ExitCode {
-    let input: HookInput = match serde_json::from_reader(std::io::stdin()) {
-        Ok(v) => v,
+///
+/// This function never returns a non-zero exit code after stdin parsing
+/// succeeds — hook failures are reported via systemMessage to avoid blocking
+/// Claude Code.
+async fn run_claude_hook_async(
+    socket: &std::path::Path,
+    status: Status,
+    input: &HookInput,
+) -> ExitCode {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    let client = match connect_with_lazy_start(socket).await {
+        Ok(c) => c,
         Err(e) => {
-            eprintln!("acd claude-hook: failed to parse JSON from stdin: {}", e);
-            return ExitCode::from(2);
+            let json = serde_json::json!({
+                "continue": true,
+                "systemMessage": format!(
+                    "acd daemon not reachable ({}), session {} not tracked",
+                    e, input.session_id
+                ),
+            });
+            println!("{}", json);
+            return ExitCode::SUCCESS;
         }
     };
 
-    let working_dir = std::path::Path::new(&input.cwd);
-    let result = run_set_command(
-        socket,
-        &input.session_id,
-        &status.to_string(),
-        Some(working_dir),
-    );
+    let stream = client.into_stream();
+    let (reader, mut writer) = stream.into_split();
+    let mut reader = BufReader::new(reader);
 
-    match result {
-        ExitCode::SUCCESS => {
-            println!(r#"{{"continue": true}}"#);
-            ExitCode::SUCCESS
-        }
-        _ => {
-            // Daemon not running or SET failed — don't block Claude Code.
-            // Output a systemMessage so the condition is visible.
-            let response = serde_json::json!({
-                "continue": true,
-                "systemMessage": format!(
-                    "acd daemon not reachable, session {} not tracked",
-                    input.session_id
-                ),
-            });
-            println!("{}", response);
-            ExitCode::SUCCESS
-        }
+    let cmd = format!("SET {} {} {}\n", input.session_id, status, input.cwd);
+
+    if writer.write_all(cmd.as_bytes()).await.is_err() || writer.flush().await.is_err() {
+        let json = serde_json::json!({
+            "continue": true,
+            "systemMessage": format!(
+                "acd daemon: failed to send command, session {} not tracked",
+                input.session_id
+            ),
+        });
+        println!("{}", json);
+        return ExitCode::SUCCESS;
     }
+
+    let mut line = String::new();
+    if reader.read_line(&mut line).await.is_err() {
+        let json = serde_json::json!({
+            "continue": true,
+            "systemMessage": format!(
+                "acd daemon: no response, session {} not tracked",
+                input.session_id
+            ),
+        });
+        println!("{}", json);
+        return ExitCode::SUCCESS;
+    }
+
+    if line.trim().starts_with("OK") {
+        println!(r#"{{"continue": true}}"#);
+    } else {
+        let json = serde_json::json!({
+            "continue": true,
+            "systemMessage": format!(
+                "acd daemon error: {}, session {} not tracked",
+                line.trim(), input.session_id
+            ),
+        });
+        println!("{}", json);
+    }
+    ExitCode::SUCCESS
 }
 
 /// Connects to the daemon socket, sends STATUS, and displays health info.
