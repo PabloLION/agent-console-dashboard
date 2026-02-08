@@ -4,8 +4,8 @@
 //! It supports running in foreground or daemonized mode with configurable socket paths.
 
 use agent_console_dashboard::{
-    daemon::run_daemon, format_uptime, service, tui::app::App, DaemonConfig, DaemonDump,
-    HealthStatus, Status,
+    daemon::run_daemon, format_uptime, tui::app::App, DaemonConfig, DaemonDump, HealthStatus,
+    Status,
 };
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -45,12 +45,6 @@ enum Commands {
         /// Output format (only json supported in v0)
         #[arg(long, default_value = "json")]
         format: String,
-    },
-
-    /// Manage daemon system service (install/uninstall/status)
-    Service {
-        #[command(subcommand)]
-        action: ServiceAction,
     },
 
     /// Manage configuration file
@@ -121,17 +115,6 @@ enum ConfigAction {
     Validate,
 }
 
-/// Actions for the `service` subcommand.
-#[derive(Subcommand)]
-enum ServiceAction {
-    /// Install daemon as a system service (launchd on macOS, systemd on Linux)
-    Install,
-    /// Uninstall daemon system service
-    Uninstall,
-    /// Check daemon service status
-    Status,
-}
-
 fn main() -> ExitCode {
     // Parse CLI arguments BEFORE any fork/runtime operations
     // This ensures errors are shown to the user in the terminal
@@ -194,17 +177,6 @@ fn main() -> ExitCode {
             };
             if let Err(e) = result {
                 eprintln!("Config error: {e}");
-                return ExitCode::FAILURE;
-            }
-        }
-        Commands::Service { action } => {
-            let result = match action {
-                ServiceAction::Install => service::install_service(),
-                ServiceAction::Uninstall => service::uninstall_service(),
-                ServiceAction::Status => service::service_status(),
-            };
-            if let Err(e) = result {
-                eprintln!("Service error: {e}");
                 return ExitCode::FAILURE;
             }
         }
@@ -823,45 +795,6 @@ mod tests {
     }
 
     #[test]
-    fn test_service_install_parses() {
-        let cli = Cli::try_parse_from(["agent-console-dashboard", "service", "install"])
-            .expect("service install should parse");
-        match cli.command {
-            Commands::Service { action } => match action {
-                ServiceAction::Install => {}
-                _ => panic!("expected Install action"),
-            },
-            _ => panic!("expected Service command"),
-        }
-    }
-
-    #[test]
-    fn test_service_uninstall_parses() {
-        let cli = Cli::try_parse_from(["agent-console-dashboard", "service", "uninstall"])
-            .expect("service uninstall should parse");
-        match cli.command {
-            Commands::Service { action } => match action {
-                ServiceAction::Uninstall => {}
-                _ => panic!("expected Uninstall action"),
-            },
-            _ => panic!("expected Service command"),
-        }
-    }
-
-    #[test]
-    fn test_service_status_parses() {
-        let cli = Cli::try_parse_from(["agent-console-dashboard", "service", "status"])
-            .expect("service status should parse");
-        match cli.command {
-            Commands::Service { action } => match action {
-                ServiceAction::Status => {}
-                _ => panic!("expected Status action"),
-            },
-            _ => panic!("expected Service command"),
-        }
-    }
-
-    #[test]
     fn test_resurrect_subcommand_parses() {
         let cli = Cli::try_parse_from(["agent-console-dashboard", "resurrect", "session-abc"])
             .expect("resurrect should parse");
@@ -897,25 +830,6 @@ mod tests {
     fn test_resurrect_requires_session_id() {
         let result = Cli::try_parse_from(["agent-console-dashboard", "resurrect"]);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_service_without_action_fails() {
-        let result = Cli::try_parse_from(["agent-console-dashboard", "service"]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_service_unknown_action_fails() {
-        let result = Cli::try_parse_from(["agent-console-dashboard", "service", "restart"]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_service_subcommand_in_help() {
-        let cmd = Cli::command();
-        let service_cmd = cmd.get_subcommands().find(|sc| sc.get_name() == "service");
-        assert!(service_cmd.is_some(), "service subcommand should exist");
     }
 
     // -- Config subcommand --------------------------------------------------
