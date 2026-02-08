@@ -6,6 +6,9 @@
 //!
 //! Also enforces that the Cargo.toml version matches the generated plugin.json
 //! version — a mismatch fails the build.
+//!
+//! Installs git hooks (pre-commit, pre-push) by symlinking from `.git/hooks/`
+//! to `scripts/`. Set `NO_INSTALL_HOOKS=1` to skip.
 
 use std::fs;
 use std::path::Path;
@@ -107,4 +110,80 @@ fn main() {
 
     // Re-run if Cargo.toml changes (version bump)
     println!("cargo:rerun-if-changed=Cargo.toml");
+
+    // Install git hooks
+    install_git_hooks(workspace_root);
+}
+
+/// Install git hooks by creating symlinks from `.git/hooks/` to `scripts/`.
+///
+/// Skipped when `NO_INSTALL_HOOKS=1` is set (for CI or special environments).
+/// Warns but does not overwrite hooks that exist and aren't our symlinks.
+fn install_git_hooks(workspace_root: &Path) {
+    if std::env::var("NO_INSTALL_HOOKS").as_deref() == Ok("1") {
+        return;
+    }
+
+    let git_hooks_dir = workspace_root.join(".git/hooks");
+    if !git_hooks_dir.is_dir() {
+        // Not a git repo (e.g., extracted tarball), skip silently
+        return;
+    }
+
+    let hooks = &[
+        ("pre-commit", "../../scripts/pre-commit.sh"),
+        ("pre-push", "../../scripts/pre-push.sh"),
+    ];
+
+    for (hook_name, relative_target) in hooks {
+        let hook_path = git_hooks_dir.join(hook_name);
+        let target = Path::new(relative_target);
+
+        // Check if the script source exists
+        let script_path = workspace_root.join(format!("scripts/{hook_name}.sh"));
+        if !script_path.exists() {
+            println!("cargo:warning=git hook script not found: scripts/{hook_name}.sh, skipping");
+            continue;
+        }
+
+        // Re-run if hook scripts change
+        println!("cargo:rerun-if-changed=scripts/{hook_name}.sh");
+
+        // If hook already exists, check what it is
+        if hook_path.exists() || hook_path.symlink_metadata().is_ok() {
+            match hook_path.read_link() {
+                Ok(existing_target) if existing_target == target => {
+                    // Already points to the right place
+                    continue;
+                }
+                Ok(_) => {
+                    // Symlink to something else — replace it
+                    let _ = fs::remove_file(&hook_path);
+                }
+                Err(_) => {
+                    // Not a symlink (regular file) — don't overwrite
+                    println!(
+                        "cargo:warning=.git/hooks/{hook_name} exists and is not our symlink, \
+                         skipping. Remove it manually to enable auto-installed hooks."
+                    );
+                    continue;
+                }
+            }
+        }
+
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, &hook_path).unwrap_or_else(|e| {
+                println!("cargo:warning=failed to create {hook_name} hook symlink: {e}");
+            });
+        }
+
+        #[cfg(not(unix))]
+        {
+            println!(
+                "cargo:warning=git hook auto-install not supported on this platform, \
+                 run: ln -sf {relative_target} .git/hooks/{hook_name}"
+            );
+        }
+    }
 }
