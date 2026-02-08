@@ -8,8 +8,9 @@ use crate::tui::ui::render_dashboard;
 use crate::tui::views::detail::render_detail;
 use crate::{AgentType, Session, Status};
 use claude_usage::UsageData;
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use crossterm::{
-    event::EventStream,
+    event::{DisableMouseCapture, EnableMouseCapture, EventStream},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -52,6 +53,8 @@ pub struct App {
     pub layout_preset: u8,
     /// Latest API usage data from the daemon, if available.
     pub usage: Option<UsageData>,
+    /// Last click time and position for double-click detection.
+    last_click: Option<(Instant, u16, u16)>,
 }
 
 impl App {
@@ -66,6 +69,7 @@ impl App {
             view: View::Dashboard,
             layout_preset: 1,
             usage: None,
+            last_click: None,
         }
     }
 
@@ -139,6 +143,68 @@ impl App {
         } = self.view
         {
             *history_scroll = history_scroll.saturating_sub(1);
+        }
+    }
+
+    /// Calculates which session index was clicked based on mouse row coordinate.
+    ///
+    /// Returns None if the click was outside the session list area.
+    /// Accounts for header (1 line) and block borders (1 line at top).
+    fn calculate_clicked_session(&self, row: u16) -> Option<usize> {
+        // Header takes 1 line, block border takes 1 line
+        // Session list starts at row 2
+        if row < 2 {
+            return None;
+        }
+        let list_row = (row - 2) as usize;
+        if list_row < self.sessions.len() {
+            Some(list_row)
+        } else {
+            None
+        }
+    }
+
+    /// Handles a mouse event and returns the appropriate action.
+    ///
+    /// Only processes mouse events when in Dashboard view.
+    fn handle_mouse_event(&mut self, mouse: MouseEvent) -> Action {
+        // Only handle mouse events in Dashboard view
+        if self.view != View::Dashboard {
+            return Action::None;
+        }
+
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                let now = Instant::now();
+                let is_double_click = if let Some((last_time, last_row, last_col)) = self.last_click
+                {
+                    now.duration_since(last_time) < Duration::from_millis(500)
+                        && mouse.row == last_row
+                        && mouse.column == last_col
+                } else {
+                    false
+                };
+
+                if let Some(idx) = self.calculate_clicked_session(mouse.row) {
+                    self.selected_index = Some(idx);
+                    if is_double_click {
+                        self.last_click = None;
+                        return Action::OpenDetail(idx);
+                    }
+                }
+
+                self.last_click = Some((now, mouse.row, mouse.column));
+                Action::None
+            }
+            MouseEventKind::ScrollDown => {
+                self.select_next();
+                Action::None
+            }
+            MouseEventKind::ScrollUp => {
+                self.select_previous();
+                Action::None
+            }
+            _ => Action::None,
         }
     }
 
@@ -270,6 +336,12 @@ impl App {
                         Action::None => {}
                     }
                 }
+                Event::Mouse(mouse) => {
+                    if let Action::OpenDetail(idx) = self.handle_mouse_event(mouse) {
+                        tracing::debug!("open detail view for session index {idx} (mouse)");
+                        self.open_detail(idx);
+                    }
+                }
                 Event::Tick => {
                     self.tick_count += 1;
                 }
@@ -284,14 +356,14 @@ impl App {
 /// Enables raw mode and switches to the alternate screen.
 fn setup_terminal() -> io::Result<()> {
     enable_raw_mode()?;
-    execute!(stdout(), EnterAlternateScreen)?;
+    execute!(stdout(), EnterAlternateScreen, EnableMouseCapture)?;
     Ok(())
 }
 
 /// Restores the terminal to its original state.
 fn restore_terminal() -> io::Result<()> {
     disable_raw_mode()?;
-    execute!(stdout(), LeaveAlternateScreen)?;
+    execute!(stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
     Ok(())
 }
 
@@ -603,5 +675,161 @@ mod tests {
     fn test_app_usage_starts_none() {
         let app = App::new(PathBuf::from("/tmp/test.sock"));
         assert!(app.usage.is_none());
+    }
+
+    // --- Mouse event handling tests ---
+
+    fn make_mouse_event(kind: MouseEventKind, row: u16, column: u16) -> MouseEvent {
+        MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: crossterm::event::KeyModifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn test_calculate_clicked_session_valid_row() {
+        let app = make_app_with_sessions(5);
+        // Header at row 0, border at row 1, first session at row 2
+        assert_eq!(app.calculate_clicked_session(2), Some(0));
+        assert_eq!(app.calculate_clicked_session(3), Some(1));
+        assert_eq!(app.calculate_clicked_session(6), Some(4));
+    }
+
+    #[test]
+    fn test_calculate_clicked_session_header_returns_none() {
+        let app = make_app_with_sessions(5);
+        assert_eq!(app.calculate_clicked_session(0), None);
+        assert_eq!(app.calculate_clicked_session(1), None);
+    }
+
+    #[test]
+    fn test_calculate_clicked_session_out_of_bounds() {
+        let app = make_app_with_sessions(3);
+        // Sessions at rows 2, 3, 4 (indices 0, 1, 2)
+        assert_eq!(app.calculate_clicked_session(5), None);
+        assert_eq!(app.calculate_clicked_session(10), None);
+    }
+
+    #[test]
+    fn test_mouse_left_click_selects_session() {
+        let mut app = make_app_with_sessions(5);
+        app.selected_index = Some(0);
+        let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 4, 10);
+        let action = app.handle_mouse_event(mouse);
+        assert_eq!(action, Action::None);
+        assert_eq!(app.selected_index, Some(2));
+    }
+
+    #[test]
+    fn test_mouse_left_click_outside_list_no_change() {
+        let mut app = make_app_with_sessions(3);
+        app.selected_index = Some(1);
+        let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 10);
+        let action = app.handle_mouse_event(mouse);
+        assert_eq!(action, Action::None);
+        assert_eq!(app.selected_index, Some(1));
+    }
+
+    #[test]
+    fn test_mouse_double_click_opens_detail() {
+        let mut app = make_app_with_sessions(3);
+        // First click
+        let mouse1 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+        let action1 = app.handle_mouse_event(mouse1);
+        assert_eq!(action1, Action::None);
+        assert_eq!(app.selected_index, Some(1));
+        assert_eq!(app.view, View::Dashboard);
+
+        // Second click in quick succession at same position
+        let mouse2 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+        let action2 = app.handle_mouse_event(mouse2);
+        assert_eq!(action2, Action::OpenDetail(1));
+    }
+
+    #[test]
+    fn test_mouse_double_click_different_position_no_detail() {
+        let mut app = make_app_with_sessions(5);
+        // First click
+        let mouse1 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+        app.handle_mouse_event(mouse1);
+
+        // Second click at different row
+        let mouse2 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 4, 10);
+        let action2 = app.handle_mouse_event(mouse2);
+        assert_eq!(action2, Action::None);
+        assert_eq!(app.selected_index, Some(2));
+    }
+
+    #[test]
+    fn test_mouse_scroll_down_selects_next() {
+        let mut app = make_app_with_sessions(5);
+        app.selected_index = Some(1);
+        let mouse = make_mouse_event(MouseEventKind::ScrollDown, 5, 10);
+        let action = app.handle_mouse_event(mouse);
+        assert_eq!(action, Action::None);
+        assert_eq!(app.selected_index, Some(2));
+    }
+
+    #[test]
+    fn test_mouse_scroll_up_selects_previous() {
+        let mut app = make_app_with_sessions(5);
+        app.selected_index = Some(2);
+        let mouse = make_mouse_event(MouseEventKind::ScrollUp, 5, 10);
+        let action = app.handle_mouse_event(mouse);
+        assert_eq!(action, Action::None);
+        assert_eq!(app.selected_index, Some(1));
+    }
+
+    #[test]
+    fn test_mouse_scroll_at_boundaries() {
+        let mut app = make_app_with_sessions(3);
+        // Scroll down at end
+        app.selected_index = Some(2);
+        let mouse_down = make_mouse_event(MouseEventKind::ScrollDown, 5, 10);
+        app.handle_mouse_event(mouse_down);
+        assert_eq!(app.selected_index, Some(2));
+
+        // Scroll up at start
+        app.selected_index = Some(0);
+        let mouse_up = make_mouse_event(MouseEventKind::ScrollUp, 5, 10);
+        app.handle_mouse_event(mouse_up);
+        assert_eq!(app.selected_index, Some(0));
+    }
+
+    #[test]
+    fn test_mouse_events_ignored_in_detail_view() {
+        let mut app = make_app_with_sessions(3);
+        app.open_detail(0);
+        app.selected_index = Some(1);
+
+        // Try left click
+        let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+        let action = app.handle_mouse_event(mouse);
+        assert_eq!(action, Action::None);
+        assert_eq!(app.selected_index, Some(1)); // No change
+
+        // Try scroll
+        let scroll = make_mouse_event(MouseEventKind::ScrollDown, 5, 10);
+        let action = app.handle_mouse_event(scroll);
+        assert_eq!(action, Action::None);
+        assert_eq!(app.selected_index, Some(1)); // No change
+    }
+
+    #[test]
+    fn test_mouse_right_click_ignored() {
+        let mut app = make_app_with_sessions(3);
+        app.selected_index = Some(0);
+        let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Right), 3, 10);
+        let action = app.handle_mouse_event(mouse);
+        assert_eq!(action, Action::None);
+        assert_eq!(app.selected_index, Some(0));
+    }
+
+    #[test]
+    fn test_last_click_initialized_to_none() {
+        let app = App::new(PathBuf::from("/tmp/test.sock"));
+        assert!(app.last_click.is_none());
     }
 }
