@@ -121,20 +121,15 @@ fn hook_forwards_cwd_as_working_dir() {
 }
 
 #[test]
-fn hook_without_cwd_defaults_to_unknown() {
+fn hook_without_cwd_is_rejected() {
     let tmp = TempDir::new().expect("temp dir");
     let sock = test_socket(&tmp);
     let _daemon = start_daemon(&sock);
 
     let hook_json = r#"{"session_id":"sess-no-cwd"}"#;
-    claude_hook(&sock, "working", hook_json).success();
-
-    let state = dump(&sock);
-    let s = &state["sessions"][0];
-    assert_eq!(
-        s["working_dir"], "<unknown>",
-        "working_dir should default to '<unknown>' when cwd is absent"
-    );
+    claude_hook(&sock, "working", hook_json)
+        .code(2)
+        .stderr(predicate::str::contains("failed to parse JSON"));
 }
 
 #[test]

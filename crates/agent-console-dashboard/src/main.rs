@@ -258,10 +258,13 @@ fn run_set_command(
     let mut writer = stream.try_clone().expect("failed to clone unix stream");
     let mut reader = BufReader::new(stream);
 
-    let wd = working_dir.map(|p| p.display().to_string()).unwrap_or_else(|| {
-        eprintln!("Warning: cwd missing from hook input, using \"<unknown>\"");
-        "<unknown>".to_string()
-    });
+    let wd = working_dir
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| {
+            std::env::current_dir()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|_| ".".to_string())
+        });
     let cmd = format!("SET {} {} {}\n", session_id, status, wd);
 
     if writer.write_all(cmd.as_bytes()).is_err() || writer.flush().is_err() {
@@ -291,7 +294,7 @@ fn run_set_command(
 #[derive(serde::Deserialize)]
 struct HookInput {
     session_id: String,
-    cwd: Option<String>,
+    cwd: String,
 }
 
 /// Reads Claude Code hook JSON from stdin, extracts session_id, and forwards
@@ -309,8 +312,8 @@ fn run_claude_hook_command(socket: &PathBuf, status: Status) -> ExitCode {
         }
     };
 
-    let working_dir = input.cwd.as_deref().map(std::path::Path::new);
-    let result = run_set_command(socket, &input.session_id, &status.to_string(), working_dir);
+    let working_dir = std::path::Path::new(&input.cwd);
+    let result = run_set_command(socket, &input.session_id, &status.to_string(), Some(working_dir));
 
     match result {
         ExitCode::SUCCESS => {
