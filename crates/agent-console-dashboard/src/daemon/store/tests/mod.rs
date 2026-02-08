@@ -13,6 +13,7 @@
 mod basic;
 mod closed;
 mod concurrent;
+mod inactive;
 mod lifecycle_close;
 mod lifecycle_create;
 mod lifecycle_get_or_create;

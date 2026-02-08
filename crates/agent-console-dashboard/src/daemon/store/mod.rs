@@ -9,7 +9,7 @@ use crate::{AgentType, Session, SessionUpdate, Status, StoreError};
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, RwLock};
 
 #[cfg(test)]
@@ -210,13 +210,15 @@ impl SessionStore {
         sessions.remove(id)
     }
 
-    /// Returns `true` if any session has a non-closed status.
+    /// Returns `true` if any session is both non-closed and not inactive.
     ///
-    /// This is cheaper than `list_all()` because it only reads the lock
-    /// and short-circuits on the first active session without cloning.
-    pub async fn has_active_sessions(&self) -> bool {
+    /// Sessions that have received no hook activity for longer than
+    /// `inactive_threshold` are considered inactive and excluded.
+    pub async fn has_active_sessions(&self, inactive_threshold: Duration) -> bool {
         let sessions = self.sessions.read().await;
-        sessions.values().any(|s| s.status != Status::Closed)
+        sessions
+            .values()
+            .any(|s| s.status != Status::Closed && !s.is_inactive(inactive_threshold))
     }
 
     /// Returns all sessions currently in the store.
@@ -526,6 +528,16 @@ impl SessionStore {
         }
 
         closed_session
+    }
+
+    /// Returns the count of non-closed sessions that have been inactive
+    /// (no hook activity) for longer than `threshold`.
+    pub async fn count_inactive_sessions(&self, threshold: Duration) -> usize {
+        let sessions = self.sessions.read().await;
+        sessions
+            .values()
+            .filter(|s| s.is_inactive(threshold))
+            .count()
     }
 
     /// Returns closed sessions sorted by close time (most recent first).

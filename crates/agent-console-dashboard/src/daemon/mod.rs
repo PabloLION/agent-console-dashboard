@@ -14,7 +14,7 @@ pub mod usage;
 pub use server::SocketServer;
 pub use store::SessionStore;
 
-use crate::DaemonConfig;
+use crate::{DaemonConfig, INACTIVE_SESSION_THRESHOLD};
 use fork::{daemon, Fork};
 use std::error::Error;
 use std::sync::Arc;
@@ -71,11 +71,10 @@ async fn wait_for_shutdown() {
 async fn idle_check_loop(store: &SessionStore, timeout: Duration) {
     let mut idle_since: Option<Instant> = Some(Instant::now());
     let mut interval = tokio::time::interval(Duration::from_secs(IDLE_CHECK_INTERVAL_SECS));
-
     loop {
         interval.tick().await;
 
-        let has_active = store.has_active_sessions().await;
+        let has_active = store.has_active_sessions(INACTIVE_SESSION_THRESHOLD).await;
 
         if has_active {
             if idle_since.is_some() {
