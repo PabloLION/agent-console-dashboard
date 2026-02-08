@@ -9,7 +9,7 @@ use crate::{AgentType, Session, SessionUpdate, Status, StoreError};
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, RwLock};
 
 #[cfg(test)]
@@ -526,6 +526,37 @@ impl SessionStore {
         }
 
         closed_session
+    }
+
+    /// Closes all non-closed sessions whose last activity exceeds `stale_timeout`.
+    ///
+    /// Stale sessions are closed and archived for potential resurrection.
+    /// Returns the count of sessions that were auto-closed.
+    pub async fn close_stale_sessions(&self, stale_timeout: Duration) -> usize {
+        // Phase 1: find stale session IDs under read lock
+        let stale_ids: Vec<(String, u64)> = {
+            let sessions = self.sessions.read().await;
+            sessions
+                .values()
+                .filter(|s| !s.closed && s.last_activity.elapsed() > stale_timeout)
+                .map(|s| (s.id.clone(), s.last_activity.elapsed().as_secs()))
+                .collect()
+        };
+
+        // Phase 2: close each stale session (reuses close_session logic)
+        let mut count = 0;
+        for (id, inactive_secs) in &stale_ids {
+            if self.close_session(id).await.is_some() {
+                tracing::warn!(
+                    session_id = %id,
+                    inactive_secs,
+                    "auto-closed stale session (no activity for {}s)",
+                    stale_timeout.as_secs()
+                );
+                count += 1;
+            }
+        }
+        count
     }
 
     /// Returns closed sessions sorted by close time (most recent first).

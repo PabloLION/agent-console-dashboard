@@ -17,6 +17,7 @@ mod lifecycle_close;
 mod lifecycle_create;
 mod lifecycle_get_or_create;
 mod lifecycle_update;
+mod stale;
 mod subscriber;
 
 use super::SessionStore;
