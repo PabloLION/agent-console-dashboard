@@ -37,7 +37,7 @@ jobs:
         run: cargo build --workspace --verbose
 
       - name: Run tests
-        run: cargo test --workspace --verbose -- --test-threads=1
+        run: cargo test --workspace --verbose -- --test-threads=4
 
   lint:
     name: Lint
