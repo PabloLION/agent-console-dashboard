@@ -30,6 +30,11 @@ const AUTO_STOP_IDLE_SECS: u64 = 3600;
 /// How often the idle check runs.
 const IDLE_CHECK_INTERVAL_SECS: u64 = 60;
 
+/// Duration of inactivity (no hook events) before a session is auto-closed as stale.
+/// Matches AUTO_STOP_IDLE_SECS — if no hook has fired for 1 hour, the client is
+/// almost certainly dead (crashed or closed without firing the Stop hook).
+const STALE_SESSION_TIMEOUT_SECS: u64 = 3600;
+
 /// Result type alias for daemon operations.
 pub type DaemonResult<T> = Result<T, Box<dyn Error>>;
 
@@ -71,9 +76,17 @@ async fn wait_for_shutdown() {
 async fn idle_check_loop(store: &SessionStore, timeout: Duration) {
     let mut idle_since: Option<Instant> = Some(Instant::now());
     let mut interval = tokio::time::interval(Duration::from_secs(IDLE_CHECK_INTERVAL_SECS));
+    let stale_timeout = Duration::from_secs(STALE_SESSION_TIMEOUT_SECS);
 
     loop {
         interval.tick().await;
+
+        // Close stale sessions before checking for active ones.
+        // This ensures has_active_sessions() reflects only truly active sessions.
+        let stale_count = store.close_stale_sessions(stale_timeout).await;
+        if stale_count > 0 {
+            info!(count = stale_count, "auto-closed stale session(s)");
+        }
 
         let has_active = store.has_active_sessions().await;
 
