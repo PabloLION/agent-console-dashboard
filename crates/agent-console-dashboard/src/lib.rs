@@ -46,6 +46,10 @@ pub mod integrations;
 /// This module is not part of the public API - external tools should use CLI commands.
 pub(crate) mod client;
 
+/// Duration of inactivity (no hook events) before a session is considered inactive.
+/// Used by both the daemon idle timer and the TUI for visual treatment.
+pub const INACTIVE_SESSION_THRESHOLD: Duration = Duration::from_secs(3600);
+
 /// Session status enumeration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Status {
@@ -200,7 +204,7 @@ impl Session {
     pub fn set_status(&mut self, new_status: Status) {
         let now = Instant::now();
 
-        // Always record activity, even if status unchanged (for stale detection).
+        // Always record activity, even if status unchanged (for inactive detection).
         self.last_activity = now;
 
         // No-op if status unchanged
@@ -224,6 +228,12 @@ impl Session {
         self.since = now;
 
         self.closed = new_status == Status::Closed;
+    }
+
+    /// Returns `true` if this session has received no hook activity for longer
+    /// than `threshold`. Closed sessions are never considered inactive.
+    pub fn is_inactive(&self, threshold: Duration) -> bool {
+        !self.closed && self.last_activity.elapsed() > threshold
     }
 }
 
@@ -739,6 +749,48 @@ mod tests {
         assert_eq!(
             session.since, original_since,
             "since should NOT advance on same-status call"
+        );
+    }
+
+    #[test]
+    fn test_session_is_inactive_when_old() {
+        let mut session = Session::new(
+            "inactive-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+        let threshold = Duration::from_secs(3600);
+
+        // Fresh session is not inactive
+        assert!(!session.is_inactive(threshold));
+
+        // Backdate last_activity to 2 hours ago
+        session.last_activity = session
+            .last_activity
+            .checked_sub(Duration::from_secs(7200))
+            .expect("backdate should succeed");
+        assert!(session.is_inactive(threshold));
+    }
+
+    #[test]
+    fn test_session_is_inactive_excludes_closed() {
+        let mut session = Session::new(
+            "closed-inactive-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+        let threshold = Duration::from_secs(3600);
+
+        // Backdate and close
+        session.last_activity = session
+            .last_activity
+            .checked_sub(Duration::from_secs(7200))
+            .expect("backdate should succeed");
+        session.set_status(Status::Closed);
+
+        assert!(
+            !session.is_inactive(threshold),
+            "closed sessions are never inactive"
         );
     }
 

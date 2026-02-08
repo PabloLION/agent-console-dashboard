@@ -210,13 +210,15 @@ impl SessionStore {
         sessions.remove(id)
     }
 
-    /// Returns `true` if any session has a non-closed status.
+    /// Returns `true` if any session is both non-closed and not inactive.
     ///
-    /// This is cheaper than `list_all()` because it only reads the lock
-    /// and short-circuits on the first active session without cloning.
-    pub async fn has_active_sessions(&self) -> bool {
+    /// Sessions that have received no hook activity for longer than
+    /// `inactive_threshold` are considered inactive and excluded.
+    pub async fn has_active_sessions(&self, inactive_threshold: Duration) -> bool {
         let sessions = self.sessions.read().await;
-        sessions.values().any(|s| s.status != Status::Closed)
+        sessions
+            .values()
+            .any(|s| s.status != Status::Closed && !s.is_inactive(inactive_threshold))
     }
 
     /// Returns all sessions currently in the store.
@@ -528,35 +530,14 @@ impl SessionStore {
         closed_session
     }
 
-    /// Closes all non-closed sessions whose last activity exceeds `stale_timeout`.
-    ///
-    /// Stale sessions are closed and archived for potential resurrection.
-    /// Returns the count of sessions that were auto-closed.
-    pub async fn close_stale_sessions(&self, stale_timeout: Duration) -> usize {
-        // Phase 1: find stale session IDs under read lock
-        let stale_ids: Vec<(String, u64)> = {
-            let sessions = self.sessions.read().await;
-            sessions
-                .values()
-                .filter(|s| !s.closed && s.last_activity.elapsed() > stale_timeout)
-                .map(|s| (s.id.clone(), s.last_activity.elapsed().as_secs()))
-                .collect()
-        };
-
-        // Phase 2: close each stale session (reuses close_session logic)
-        let mut count = 0;
-        for (id, inactive_secs) in &stale_ids {
-            if self.close_session(id).await.is_some() {
-                tracing::warn!(
-                    session_id = %id,
-                    inactive_secs,
-                    "auto-closed stale session (no activity for {}s)",
-                    stale_timeout.as_secs()
-                );
-                count += 1;
-            }
-        }
-        count
+    /// Returns the count of non-closed sessions that have been inactive
+    /// (no hook activity) for longer than `threshold`.
+    pub async fn count_inactive_sessions(&self, threshold: Duration) -> usize {
+        let sessions = self.sessions.read().await;
+        sessions
+            .values()
+            .filter(|s| s.is_inactive(threshold))
+            .count()
     }
 
     /// Returns closed sessions sorted by close time (most recent first).

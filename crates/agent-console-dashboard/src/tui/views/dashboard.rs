@@ -3,10 +3,10 @@
 //! Provides session list rendering with responsive column layouts
 //! and status-based color coding.
 
-use crate::{Session, Status};
+use crate::{Session, Status, INACTIVE_SESSION_THRESHOLD};
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState},
     Frame,
@@ -83,27 +83,47 @@ const WIDE_THRESHOLD: u16 = 80;
 /// - `40-80` cols: symbol + name + status + working dir + elapsed
 /// - `>80` cols: full with session ID prefix
 pub fn format_session_line<'a>(session: &Session, width: u16) -> Line<'a> {
-    let color = status_color(session.status);
-    let symbol = status_symbol(session.status);
+    let inactive = session.is_inactive(INACTIVE_SESSION_THRESHOLD);
+    let color = if inactive {
+        Color::DarkGray
+    } else {
+        status_color(session.status)
+    };
+    let symbol = if inactive {
+        "◌"
+    } else {
+        status_symbol(session.status)
+    };
+    let dim = if inactive {
+        Style::default()
+            .fg(Color::DarkGray)
+            .add_modifier(Modifier::DIM)
+    } else {
+        Style::default()
+    };
     let elapsed = format_elapsed(session.since);
     let name = truncate_string(&session.id, 20);
-    let status_text = session.status.to_string();
+    let status_text = if inactive {
+        "inactive".to_string()
+    } else {
+        session.status.to_string()
+    };
 
     if width < NARROW_THRESHOLD {
         // Narrow: symbol + name only
         Line::from(vec![
             Span::styled(format!("{} ", symbol), Style::default().fg(color)),
-            Span::raw(name),
+            Span::styled(name, dim),
         ])
     } else if width <= WIDE_THRESHOLD {
         // Standard: symbol + name + status + working dir + elapsed
         let work_dir = truncate_path(&session.working_dir, 20);
         Line::from(vec![
             Span::styled(format!("{} ", symbol), Style::default().fg(color)),
-            Span::raw(format!("{:<20} ", name)),
+            Span::styled(format!("{:<20} ", name), dim),
             Span::styled(format!("{:<10} ", status_text), Style::default().fg(color)),
-            Span::raw(format!("{:<20} ", work_dir)),
-            Span::raw(elapsed),
+            Span::styled(format!("{:<20} ", work_dir), dim),
+            Span::styled(elapsed, dim),
         ])
     } else {
         // Wide: session ID prefix + symbol + name + status + working dir + elapsed
@@ -116,12 +136,12 @@ pub fn format_session_line<'a>(session: &Session, width: u16) -> Line<'a> {
             .unwrap_or_default();
 
         Line::from(vec![
-            Span::raw(format!("{:<14} ", session_id_display)),
+            Span::styled(format!("{:<14} ", session_id_display), dim),
             Span::styled(format!("{} ", symbol), Style::default().fg(color)),
-            Span::raw(format!("{:<20} ", short_id)),
+            Span::styled(format!("{:<20} ", short_id), dim),
             Span::styled(format!("{:<10} ", status_text), Style::default().fg(color)),
-            Span::raw(format!("{:<30} ", work_dir)),
-            Span::raw(elapsed),
+            Span::styled(format!("{:<30} ", work_dir), dim),
+            Span::styled(elapsed, dim),
         ])
     }
 }

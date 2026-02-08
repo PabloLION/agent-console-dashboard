@@ -19,6 +19,7 @@
 //! | Closed    | `×`            | Gray   |
 
 use crate::widgets::{Widget, WidgetContext};
+use crate::INACTIVE_SESSION_THRESHOLD;
 use ratatui::{
     style::{Color, Style},
     text::{Line, Span},
@@ -60,6 +61,7 @@ impl Widget for SessionStatusWidget {
                     name: extract_name(&s.id),
                     status: s.status,
                     elapsed,
+                    inactive: s.is_inactive(INACTIVE_SESSION_THRESHOLD),
                 }
             })
             .collect();
@@ -81,6 +83,7 @@ struct SessionEntry {
     name: String,
     status: crate::Status,
     elapsed: Duration,
+    inactive: bool,
 }
 
 /// Extracts a display name from a session ID.
@@ -123,6 +126,9 @@ fn status_color(status: crate::Status) -> Color {
 
 /// Builds a styled [`Span`] for a session's status indicator.
 fn status_span(entry: &SessionEntry) -> Span<'static> {
+    if entry.inactive {
+        return Span::styled("◌".to_string(), Style::default().fg(Color::DarkGray));
+    }
     let color = status_color(entry.status);
     match entry.status {
         crate::Status::Working => Span::styled("●".to_string(), Style::default().fg(color)),
@@ -318,6 +324,7 @@ mod tests {
             name: "test".to_string(),
             status: Status::Working,
             elapsed: Duration::from_secs(0),
+            inactive: false,
         };
         let span = status_span(&entry);
         assert_eq!(span.content.as_ref(), "●");
@@ -330,6 +337,7 @@ mod tests {
             name: "test".to_string(),
             status: Status::Attention,
             elapsed: Duration::from_secs(154),
+            inactive: false,
         };
         let span = status_span(&entry);
         assert_eq!(span.content.as_ref(), "2m 34s");
@@ -342,6 +350,7 @@ mod tests {
             name: "test".to_string(),
             status: Status::Question,
             elapsed: Duration::from_secs(72),
+            inactive: false,
         };
         let span = status_span(&entry);
         assert_eq!(span.content.as_ref(), "? 1m 12s");
@@ -354,6 +363,7 @@ mod tests {
             name: "test".to_string(),
             status: Status::Closed,
             elapsed: Duration::from_secs(0),
+            inactive: false,
         };
         let span = status_span(&entry);
         assert_eq!(span.content.as_ref(), "×");
