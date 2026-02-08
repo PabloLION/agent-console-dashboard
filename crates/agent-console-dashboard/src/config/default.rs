@@ -23,7 +23,7 @@ pub const DEFAULT_CONFIG_TEMPLATE: &str = r#"# Agent Console Dashboard Configura
 # All values shown below are the built-in defaults.
 # Uncomment and modify options to customize your dashboard.
 #
-# Location: $XDG_CONFIG_HOME/agent-console/config.toml
+# Location: $XDG_CONFIG_HOME/agent-console-dashboard/config.toml
 # Reference: https://github.com/PabloLION/agent-console-dashboard
 
 # ==============================================================================
@@ -102,7 +102,7 @@ usage_fetch_interval = "3m"
 log_level = "info"
 
 # Path to log file. Empty string means log to stderr.
-# Examples: "/var/log/agent-console.log", "~/.local/share/agent-console/daemon.log"
+# Examples: "/var/log/agent-console-dashboard.log", "~/.local/share/agent-console-dashboard/daemon.log"
 # Hot-reloadable: No (restart required)
 log_file = ""
 "#;
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn if_missing_creates_file() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
-        let expected_path = tmp.path().join("agent-console/config.toml");
+        let expected_path = tmp.path().join("agent-console-dashboard/config.toml");
         with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
             let created = create_default_config_if_missing().expect("should succeed");
             assert!(created, "should report file was created");
@@ -274,7 +274,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         // Pre-create the file so we don't depend on two sequential calls
         // both seeing the same XDG_CONFIG_HOME
-        let config_dir = tmp.path().join("agent-console");
+        let config_dir = tmp.path().join("agent-console-dashboard");
         fs::create_dir_all(&config_dir).expect("create config dir");
         let config_file = config_dir.join("config.toml");
         fs::write(&config_file, DEFAULT_CONFIG_TEMPLATE).expect("write initial config");
@@ -329,7 +329,7 @@ mod tests {
     #[test]
     fn create_returns_correct_path() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
-        let expected = tmp.path().join("agent-console/config.toml");
+        let expected = tmp.path().join("agent-console-dashboard/config.toml");
         with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
             let path = create_default_config(false).expect("should succeed");
             assert_eq!(path, expected);
@@ -343,7 +343,7 @@ mod tests {
     fn file_permissions_are_0600() {
         use std::os::unix::fs::PermissionsExt;
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
-        let expected_path = tmp.path().join("agent-console/config.toml");
+        let expected_path = tmp.path().join("agent-console-dashboard/config.toml");
         with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
             create_default_config_if_missing().expect("should succeed");
             let mode = fs::metadata(&expected_path)

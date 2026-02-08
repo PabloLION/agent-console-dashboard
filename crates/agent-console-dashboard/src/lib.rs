@@ -265,7 +265,7 @@ impl DaemonConfig {
 impl Default for DaemonConfig {
     fn default() -> Self {
         Self {
-            socket_path: PathBuf::from("/tmp/agent-console.sock"),
+            socket_path: PathBuf::from("/tmp/agent-console-dashboard.sock"),
             daemonize: false,
         }
     }
@@ -444,7 +444,10 @@ mod tests {
     #[test]
     fn test_daemon_config_default() {
         let config = DaemonConfig::default();
-        assert_eq!(config.socket_path, PathBuf::from("/tmp/agent-console.sock"));
+        assert_eq!(
+            config.socket_path,
+            PathBuf::from("/tmp/agent-console-dashboard.sock")
+        );
         assert!(!config.daemonize);
     }
 

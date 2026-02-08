@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn display_already_exists_error() {
         let err = ConfigError::AlreadyExists {
-            path: PathBuf::from("/home/user/.config/agent-console/config.toml"),
+            path: PathBuf::from("/home/user/.config/agent-console-dashboard/config.toml"),
         };
         let msg = err.to_string();
         assert!(

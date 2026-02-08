@@ -159,7 +159,7 @@ pub fn daemonize_process(nochdir: bool, noclose: bool) -> DaemonResult<()> {
 /// use std::path::PathBuf;
 ///
 /// let config = DaemonConfig::new(
-///     PathBuf::from("/tmp/agent-console.sock"),
+///     PathBuf::from("/tmp/agent-console-dashboard.sock"),
 ///     false, // foreground mode
 /// );
 /// run_daemon(config).expect("Failed to run daemon");

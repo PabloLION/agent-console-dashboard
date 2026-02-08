@@ -1,25 +1,25 @@
-//! Platform-aware path resolution for agent-console.
+//! Platform-aware path resolution for agent-console-dashboard.
 //!
 //! On **Linux**, follows the XDG Base Directory Specification:
-//! - Config: `$XDG_CONFIG_HOME/agent-console` or `~/.config/agent-console`
+//! - Config: `$XDG_CONFIG_HOME/agent-console-dashboard` or `~/.config/agent-console-dashboard`
 //! - Runtime/socket: `$XDG_RUNTIME_DIR` or `/tmp`
 //!
 //! On **macOS**, uses Apple conventions with XDG env var overrides:
-//! - Config: `$XDG_CONFIG_HOME/agent-console` or `~/Library/Application Support/agent-console`
+//! - Config: `$XDG_CONFIG_HOME/agent-console-dashboard` or `~/Library/Application Support/agent-console-dashboard`
 //! - Runtime/socket: `$XDG_RUNTIME_DIR` or `$TMPDIR` or `/tmp`
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const APP_NAME: &str = "agent-console";
+const APP_NAME: &str = "agent-console-dashboard";
 
-/// Returns the configuration directory for agent-console.
+/// Returns the configuration directory for agent-console-dashboard.
 ///
 /// Resolution order:
-/// 1. `$XDG_CONFIG_HOME/agent-console` (if env var set, any platform)
+/// 1. `$XDG_CONFIG_HOME/agent-console-dashboard` (if env var set, any platform)
 /// 2. Platform default:
-///    - Linux: `~/.config/agent-console`
-///    - macOS: `~/Library/Application Support/agent-console`
+///    - Linux: `~/.config/agent-console-dashboard`
+///    - macOS: `~/Library/Application Support/agent-console-dashboard`
 pub fn config_dir() -> PathBuf {
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
         return PathBuf::from(xdg).join(APP_NAME);
@@ -82,7 +82,7 @@ fn platform_runtime_dir() -> PathBuf {
 
 /// Returns the path to the Unix domain socket.
 ///
-/// Resolves to `runtime_dir()/agent-console.sock`.
+/// Resolves to `runtime_dir()/agent-console-dashboard.sock`.
 pub fn socket_path() -> PathBuf {
     runtime_dir().join(format!("{APP_NAME}.sock"))
 }
@@ -160,7 +160,7 @@ mod tests {
             let path = config_path();
             assert_eq!(
                 path,
-                PathBuf::from("/custom/config/agent-console/config.toml")
+                PathBuf::from("/custom/config/agent-console-dashboard/config.toml")
             );
         });
     }
@@ -169,7 +169,7 @@ mod tests {
     fn test_config_path_without_xdg_uses_platform_default() {
         with_env(&[("XDG_CONFIG_HOME", None)], || {
             let path = config_path();
-            let expected = platform_config_dir().join("agent-console/config.toml");
+            let expected = platform_config_dir().join("agent-console-dashboard/config.toml");
             assert_eq!(path, expected);
         });
     }
@@ -180,7 +180,10 @@ mod tests {
         with_env(&[("XDG_CONFIG_HOME", None)], || {
             let dir = config_dir();
             let home = dirs::home_dir().expect("could not determine home directory");
-            assert_eq!(dir, home.join("Library/Application Support/agent-console"));
+            assert_eq!(
+                dir,
+                home.join("Library/Application Support/agent-console-dashboard")
+            );
         });
     }
 
@@ -190,7 +193,7 @@ mod tests {
         with_env(&[("XDG_CONFIG_HOME", None)], || {
             let dir = config_dir();
             let home = dirs::home_dir().expect("could not determine home directory");
-            assert_eq!(dir, home.join(".config/agent-console"));
+            assert_eq!(dir, home.join(".config/agent-console-dashboard"));
         });
     }
 
@@ -215,7 +218,10 @@ mod tests {
     fn test_socket_path_with_xdg_override() {
         with_env(&[("XDG_RUNTIME_DIR", Some("/run/user/1000"))], || {
             let path = socket_path();
-            assert_eq!(path, PathBuf::from("/run/user/1000/agent-console.sock"));
+            assert_eq!(
+                path,
+                PathBuf::from("/run/user/1000/agent-console-dashboard.sock")
+            );
         });
     }
 
@@ -223,7 +229,7 @@ mod tests {
     fn test_config_dir_with_xdg_override() {
         with_env(&[("XDG_CONFIG_HOME", Some("/custom/config"))], || {
             let dir = config_dir();
-            assert_eq!(dir, PathBuf::from("/custom/config/agent-console"));
+            assert_eq!(dir, PathBuf::from("/custom/config/agent-console-dashboard"));
         });
     }
 
@@ -287,7 +293,7 @@ mod tests {
             )],
             || {
                 let result = ensure_config_dir().expect("ensure_config_dir failed");
-                assert_eq!(result, tmp.path().join("agent-console"));
+                assert_eq!(result, tmp.path().join("agent-console-dashboard"));
                 assert!(result.is_dir());
             },
         );

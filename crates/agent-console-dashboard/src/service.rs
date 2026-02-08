@@ -8,13 +8,14 @@ use std::path::PathBuf;
 use std::process::Command;
 
 /// macOS launchd plist template with USERNAME placeholder.
-const PLIST_TEMPLATE: &str = include_str!("../../../resources/com.agent-console.daemon.plist");
+const PLIST_TEMPLATE: &str =
+    include_str!("../../../resources/com.agent-console-dashboard.daemon.plist");
 
 /// Linux systemd user unit file.
 const SYSTEMD_UNIT: &str = include_str!("../../../resources/acd.service");
 
 /// Service label used in launchd plist.
-const LAUNCHD_LABEL: &str = "com.agent-console.daemon";
+const LAUNCHD_LABEL: &str = "com.agent-console-dashboard.daemon";
 
 /// Systemd service name.
 const SYSTEMD_SERVICE: &str = "acd.service";
@@ -76,7 +77,7 @@ pub fn service_status() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-/// Returns the macOS plist install path: ~/Library/LaunchAgents/com.agent-console.daemon.plist
+/// Returns the macOS plist install path: ~/Library/LaunchAgents/com.agent-console-dashboard.daemon.plist
 pub fn macos_plist_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let home = dirs::home_dir().ok_or("could not determine home directory")?;
     Ok(home
@@ -174,7 +175,7 @@ fn status_macos() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let found: Vec<&str> = stdout
         .lines()
-        .filter(|line| line.contains("com.agent-console"))
+        .filter(|line| line.contains("com.agent-console-dashboard"))
         .collect();
 
     if found.is_empty() {
@@ -406,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_constants_are_consistent() {
-        assert_eq!(LAUNCHD_LABEL, "com.agent-console.daemon");
+        assert_eq!(LAUNCHD_LABEL, "com.agent-console-dashboard.daemon");
         assert_eq!(SYSTEMD_SERVICE, "acd.service");
     }
 }

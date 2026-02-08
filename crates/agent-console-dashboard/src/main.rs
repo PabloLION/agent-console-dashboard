@@ -13,7 +13,7 @@ use std::process::ExitCode;
 
 /// Agent Console Dashboard daemon
 #[derive(Parser)]
-#[command(name = "agent-console")]
+#[command(name = "agent-console-dashboard")]
 #[command(version, about = "Agent Console Dashboard daemon")]
 struct Cli {
     #[command(subcommand)]
@@ -26,21 +26,21 @@ enum Commands {
     /// Launch the terminal user interface
     Tui {
         /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console.sock")]
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
         socket: PathBuf,
     },
 
     /// Check daemon health status
     Status {
         /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console.sock")]
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
         socket: PathBuf,
     },
 
     /// Dump full daemon state as JSON
     Dump {
         /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console.sock")]
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
         socket: PathBuf,
         /// Output format (only json supported in v0)
         #[arg(long, default_value = "json")]
@@ -64,7 +64,7 @@ enum Commands {
         /// Session ID to resurrect
         session_id: String,
         /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console.sock")]
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
         socket: PathBuf,
         /// Print command without explanation (for scripting)
         #[arg(long)]
@@ -81,7 +81,7 @@ enum Commands {
         #[arg(long)]
         working_dir: Option<PathBuf>,
         /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console.sock")]
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
         socket: PathBuf,
     },
 
@@ -92,7 +92,7 @@ enum Commands {
         daemonize: bool,
 
         /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console.sock")]
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
         socket: PathBuf,
     },
 
@@ -101,7 +101,7 @@ enum Commands {
         /// Status to set: working, attention
         status: Status,
         /// Daemon socket path
-        #[arg(long, default_value = "/tmp/agent-console.sock")]
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
         socket: PathBuf,
     },
 }
@@ -525,17 +525,17 @@ mod tests {
     #[test]
     fn test_daemon_subcommand_exists() {
         // Verify the daemon subcommand can be parsed
-        let result = Cli::try_parse_from(["agent-console", "daemon"]);
+        let result = Cli::try_parse_from(["agent-console-dashboard", "daemon"]);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_default_socket_path() {
-        // Verify default socket path is /tmp/agent-console.sock
-        let cli = Cli::try_parse_from(["agent-console", "daemon"]).unwrap();
+        // Verify default socket path is /tmp/agent-console-dashboard.sock
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "daemon"]).unwrap();
         match cli.command {
             Commands::Daemon { socket, .. } => {
-                assert_eq!(socket, PathBuf::from("/tmp/agent-console.sock"));
+                assert_eq!(socket, PathBuf::from("/tmp/agent-console-dashboard.sock"));
             }
             _ => panic!("unexpected command variant"),
         }
@@ -544,8 +544,13 @@ mod tests {
     #[test]
     fn test_custom_socket_path() {
         // Verify custom socket path can be specified
-        let cli = Cli::try_parse_from(["agent-console", "daemon", "--socket", "/custom/path.sock"])
-            .unwrap();
+        let cli = Cli::try_parse_from([
+            "agent-console-dashboard",
+            "daemon",
+            "--socket",
+            "/custom/path.sock",
+        ])
+        .unwrap();
         match cli.command {
             Commands::Daemon { socket, .. } => {
                 assert_eq!(socket, PathBuf::from("/custom/path.sock"));
@@ -557,7 +562,7 @@ mod tests {
     #[test]
     fn test_daemonize_flag_default_false() {
         // Verify daemonize flag defaults to false
-        let cli = Cli::try_parse_from(["agent-console", "daemon"]).unwrap();
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "daemon"]).unwrap();
         match cli.command {
             Commands::Daemon { daemonize, .. } => {
                 assert!(!daemonize);
@@ -569,7 +574,8 @@ mod tests {
     #[test]
     fn test_daemonize_flag_true() {
         // Verify daemonize flag can be set to true
-        let cli = Cli::try_parse_from(["agent-console", "daemon", "--daemonize"]).unwrap();
+        let cli =
+            Cli::try_parse_from(["agent-console-dashboard", "daemon", "--daemonize"]).unwrap();
         match cli.command {
             Commands::Daemon { daemonize, .. } => {
                 assert!(daemonize);
@@ -604,7 +610,7 @@ mod tests {
     fn test_combined_flags() {
         // Verify both flags can be used together
         let cli = Cli::try_parse_from([
-            "agent-console",
+            "agent-console-dashboard",
             "daemon",
             "--daemonize",
             "--socket",
@@ -624,7 +630,7 @@ mod tests {
     fn test_flag_order_independence() {
         // Verify flags can be specified in any order (--socket before --daemonize)
         let cli = Cli::try_parse_from([
-            "agent-console",
+            "agent-console-dashboard",
             "daemon",
             "--socket",
             "/custom/path.sock",
@@ -643,7 +649,7 @@ mod tests {
     #[test]
     fn test_unknown_subcommand_fails() {
         // Verify unknown subcommand fails to parse
-        let result = Cli::try_parse_from(["agent-console", "unknown"]);
+        let result = Cli::try_parse_from(["agent-console-dashboard", "unknown"]);
         assert!(result.is_err());
     }
 
@@ -657,7 +663,7 @@ mod tests {
     #[test]
     fn test_socket_requires_value() {
         // Verify --socket flag requires a value
-        let result = Cli::try_parse_from(["agent-console", "daemon", "--socket"]);
+        let result = Cli::try_parse_from(["agent-console-dashboard", "daemon", "--socket"]);
         assert!(result.is_err());
     }
 
@@ -665,7 +671,7 @@ mod tests {
     fn test_socket_path_with_spaces() {
         // Verify socket path with spaces works correctly
         let cli = Cli::try_parse_from([
-            "agent-console",
+            "agent-console-dashboard",
             "daemon",
             "--socket",
             "/path/with spaces/socket.sock",
@@ -682,8 +688,13 @@ mod tests {
     #[test]
     fn test_socket_relative_path() {
         // Verify relative socket path is accepted
-        let cli =
-            Cli::try_parse_from(["agent-console", "daemon", "--socket", "./local.sock"]).unwrap();
+        let cli = Cli::try_parse_from([
+            "agent-console-dashboard",
+            "daemon",
+            "--socket",
+            "./local.sock",
+        ])
+        .unwrap();
         match cli.command {
             Commands::Daemon { socket, .. } => {
                 assert_eq!(socket, PathBuf::from("./local.sock"));
@@ -695,7 +706,7 @@ mod tests {
     #[test]
     fn test_unknown_flag_fails() {
         // Verify unknown flag fails to parse
-        let result = Cli::try_parse_from(["agent-console", "daemon", "--unknown-flag"]);
+        let result = Cli::try_parse_from(["agent-console-dashboard", "daemon", "--unknown-flag"]);
         assert!(result.is_err());
     }
 
@@ -703,12 +714,12 @@ mod tests {
 
     #[test]
     fn test_claude_hook_working_parses() {
-        let cli = Cli::try_parse_from(["agent-console", "claude-hook", "working"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "claude-hook", "working"])
             .expect("claude-hook working should parse");
         match cli.command {
             Commands::ClaudeHook { status, socket } => {
                 assert_eq!(status, agent_console_dashboard::Status::Working);
-                assert_eq!(socket, PathBuf::from("/tmp/agent-console.sock"));
+                assert_eq!(socket, PathBuf::from("/tmp/agent-console-dashboard.sock"));
             }
             _ => panic!("expected ClaudeHook command"),
         }
@@ -716,7 +727,7 @@ mod tests {
 
     #[test]
     fn test_claude_hook_attention_parses() {
-        let cli = Cli::try_parse_from(["agent-console", "claude-hook", "attention"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "claude-hook", "attention"])
             .expect("claude-hook attention should parse");
         match cli.command {
             Commands::ClaudeHook { status, .. } => {
@@ -729,7 +740,7 @@ mod tests {
     #[test]
     fn test_claude_hook_custom_socket() {
         let cli = Cli::try_parse_from([
-            "agent-console",
+            "agent-console-dashboard",
             "claude-hook",
             "working",
             "--socket",
@@ -746,22 +757,23 @@ mod tests {
 
     #[test]
     fn test_claude_hook_requires_status() {
-        let result = Cli::try_parse_from(["agent-console", "claude-hook"]);
+        let result = Cli::try_parse_from(["agent-console-dashboard", "claude-hook"]);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_claude_hook_invalid_status_fails() {
-        let result = Cli::try_parse_from(["agent-console", "claude-hook", "invalid"]);
+        let result = Cli::try_parse_from(["agent-console-dashboard", "claude-hook", "invalid"]);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_dump_subcommand_parses() {
-        let cli = Cli::try_parse_from(["agent-console", "dump"]).expect("dump should parse");
+        let cli =
+            Cli::try_parse_from(["agent-console-dashboard", "dump"]).expect("dump should parse");
         match cli.command {
             Commands::Dump { socket, format } => {
-                assert_eq!(socket, PathBuf::from("/tmp/agent-console.sock"));
+                assert_eq!(socket, PathBuf::from("/tmp/agent-console-dashboard.sock"));
                 assert_eq!(format, "json");
             }
             _ => panic!("unexpected command variant"),
@@ -770,7 +782,7 @@ mod tests {
 
     #[test]
     fn test_dump_with_format_json() {
-        let cli = Cli::try_parse_from(["agent-console", "dump", "--format", "json"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "dump", "--format", "json"])
             .expect("dump --format json should parse");
         match cli.command {
             Commands::Dump { format, .. } => {
@@ -783,7 +795,7 @@ mod tests {
     #[test]
     fn test_dump_with_format_text_parses() {
         // CLI accepts any string for format; validation happens at runtime
-        let cli = Cli::try_parse_from(["agent-console", "dump", "--format", "text"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "dump", "--format", "text"])
             .expect("dump --format text should parse");
         match cli.command {
             Commands::Dump { format, .. } => {
@@ -795,8 +807,13 @@ mod tests {
 
     #[test]
     fn test_dump_with_custom_socket() {
-        let cli = Cli::try_parse_from(["agent-console", "dump", "--socket", "/custom/dump.sock"])
-            .expect("dump --socket should parse");
+        let cli = Cli::try_parse_from([
+            "agent-console-dashboard",
+            "dump",
+            "--socket",
+            "/custom/dump.sock",
+        ])
+        .expect("dump --socket should parse");
         match cli.command {
             Commands::Dump { socket, .. } => {
                 assert_eq!(socket, PathBuf::from("/custom/dump.sock"));
@@ -807,7 +824,7 @@ mod tests {
 
     #[test]
     fn test_service_install_parses() {
-        let cli = Cli::try_parse_from(["agent-console", "service", "install"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "service", "install"])
             .expect("service install should parse");
         match cli.command {
             Commands::Service { action } => match action {
@@ -820,7 +837,7 @@ mod tests {
 
     #[test]
     fn test_service_uninstall_parses() {
-        let cli = Cli::try_parse_from(["agent-console", "service", "uninstall"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "service", "uninstall"])
             .expect("service uninstall should parse");
         match cli.command {
             Commands::Service { action } => match action {
@@ -833,7 +850,7 @@ mod tests {
 
     #[test]
     fn test_service_status_parses() {
-        let cli = Cli::try_parse_from(["agent-console", "service", "status"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "service", "status"])
             .expect("service status should parse");
         match cli.command {
             Commands::Service { action } => match action {
@@ -846,7 +863,7 @@ mod tests {
 
     #[test]
     fn test_resurrect_subcommand_parses() {
-        let cli = Cli::try_parse_from(["agent-console", "resurrect", "session-abc"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "resurrect", "session-abc"])
             .expect("resurrect should parse");
         match cli.command {
             Commands::Resurrect {
@@ -861,8 +878,13 @@ mod tests {
 
     #[test]
     fn test_resurrect_quiet_flag() {
-        let cli = Cli::try_parse_from(["agent-console", "resurrect", "session-abc", "--quiet"])
-            .expect("resurrect --quiet should parse");
+        let cli = Cli::try_parse_from([
+            "agent-console-dashboard",
+            "resurrect",
+            "session-abc",
+            "--quiet",
+        ])
+        .expect("resurrect --quiet should parse");
         match cli.command {
             Commands::Resurrect { quiet, .. } => {
                 assert!(quiet);
@@ -873,19 +895,19 @@ mod tests {
 
     #[test]
     fn test_resurrect_requires_session_id() {
-        let result = Cli::try_parse_from(["agent-console", "resurrect"]);
+        let result = Cli::try_parse_from(["agent-console-dashboard", "resurrect"]);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_service_without_action_fails() {
-        let result = Cli::try_parse_from(["agent-console", "service"]);
+        let result = Cli::try_parse_from(["agent-console-dashboard", "service"]);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_service_unknown_action_fails() {
-        let result = Cli::try_parse_from(["agent-console", "service", "restart"]);
+        let result = Cli::try_parse_from(["agent-console-dashboard", "service", "restart"]);
         assert!(result.is_err());
     }
 
@@ -900,7 +922,7 @@ mod tests {
 
     #[test]
     fn test_config_init_parses() {
-        let cli = Cli::try_parse_from(["agent-console", "config", "init"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "config", "init"])
             .expect("config init should parse");
         match cli.command {
             Commands::Config { action } => match action {
@@ -913,7 +935,7 @@ mod tests {
 
     #[test]
     fn test_config_init_force_parses() {
-        let cli = Cli::try_parse_from(["agent-console", "config", "init", "--force"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "config", "init", "--force"])
             .expect("config init --force should parse");
         match cli.command {
             Commands::Config { action } => match action {
@@ -926,7 +948,7 @@ mod tests {
 
     #[test]
     fn test_config_path_parses() {
-        let cli = Cli::try_parse_from(["agent-console", "config", "path"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "config", "path"])
             .expect("config path should parse");
         match cli.command {
             Commands::Config { action } => match action {
@@ -939,7 +961,7 @@ mod tests {
 
     #[test]
     fn test_config_validate_parses() {
-        let cli = Cli::try_parse_from(["agent-console", "config", "validate"])
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "config", "validate"])
             .expect("config validate should parse");
         match cli.command {
             Commands::Config { action } => match action {
@@ -952,7 +974,7 @@ mod tests {
 
     #[test]
     fn test_config_without_action_fails() {
-        let result = Cli::try_parse_from(["agent-console", "config"]);
+        let result = Cli::try_parse_from(["agent-console-dashboard", "config"]);
         assert!(result.is_err());
     }
 

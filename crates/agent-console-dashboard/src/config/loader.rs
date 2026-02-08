@@ -230,7 +230,7 @@ log_level = "debug"
     #[test]
     fn load_default_with_existing_file_parses_it() {
         let dir = tempfile::tempdir().expect("failed to create temp dir");
-        let config_dir = dir.path().join("agent-console");
+        let config_dir = dir.path().join("agent-console-dashboard");
         fs::create_dir_all(&config_dir).expect("failed to create config dir");
         fs::write(
             config_dir.join("config.toml"),

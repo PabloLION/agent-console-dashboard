@@ -4,7 +4,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.agent-console.daemon</string>
+    <string>com.agent-console-dashboard.daemon</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/acd</string>
@@ -20,6 +20,6 @@
         <string>/Users/USERNAME</string>
     </dict>
     <key>StandardErrorPath</key>
-    <string>/Users/USERNAME/.local/state/agent-console/acd.log</string>
+    <string>/Users/USERNAME/.local/state/agent-console-dashboard/acd.log</string>
 </dict>
 </plist>

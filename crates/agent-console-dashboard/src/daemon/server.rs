@@ -16,7 +16,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//!     let mut server = SocketServer::new("/tmp/agent-console.sock".to_string());
+//!     let mut server = SocketServer::new("/tmp/agent-console-dashboard.sock".to_string());
 //!     server.start().await?;
 //!     server.run().await?;
 //!     Ok(())
@@ -72,7 +72,7 @@ impl SocketServer {
     /// # Arguments
     ///
     /// * `socket_path` - The filesystem path where the Unix socket will be created.
-    ///   Default is typically `/tmp/agent-console.sock`.
+    ///   Default is typically `/tmp/agent-console-dashboard.sock`.
     ///
     /// # Example
     ///
@@ -250,7 +250,7 @@ impl SocketServer {
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     ///     let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
-    ///     let mut server = SocketServer::new("/tmp/agent-console.sock".to_string());
+    ///     let mut server = SocketServer::new("/tmp/agent-console-dashboard.sock".to_string());
     ///     server.start().await?;
     ///
     ///     // In another task: shutdown_tx.send(()).unwrap();
