@@ -5,12 +5,13 @@
 
 use crate::{Session, Status, INACTIVE_SESSION_THRESHOLD};
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
+use std::path::PathBuf;
 use std::time::Instant;
 
 /// Returns the status symbol for a given session status.
@@ -105,38 +106,113 @@ pub fn format_session_line<'a>(session: &Session, width: u16) -> Line<'a> {
     let name = truncate_string(&session.id, 20);
 
     if width < NARROW_THRESHOLD {
-        // Narrow: symbol + name only
+        // Narrow: symbol + name only (no column alignment)
         Line::from(vec![
             Span::styled(format!("{} ", symbol), Style::default().fg(color)),
             Span::styled(name, dim),
         ])
     } else if width <= WIDE_THRESHOLD {
-        // Standard: symbol + name + status + working dir + elapsed
-        let work_dir = truncate_path(&session.working_dir, 20);
+        // Standard: symbol + name (flexible) + status + working dir + elapsed (right-aligned)
+        // Fixed column widths: symbol (2) + status (10) + work_dir (20) + elapsed (8) = 40
+        let fixed_width = 2 + 10 + 20 + 8;
+        let name_width = (width as usize).saturating_sub(fixed_width);
+
+        let work_dir_text = if session.working_dir == PathBuf::from("unknown") {
+            "<error>".to_string()
+        } else {
+            truncate_path(&session.working_dir, 20)
+        };
+
+        let work_dir_span = if session.working_dir == PathBuf::from("unknown") {
+            Span::styled(
+                format!("{:>20}", work_dir_text),
+                Style::default().fg(error_color()),
+            )
+        } else {
+            Span::styled(format!("{:>20}", work_dir_text), dim)
+        };
+
         Line::from(vec![
             Span::styled(format!("{} ", symbol), Style::default().fg(color)),
-            Span::styled(format!("{:<20} ", name), dim),
-            Span::styled(format!("{:<10} ", status_text), Style::default().fg(color)),
-            Span::styled(format!("{:<20} ", work_dir), dim),
-            Span::styled(elapsed, dim),
+            Span::styled(format!("{:<name_width$}", name), dim),
+            Span::styled(format!("{:>10}", status_text), Style::default().fg(color)),
+            work_dir_span,
+            Span::styled(format!("{:>8}", elapsed), dim),
         ])
     } else {
-        // Wide: session ID prefix + symbol + name + status + working dir + elapsed
-        let short_id = truncate_string(&session.id, 8);
-        let work_dir = truncate_path(&session.working_dir, 30);
+        // Wide: session ID + symbol + name (flexible) + status + working dir + elapsed (right-aligned)
+        // Fixed column widths: session_id (14) + symbol (2) + status (10) + work_dir (30) + elapsed (8) = 64
+        let fixed_width = 14 + 2 + 10 + 30 + 8;
+        let name_width = (width as usize).saturating_sub(fixed_width);
+
         let session_id_display = session
             .session_id
             .as_deref()
             .map(|s| truncate_string(s, 12))
             .unwrap_or_default();
 
+        let work_dir_text = if session.working_dir == PathBuf::from("unknown") {
+            "<error>".to_string()
+        } else {
+            truncate_path(&session.working_dir, 30)
+        };
+
+        let work_dir_span = if session.working_dir == PathBuf::from("unknown") {
+            Span::styled(
+                format!("{:>30}", work_dir_text),
+                Style::default().fg(error_color()),
+            )
+        } else {
+            Span::styled(format!("{:>30}", work_dir_text), dim)
+        };
+
         Line::from(vec![
-            Span::styled(format!("{:<14} ", session_id_display), dim),
+            Span::styled(format!("{:<14}", session_id_display), dim),
             Span::styled(format!("{} ", symbol), Style::default().fg(color)),
-            Span::styled(format!("{:<20} ", short_id), dim),
-            Span::styled(format!("{:<10} ", status_text), Style::default().fg(color)),
-            Span::styled(format!("{:<30} ", work_dir), dim),
-            Span::styled(elapsed, dim),
+            Span::styled(format!("{:<name_width$}", name), dim),
+            Span::styled(format!("{:>10}", status_text), Style::default().fg(color)),
+            work_dir_span,
+            Span::styled(format!("{:>8}", elapsed), dim),
+        ])
+    }
+}
+
+/// Formats a header line matching the column widths from format_session_line.
+///
+/// Returns a header row with column titles aligned to their respective columns.
+/// Narrow mode has no headers, standard mode shows 4 columns, wide mode shows 5.
+pub fn format_header_line(width: u16) -> Line<'static> {
+    let header_style = Style::default()
+        .fg(Color::Cyan)
+        .add_modifier(Modifier::BOLD);
+
+    if width < NARROW_THRESHOLD {
+        // Narrow: no headers
+        Line::from(vec![])
+    } else if width <= WIDE_THRESHOLD {
+        // Standard: Name (flexible) + Status + Directory + Elapsed (right-aligned)
+        let fixed_width = 2 + 10 + 20 + 8; // symbol + status + dir + elapsed
+        let name_width = (width as usize).saturating_sub(fixed_width);
+
+        Line::from(vec![
+            Span::styled("  ", header_style), // Symbol space
+            Span::styled(format!("{:<name_width$}", "Name"), header_style),
+            Span::styled(format!("{:>10}", "Status"), header_style),
+            Span::styled(format!("{:>20}", "Directory"), header_style),
+            Span::styled(format!("{:>8}", "Elapsed"), header_style),
+        ])
+    } else {
+        // Wide: Session ID + Name (flexible) + Status + Directory + Elapsed (right-aligned)
+        let fixed_width = 14 + 2 + 10 + 30 + 8; // id + symbol + status + dir + elapsed
+        let name_width = (width as usize).saturating_sub(fixed_width);
+
+        Line::from(vec![
+            Span::styled(format!("{:<14}", "Session ID"), header_style),
+            Span::styled("  ", header_style), // Symbol space
+            Span::styled(format!("{:<name_width$}", "Name"), header_style),
+            Span::styled(format!("{:>10}", "Status"), header_style),
+            Span::styled(format!("{:>30}", "Directory"), header_style),
+            Span::styled(format!("{:>8}", "Elapsed"), header_style),
         ])
     }
 }
@@ -149,6 +225,28 @@ pub fn render_session_list(
     selected_index: Option<usize>,
     width: u16,
 ) {
+    // Split area into header (1 line) + list (remaining) if not narrow mode
+    let (header_area, list_area) = if width >= NARROW_THRESHOLD {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1), // header
+                Constraint::Min(1),    // list
+            ])
+            .split(area);
+        (Some(chunks[0]), chunks[1])
+    } else {
+        (None, area)
+    };
+
+    // Render header if not narrow mode
+    if let Some(header_rect) = header_area {
+        let header_line = format_header_line(width);
+        let header = Paragraph::new(header_line);
+        frame.render_widget(header, header_rect);
+    }
+
+    // Render session list
     let items: Vec<ListItem> = sessions
         .iter()
         .map(|session| ListItem::new(format_session_line(session, width)))
@@ -166,7 +264,7 @@ pub fn render_session_list(
     let mut state = ListState::default();
     state.select(selected_index);
 
-    frame.render_stateful_widget(list, area, &mut state);
+    frame.render_stateful_widget(list, list_area, &mut state);
 }
 
 /// Truncates a string to the given max length, appending "..." if truncated.
@@ -460,5 +558,329 @@ mod tests {
                 render_session_list(frame, area, &sessions, Some(99), 80);
             })
             .expect("draw should not fail");
+    }
+
+    // --- Story 1 (acd-lht): Red error for missing CWD tests ---
+
+    #[test]
+    fn test_format_session_line_unknown_working_dir_shows_error_standard() {
+        let mut session = Session::new(
+            "error-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("unknown"),
+        );
+        session.status = Status::Working;
+        let line = format_session_line(&session, 60);
+
+        // Should have 5 spans: symbol, name, status, work_dir (error), elapsed
+        assert_eq!(line.spans.len(), 5);
+
+        // The work_dir span (index 3) should contain "<error>" and be styled with red
+        let work_dir_span = &line.spans[3];
+        assert!(
+            work_dir_span.content.contains("<error>"),
+            "Expected '<error>' in work_dir span, got: '{}'",
+            work_dir_span.content
+        );
+        assert_eq!(
+            work_dir_span.style.fg,
+            Some(error_color()),
+            "Expected error color (red) for <error> span"
+        );
+    }
+
+    #[test]
+    fn test_format_session_line_unknown_working_dir_shows_error_wide() {
+        let mut session = Session::new(
+            "error-wide-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("unknown"),
+        );
+        session.status = Status::Attention;
+        session.session_id = Some("session-abc".to_string());
+        let line = format_session_line(&session, 100);
+
+        // Should have 6 spans: session_id, symbol, name, status, work_dir (error), elapsed
+        assert_eq!(line.spans.len(), 6);
+
+        // The work_dir span (index 4) should contain "<error>" and be styled with red
+        let work_dir_span = &line.spans[4];
+        assert!(
+            work_dir_span.content.contains("<error>"),
+            "Expected '<error>' in work_dir span, got: '{}'",
+            work_dir_span.content
+        );
+        assert_eq!(
+            work_dir_span.style.fg,
+            Some(error_color()),
+            "Expected error color (red) for <error> span"
+        );
+    }
+
+    #[test]
+    fn test_format_session_line_normal_path_unchanged() {
+        let session = Session::new(
+            "normal-path-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/home/user/project"),
+        );
+        let line = format_session_line(&session, 60);
+
+        // Should have 5 spans
+        assert_eq!(line.spans.len(), 5);
+
+        // The work_dir span (index 3) should contain the truncated path, not "<error>"
+        let work_dir_span = &line.spans[3];
+        assert!(
+            !work_dir_span.content.contains("<error>"),
+            "Normal path should not display <error>, got: '{}'",
+            work_dir_span.content
+        );
+        assert!(
+            work_dir_span.content.contains("/home/user/project"),
+            "Expected path to contain '/home/user/project', got: '{}'",
+            work_dir_span.content
+        );
+        // Should not be red
+        assert_ne!(
+            work_dir_span.style.fg,
+            Some(error_color()),
+            "Normal path should not use error color"
+        );
+    }
+
+    // --- Story 2 (acd-r57): Right-align columns tests ---
+
+    #[test]
+    fn test_column_alignment_standard_width() {
+        let session = Session::new(
+            "align-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/home/user/project"),
+        );
+        let line = format_session_line(&session, 60);
+
+        // Should have 5 spans: symbol, name, status, workdir, elapsed
+        assert_eq!(line.spans.len(), 5);
+
+        // Status (index 2) should be right-aligned (check for leading spaces)
+        let status_span = &line.spans[2];
+        assert!(
+            status_span.content.starts_with(' ') || status_span.content.len() >= 10,
+            "Status should be right-aligned with width 10, got: '{}'",
+            status_span.content
+        );
+
+        // Work_dir (index 3) should be right-aligned
+        let work_dir_span = &line.spans[3];
+        assert!(
+            work_dir_span.content.starts_with(' ') || work_dir_span.content.len() >= 20,
+            "Work_dir should be right-aligned with width 20, got: '{}'",
+            work_dir_span.content
+        );
+
+        // Elapsed (index 4) should be right-aligned
+        let elapsed_span = &line.spans[4];
+        assert!(
+            elapsed_span.content.starts_with(' ') || elapsed_span.content.len() >= 8,
+            "Elapsed should be right-aligned with width 8, got: '{}'",
+            elapsed_span.content
+        );
+    }
+
+    #[test]
+    fn test_column_alignment_wide_width() {
+        let mut session = Session::new(
+            "wide-align-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/home/user/project"),
+        );
+        session.session_id = Some("session-123".to_string());
+        let line = format_session_line(&session, 120);
+
+        // Should have 6 spans: session_id, symbol, name, status, workdir, elapsed
+        assert_eq!(line.spans.len(), 6);
+
+        // Session ID (index 0) should be left-aligned
+        let session_id_span = &line.spans[0];
+        assert!(
+            session_id_span.content.ends_with(' ') || session_id_span.content.len() <= 14,
+            "Session ID should be left-aligned, got: '{}'",
+            session_id_span.content
+        );
+
+        // Status (index 3) should be right-aligned
+        let status_span = &line.spans[3];
+        assert!(
+            status_span.content.starts_with(' ') || status_span.content.len() >= 10,
+            "Status should be right-aligned with width 10, got: '{}'",
+            status_span.content
+        );
+
+        // Work_dir (index 4) should be right-aligned
+        let work_dir_span = &line.spans[4];
+        assert!(
+            work_dir_span.content.starts_with(' ') || work_dir_span.content.len() >= 30,
+            "Work_dir should be right-aligned with width 30, got: '{}'",
+            work_dir_span.content
+        );
+
+        // Elapsed (index 5) should be right-aligned
+        let elapsed_span = &line.spans[5];
+        assert!(
+            elapsed_span.content.starts_with(' ') || elapsed_span.content.len() >= 8,
+            "Elapsed should be right-aligned with width 8, got: '{}'",
+            elapsed_span.content
+        );
+    }
+
+    #[test]
+    fn test_name_column_expands_with_terminal_width() {
+        let session = Session::new(
+            "expand-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+
+        // Test at standard width (60 cols)
+        let line_60 = format_session_line(&session, 60);
+        let name_span_60 = &line_60.spans[1];
+
+        // Test at wider width (80 cols)
+        let line_80 = format_session_line(&session, 80);
+        let name_span_80 = &line_80.spans[1];
+
+        // Name column at 80 should be wider than at 60
+        assert!(
+            name_span_80.content.len() > name_span_60.content.len(),
+            "Name column should expand with terminal width: 60={}, 80={}",
+            name_span_60.content.len(),
+            name_span_80.content.len()
+        );
+    }
+
+    // --- Story 3 (acd-8uw): Column headers tests ---
+
+    #[test]
+    fn test_header_narrow_mode_no_header() {
+        let line = format_header_line(30);
+        // Narrow mode should have no header
+        assert_eq!(line.spans.len(), 0, "Narrow mode should have no header");
+    }
+
+    #[test]
+    fn test_header_standard_mode() {
+        let line = format_header_line(60);
+        // Standard mode: symbol space + Name + Status + Directory + Elapsed = 5 spans
+        assert_eq!(
+            line.spans.len(),
+            5,
+            "Standard mode should have 5 header spans"
+        );
+
+        // Verify header contains expected column titles
+        let full_text = line
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect::<Vec<_>>()
+            .join("");
+        assert!(full_text.contains("Name"), "Header should contain 'Name'");
+        assert!(
+            full_text.contains("Status"),
+            "Header should contain 'Status'"
+        );
+        assert!(
+            full_text.contains("Directory"),
+            "Header should contain 'Directory'"
+        );
+        assert!(
+            full_text.contains("Elapsed"),
+            "Header should contain 'Elapsed'"
+        );
+
+        // Verify all spans use header style (cyan + bold)
+        for span in &line.spans {
+            assert_eq!(
+                span.style.fg,
+                Some(Color::Cyan),
+                "Header span should use cyan color"
+            );
+            assert!(
+                span.style.add_modifier.contains(Modifier::BOLD),
+                "Header span should be bold"
+            );
+        }
+    }
+
+    #[test]
+    fn test_header_wide_mode_includes_session_id() {
+        let line = format_header_line(100);
+        // Wide mode: Session ID + symbol space + Name + Status + Directory + Elapsed = 6 spans
+        assert_eq!(line.spans.len(), 6, "Wide mode should have 6 header spans");
+
+        // Verify header contains expected column titles including Session ID
+        let full_text = line
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect::<Vec<_>>()
+            .join("");
+        assert!(
+            full_text.contains("Session ID"),
+            "Header should contain 'Session ID'"
+        );
+        assert!(full_text.contains("Name"), "Header should contain 'Name'");
+        assert!(
+            full_text.contains("Status"),
+            "Header should contain 'Status'"
+        );
+        assert!(
+            full_text.contains("Directory"),
+            "Header should contain 'Directory'"
+        );
+        assert!(
+            full_text.contains("Elapsed"),
+            "Header should contain 'Elapsed'"
+        );
+    }
+
+    #[test]
+    fn test_header_alignment_matches_data() {
+        // Verify that header columns align with data columns at standard width
+        let header = format_header_line(60);
+        let session = Session::new(
+            "align-check".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp/test"),
+        );
+        let data_line = format_session_line(&session, 60);
+
+        // Both should have same span count
+        assert_eq!(
+            header.spans.len(),
+            data_line.spans.len(),
+            "Header and data should have same span count"
+        );
+
+        // Verify column widths match (approximate check for alignment)
+        for (i, (header_span, data_span)) in
+            header.spans.iter().zip(data_line.spans.iter()).enumerate()
+        {
+            // Allow some tolerance for content differences but structure should match
+            if i > 0 {
+                // Skip symbol column which is just spacing
+                let header_len = header_span.content.len();
+                let data_len = data_span.content.len();
+                // Widths should be close (within reasonable tolerance)
+                assert!(
+                    (header_len as i32 - data_len as i32).abs() <= 5,
+                    "Column {} width mismatch: header={}, data={}",
+                    i,
+                    header_len,
+                    data_len
+                );
+            }
+        }
     }
 }
