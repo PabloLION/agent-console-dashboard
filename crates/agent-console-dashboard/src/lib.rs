@@ -33,9 +33,6 @@ pub mod tui;
 /// Widget system for composable dashboard UI components.
 pub mod widgets;
 
-/// Platform-specific system service management (install/uninstall/status).
-pub mod service;
-
 /// Terminal execution module for running commands in panes/terminals.
 pub mod terminal;
 
