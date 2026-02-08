@@ -71,6 +71,40 @@ fn main() {
                         }
                     ]
                 }
+            ],
+            "SessionEnd": [
+                {
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "acd claude-hook closed",
+                            "timeout": 10
+                        }
+                    ]
+                }
+            ],
+            "Notification": [
+                {
+                    "matcher": "elicitation_dialog",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "acd claude-hook question",
+                            "timeout": 10
+                        }
+                    ]
+                },
+                {
+                    "matcher": "permission_prompt",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "acd claude-hook attention",
+                            "timeout": 10
+                        }
+                    ]
+                }
             ]
         }
     });
