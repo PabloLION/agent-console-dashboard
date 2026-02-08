@@ -139,6 +139,9 @@ pub struct Session {
     pub working_dir: PathBuf,
     /// Timestamp when status last changed.
     pub since: Instant,
+    /// Timestamp of last hook activity (updated on every `set_status` call,
+    /// even when the status is unchanged). Used for stale session detection.
+    pub last_activity: Instant,
     /// History of state transitions (display limited by dashboard, not enforced here).
     pub history: Vec<StateTransition>,
     /// Optional API usage tracking.
@@ -158,6 +161,7 @@ impl Session {
             status: Status::Working,
             working_dir,
             since: Instant::now(),
+            last_activity: Instant::now(),
             history: Vec::new(),
             api_usage: None,
             closed: false,
@@ -194,12 +198,15 @@ impl Session {
     /// assert_eq!(session.history.len(), 1);
     /// ```
     pub fn set_status(&mut self, new_status: Status) {
+        let now = Instant::now();
+
+        // Always record activity, even if status unchanged (for stale detection).
+        self.last_activity = now;
+
         // No-op if status unchanged
         if self.status == new_status {
             return;
         }
-
-        let now = Instant::now();
         let duration = now.duration_since(self.since);
 
         // Record the transition
@@ -693,6 +700,46 @@ mod tests {
 
         // 'since' should be updated to a later time
         assert!(session.since > original_since);
+    }
+
+    #[test]
+    fn test_session_set_status_updates_last_activity_on_change() {
+        let mut session = Session::new(
+            "activity-change-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+        let original = session.last_activity;
+
+        std::thread::sleep(Duration::from_millis(10));
+        session.set_status(Status::Attention);
+
+        assert!(session.last_activity > original);
+    }
+
+    #[test]
+    fn test_session_set_status_updates_last_activity_on_same_status() {
+        let mut session = Session::new(
+            "activity-same-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+        let original_activity = session.last_activity;
+        let original_since = session.since;
+
+        std::thread::sleep(Duration::from_millis(10));
+
+        // Same status: last_activity advances, since does NOT
+        session.set_status(Status::Working);
+
+        assert!(
+            session.last_activity > original_activity,
+            "last_activity should advance on same-status call"
+        );
+        assert_eq!(
+            session.since, original_since,
+            "since should NOT advance on same-status call"
+        );
     }
 
     #[test]
