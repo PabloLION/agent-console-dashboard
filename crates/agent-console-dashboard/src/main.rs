@@ -217,8 +217,8 @@ fn main() -> ExitCode {
                 }
             };
 
-            let rt = tokio::runtime::Runtime::new()
-                .expect("failed to create tokio runtime for hook");
+            let rt =
+                tokio::runtime::Runtime::new().expect("failed to create tokio runtime for hook");
             return rt.block_on(run_claude_hook_async(&socket, status, &input));
         }
         Commands::Install => {
@@ -546,11 +546,7 @@ fn acd_hook_definitions() -> Vec<(claude_hooks::HookEvent, &'static str, Option<
     use claude_hooks::HookEvent;
     vec![
         (HookEvent::SessionStart, "acd claude-hook attention", None),
-        (
-            HookEvent::UserPromptSubmit,
-            "acd claude-hook working",
-            None,
-        ),
+        (HookEvent::UserPromptSubmit, "acd claude-hook working", None),
         (HookEvent::Stop, "acd claude-hook attention", None),
         (HookEvent::SessionEnd, "acd claude-hook closed", None),
         (
@@ -1168,12 +1164,13 @@ mod tests {
             .iter()
             .filter(|(event, _, _)| *event == claude_hooks::HookEvent::Notification)
             .collect();
-        assert_eq!(notification_hooks.len(), 2, "should have 2 Notification hooks");
+        assert_eq!(
+            notification_hooks.len(),
+            2,
+            "should have 2 Notification hooks"
+        );
         for (_, _, matcher) in &notification_hooks {
-            assert!(
-                matcher.is_some(),
-                "Notification hooks must have a matcher"
-            );
+            assert!(matcher.is_some(), "Notification hooks must have a matcher");
         }
     }
 
