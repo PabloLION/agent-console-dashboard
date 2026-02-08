@@ -39,9 +39,8 @@ pub mod terminal;
 /// Integration modules for external tools (Zellij, tmux, etc.).
 pub mod integrations;
 
-/// Internal client module for daemon communication with lazy-start capability.
-/// This module is not part of the public API - external tools should use CLI commands.
-pub(crate) mod client;
+/// Client module for daemon communication with lazy-start capability.
+pub mod client;
 
 /// Duration of inactivity (no hook events) before a session is considered inactive.
 /// Used by both the daemon idle timer and the TUI for visual treatment.
