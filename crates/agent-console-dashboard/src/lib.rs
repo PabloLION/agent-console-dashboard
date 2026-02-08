@@ -216,9 +216,7 @@ impl Session {
         self.status = new_status;
         self.since = now;
 
-        if new_status == Status::Closed {
-            self.closed = true;
-        }
+        self.closed = new_status == Status::Closed;
     }
 }
 
@@ -659,6 +657,24 @@ mod tests {
         assert_eq!(session.history[1].to, Status::Question);
         assert_eq!(session.history[2].from, Status::Question);
         assert_eq!(session.history[2].to, Status::Closed);
+    }
+
+    #[test]
+    fn test_session_set_status_closed_to_working_clears_closed_flag() {
+        let mut session = Session::new(
+            "latch-test".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+
+        // Close the session
+        session.set_status(Status::Closed);
+        assert!(session.closed, "closed flag should be set");
+
+        // Re-activate the session
+        session.set_status(Status::Working);
+        assert!(!session.closed, "closed flag should be cleared on re-activation");
+        assert_eq!(session.status, Status::Working);
     }
 
     #[test]
