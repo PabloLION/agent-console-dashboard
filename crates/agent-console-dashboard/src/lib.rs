@@ -39,7 +39,7 @@ pub mod terminal;
 /// Integration modules for external tools (Zellij, tmux, etc.).
 pub mod integrations;
 
-/// Internal client module for daemon communication with auto-start capability.
+/// Internal client module for daemon communication with lazy-start capability.
 /// This module is not part of the public API - external tools should use CLI commands.
 pub(crate) mod client;
 

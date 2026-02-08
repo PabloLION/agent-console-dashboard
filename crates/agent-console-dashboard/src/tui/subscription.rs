@@ -4,7 +4,7 @@
 //! changes and usage data), and parsing the SUB wire protocol into typed
 //! messages.
 
-use crate::client::connect_with_auto_start;
+use crate::client::connect_with_lazy_start;
 use crate::Status;
 use claude_usage::UsageData;
 use std::path::Path;
@@ -32,7 +32,7 @@ pub async fn subscribe_to_daemon(
     socket_path: &Path,
     tx: mpsc::Sender<DaemonMessage>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let client = connect_with_auto_start(socket_path).await?;
+    let client = connect_with_lazy_start(socket_path).await?;
     let stream = client.into_stream();
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
@@ -70,7 +70,7 @@ pub async fn subscribe_to_daemon(
     }
 
     // Now subscribe for live updates — need a new connection since LIST consumed the first
-    let client = connect_with_auto_start(socket_path).await?;
+    let client = connect_with_lazy_start(socket_path).await?;
     let stream = client.into_stream();
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
