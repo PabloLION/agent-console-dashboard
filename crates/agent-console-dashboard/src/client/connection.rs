@@ -1,4 +1,4 @@
-//! Client connection functionality with auto-start capability.
+//! Client connection functionality with lazy-start capability.
 //!
 //! This module provides the core connection logic for the client, including
 //! automatic daemon startup when the daemon is not running.
@@ -34,7 +34,7 @@ pub enum ClientError {
     /// Connection failed with a non-recoverable error.
     ///
     /// This error occurs when the initial connection attempt fails with
-    /// an error that cannot be resolved by auto-starting the daemon
+    /// an error that cannot be resolved by lazy-starting the daemon
     /// (e.g., permission denied, invalid path).
     ConnectionFailed(std::io::Error),
 
@@ -75,7 +75,7 @@ impl fmt::Display for ClientError {
                 write!(
                     f,
                     "Connection to daemon failed: {}. \
-                    This error cannot be resolved by auto-starting the daemon",
+                    This error cannot be resolved by lazy-starting the daemon",
                     e
                 )
             }
@@ -110,11 +110,11 @@ impl Error for ClientError {
 /// # Example
 ///
 /// ```ignore
-/// use crate::client::{connect_with_auto_start, Client};
+/// use crate::client::{connect_with_lazy_start, Client};
 /// use std::path::Path;
 ///
 /// async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-///     let client = connect_with_auto_start(Path::new("/tmp/agent-console.sock")).await?;
+///     let client = connect_with_lazy_start(Path::new("/tmp/agent-console.sock")).await?;
 ///     // Use client for communication
 ///     Ok(())
 /// }
@@ -128,7 +128,7 @@ pub struct Client {
 impl Client {
     /// Creates a new `Client` from an established `UnixStream` connection.
     ///
-    /// This is typically called internally by `connect_with_auto_start()`,
+    /// This is typically called internally by `connect_with_lazy_start()`,
     /// but can be used directly if you have an existing connection.
     ///
     /// # Arguments
@@ -203,16 +203,16 @@ const MAX_RETRIES: u32 = 10;
 /// # Example
 ///
 /// ```ignore
-/// use crate::client::connect_with_auto_start;
+/// use crate::client::connect_with_lazy_start;
 /// use std::path::Path;
 ///
 /// async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-///     let client = connect_with_auto_start(Path::new("/tmp/agent-console.sock")).await?;
+///     let client = connect_with_lazy_start(Path::new("/tmp/agent-console.sock")).await?;
 ///     // Use client for communication with daemon
 ///     Ok(())
 /// }
 /// ```
-pub async fn connect_with_auto_start(socket_path: &Path) -> ClientResult<Client> {
+pub async fn connect_with_lazy_start(socket_path: &Path) -> ClientResult<Client> {
     // Try to connect first (daemon might already be running)
     match UnixStream::connect(socket_path).await {
         Ok(stream) => {
@@ -220,11 +220,11 @@ pub async fn connect_with_auto_start(socket_path: &Path) -> ClientResult<Client>
             return Ok(Client::new(stream));
         }
         Err(e) => {
-            // Only attempt auto-start for errors indicating daemon is not running
+            // Only attempt lazy-start for errors indicating daemon is not running
             match e.kind() {
                 std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotFound => {
                     tracing::info!(
-                        "Daemon not running at {:?} ({}), attempting auto-start",
+                        "Daemon not running at {:?} ({}), attempting lazy-start",
                         socket_path,
                         e
                     );
@@ -293,7 +293,7 @@ pub async fn connect_with_auto_start(socket_path: &Path) -> ClientResult<Client>
 /// # Note
 ///
 /// This function only spawns the process - it does not wait for the daemon
-/// to be ready. Use `connect_with_auto_start()` for the full connection flow.
+/// to be ready. Use `connect_with_lazy_start()` for the full connection flow.
 fn spawn_daemon(socket_path: &Path) -> Result<(), ClientError> {
     let exe = current_exe().map_err(ClientError::ExecutableNotFound)?;
 
@@ -382,7 +382,7 @@ mod tests {
         let err = ClientError::ConnectionFailed(io_err);
         let display = err.to_string();
         assert!(display.contains("Connection to daemon failed"));
-        assert!(display.contains("cannot be resolved by auto-starting"));
+        assert!(display.contains("cannot be resolved by lazy-starting"));
     }
 
     #[test]
@@ -502,7 +502,7 @@ mod tests {
     }
 
     // =========================================================================
-    // Async connection tests (moved from tests/client_auto_start.rs)
+    // Async connection tests (moved from tests/client_lazy_start.rs)
     // =========================================================================
 
     /// Tests that a client can connect to an already-running daemon without spawning.
@@ -530,7 +530,7 @@ mod tests {
         // Connect to the mock daemon - should succeed immediately without spawning
         let connect_result = timeout(
             Duration::from_secs(2),
-            connect_with_auto_start(&socket_path),
+            connect_with_lazy_start(&socket_path),
         )
         .await;
 
@@ -576,7 +576,7 @@ mod tests {
         for _ in 0..3 {
             let path = socket_path_clone.clone();
             let handle = tokio::spawn(async move {
-                timeout(Duration::from_secs(3), connect_with_auto_start(&path)).await
+                timeout(Duration::from_secs(3), connect_with_lazy_start(&path)).await
             });
             handles.push(handle);
         }
@@ -605,7 +605,7 @@ mod tests {
         let socket_path = unique_socket_path(&temp_dir, "timeout_test");
 
         let start = std::time::Instant::now();
-        let result = connect_with_auto_start(&socket_path).await;
+        let result = connect_with_lazy_start(&socket_path).await;
         let elapsed = start.elapsed();
 
         assert!(result.is_err(), "Expected connection to fail");
@@ -656,7 +656,7 @@ mod tests {
 
         let connect_result = timeout(
             Duration::from_secs(5),
-            connect_with_auto_start(&socket_path),
+            connect_with_lazy_start(&socket_path),
         )
         .await;
 
@@ -680,7 +680,7 @@ mod tests {
 
         let result = timeout(
             Duration::from_secs(2),
-            connect_with_auto_start(&socket_path),
+            connect_with_lazy_start(&socket_path),
         )
         .await;
 
@@ -692,15 +692,15 @@ mod tests {
         let _ = accept_handle.await;
     }
 
-    /// Tests that connecting to a non-existent socket triggers auto-start flow.
+    /// Tests that connecting to a non-existent socket triggers lazy-start flow.
     #[tokio::test]
-    async fn test_auto_start_triggered_on_missing_socket() {
+    async fn test_lazy_start_triggered_on_missing_socket() {
         let temp_dir = create_temp_dir();
-        let socket_path = unique_socket_path(&temp_dir, "auto_start");
+        let socket_path = unique_socket_path(&temp_dir, "lazy_start");
 
         assert!(!socket_path.exists(), "Socket should not exist before test");
 
-        let result = connect_with_auto_start(&socket_path).await;
+        let result = connect_with_lazy_start(&socket_path).await;
 
         // In test environment, this will fail because spawn_daemon uses test binary
         assert!(result.is_err(), "Expected failure in test environment");
@@ -711,7 +711,7 @@ mod tests {
     async fn test_connection_to_invalid_path() {
         let invalid_path = PathBuf::from("/nonexistent/directory/socket.sock");
 
-        let result = connect_with_auto_start(&invalid_path).await;
+        let result = connect_with_lazy_start(&invalid_path).await;
 
         assert!(result.is_err(), "Expected failure for invalid path");
     }

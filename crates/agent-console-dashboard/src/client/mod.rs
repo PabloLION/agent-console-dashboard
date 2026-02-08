@@ -1,6 +1,6 @@
 //! Internal client module for the Agent Console Dashboard.
 //!
-//! This module provides client connection functionality with auto-start
+//! This module provides client connection functionality with lazy-start
 //! capability for the daemon. When a client attempts to connect and finds
 //! the daemon not running, it will automatically spawn the daemon process
 //! in the background and retry the connection with exponential backoff.
@@ -17,18 +17,18 @@
 //!
 //! # Features
 //!
-//! - **Auto-Start**: Automatically spawns the daemon if not running
+//! - **Lazy-Start**: Automatically spawns the daemon if not running
 //! - **Exponential Backoff**: Retries connection with increasing delays
 //! - **Race-Safe**: Multiple simultaneous clients won't spawn duplicate daemons
 //!
 //! # Usage (internal)
 //!
 //! ```ignore
-//! use crate::client::connect_with_auto_start;
+//! use crate::client::connect_with_lazy_start;
 //! use std::path::Path;
 //!
 //! async fn example() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-//!     let client = connect_with_auto_start(Path::new("/tmp/agent-console.sock")).await?;
+//!     let client = connect_with_lazy_start(Path::new("/tmp/agent-console.sock")).await?;
 //!     // Use client for communication with daemon
 //!     Ok(())
 //! }
@@ -40,7 +40,7 @@
 
 pub mod connection;
 
-pub use connection::{connect_with_auto_start, Client, ClientError};
+pub use connection::{connect_with_lazy_start, Client, ClientError};
 
 use std::error::Error;
 
