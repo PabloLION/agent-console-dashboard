@@ -1,174 +1,114 @@
 # End-to-End Blockers
 
-What prevents ACD from working as a complete system today. Each blocker
-includes the problem, evidence, and a concrete fix.
+What prevents ACD from working as a complete system today. Each blocker includes
+the problem, evidence, and a concrete fix.
 
 ## Current Hook Coverage
 
-ACD registers 3 hooks via `.claude-plugin/plugin.json` (build artifact):
+ACD registers 6 hooks via `acd install` (writes to `~/.claude/settings.json`):
 
-| Hook              | Status mapped | When it fires                    |
-|-------------------|---------------|----------------------------------|
-| `SessionStart`    | `attention`   | Session begins or resumes        |
-| `UserPromptSubmit`| `working`     | User sends a prompt              |
-| `Stop`            | `attention`   | Claude finishes responding       |
+| Hook                                  | Status mapped | When it fires              |
+| ------------------------------------- | ------------- | -------------------------- |
+| `SessionStart`                        | `attention`   | Session begins or resumes  |
+| `UserPromptSubmit`                    | `working`     | User sends a prompt        |
+| `Stop`                                | `attention`   | Claude finishes responding |
+| `SessionEnd`                          | `closed`      | Session ends               |
+| `Notification` (`elicitation_dialog`) | `question`    | AskUserQuestion dialog     |
+| `Notification` (`permission_prompt`)  | `attention`   | Permission prompt          |
 
-Claude Code provides 14 hook events total. Missing events that matter:
-
-| Hook                             | Should map to | Why it matters                       |
-|----------------------------------|---------------|--------------------------------------|
-| `SessionEnd`                     | `closed`      | Sessions never close otherwise       |
-| `Notification` (`elicitation_dialog`)   | `question`    | Detects AskUserQuestion dialogs      |
-| `Notification` (`permission_prompt`)    | `attention`   | Detects permission prompts           |
-
-Source: https://code.claude.com/docs/en/hooks
+Source: <https://code.claude.com/docs/en/hooks>
 
 ## Blockers
 
-### B1 (P0): Plugin not installed in Claude Code
+### B1: Plugin not installed in Claude Code
+
+**Status:** Partially resolved (2026-02-08)
 
 **Problem:** `.claude-plugin/` is a gitignored build artifact at the workspace
-root. Claude Code does not auto-discover it. The plugin must be explicitly
-installed or hooks must be added to settings.
+root. Claude Code does not auto-discover it.
 
-**Evidence:** The hooks reference lists these hook locations:
+**Resolution (personal use):** `acd install` writes hooks directly to
+`~/.claude/settings.json`. Works across all projects immediately. Implemented in
+acd-qe8.
 
-| Location                         | Scope           | Shareable |
-|----------------------------------|-----------------|-----------|
-| `~/.claude/settings.json`        | All projects    | No        |
-| `.claude/settings.json`          | Single project  | Yes       |
-| `.claude/settings.local.json`    | Single project  | No        |
-| Plugin `hooks/hooks.json`        | When enabled    | Yes       |
+**Still open (distribution):** The plugin marketplace path is unclear.
+Publishing the plugin for `claude plugin install agent-console-dashboard`
+requires a marketplace entry. The `.claude-plugin/` build artifact is gitignored
+and won't ship via git clone. A distribution strategy decision is needed (see
+B4).
 
-Plugins require installation via `claude plugin install <name>` from a
-marketplace, or per-session loading with `claude --plugin-dir <path>`.
+Source:
+<https://code.claude.com/docs/en/plugins-reference#plugin-installation-scopes>
 
-**Fix options (pick one):**
+### B2: `acd` binary not in PATH
 
-1. **Global settings (simplest for personal use):** Write hooks directly to
-   `~/.claude/settings.json`. Works across all projects immediately.
-   An `acd install` command could automate this.
+**Status:** Resolved (2026-02-08)
 
-2. **Plugin marketplace (for distribution):** Publish the plugin so others can
-   `claude plugin install agent-console-dashboard --scope user`. Requires a
-   marketplace entry (local or remote).
+`acd install` checks if `acd` is in `$PATH` and warns if not.
+`cargo install --path crates/agent-console-dashboard` puts the binary at
+`~/.cargo/bin/acd`. Implemented in acd-qe8.
 
-3. **Per-session flag:** `claude --plugin-dir /path/to/acd`. Not practical for
-   daily use.
+### B3: Missing hook events
 
-**Recommendation:** Option 1 for now. Option 2 when distributing to others.
+**Status:** Resolved (2026-02-08)
 
-Source: https://code.claude.com/docs/en/plugins-reference#plugin-installation-scopes
+SessionEnd, Notification (elicitation_dialog), and Notification
+(permission_prompt) hooks added to both `build.rs` (plugin path) and `main.rs`
+(settings.json path). The `claude-hook` subcommand accepts `closed` and
+`question` as valid status values. Implemented in acd-2n6.
 
-### B2 (P0): `acd` binary not in PATH
+All 6 hook events now registered (see hook coverage table above).
 
-**Problem:** Hook commands use bare `acd` (e.g., `acd claude-hook attention`).
-After `cargo build`, the binary is at `target/debug/acd` or
-`target/release/acd`, not in `$PATH`. Hooks fail silently.
+### B4: Plugin distribution strategy
 
-**Evidence:** The hook command in plugin.json:
-```json
-{ "command": "acd claude-hook attention" }
-```
+**Status:** Open
 
-Claude Code runs this as a shell command. If `acd` is not found, the hook
-exits non-zero and Claude Code ignores the failure (non-blocking).
+Two hook installation paths exist:
 
-**Fix:** `cargo install --path crates/agent-console-dashboard` puts the binary
-at `~/.cargo/bin/acd`. An `acd install` command should verify this.
+| Path                         | Method                              | Audience     |
+| ---------------------------- | ----------------------------------- | ------------ |
+| `acd install`                | Writes to `~/.claude/settings.json` | Personal use |
+| `.claude-plugin/plugin.json` | Build artifact from `build.rs`      | Distribution |
 
-### B3 (P1): Missing hook events
+**Decision needed:** Keep both paths, or remove the plugin approach?
 
-**Problem:** Only 3 of 14 hook events are registered. Key gaps:
+- The plugin path requires publishing to a marketplace or manual
+  `claude --plugin-dir` usage
+- `.claude-plugin/` is gitignored — won't ship via git clone
+- `acd install` works for all use cases today
+- Plugin approach only matters if distributing to others
 
-- **No `SessionEnd` hook:** Sessions are never marked `closed` by hooks.
-  The daemon tracks sessions as active forever until manually closed or
-  the daemon restarts.
+### B5: No root README
 
-- **No `Notification` hooks:** `elicitation_dialog` fires when Claude uses
-  AskUserQuestion — this should set status to `question`. `permission_prompt`
-  fires when a permission dialog appears — this should set `attention`.
+**Status:** Resolved (2026-02-08)
 
-- **`Stop` maps to `attention` but should map contextually:** When Claude
-  finishes a response normally (waiting for user input), `attention` is
-  correct. But the current mapping doesn't distinguish from error states.
+README.md created with overview, installation, setup, usage, architecture, and
+development guide. PR #3 on branch `chore/readme-and-beads-sync`. Implemented in
+acd-35c.
 
-**Fix:** Add these hooks to the configuration:
+### B6: No `acd install` command
 
-```json
-{
-  "SessionEnd": [
-    {
-      "hooks": [{ "type": "command", "command": "acd claude-hook closed" }]
-    }
-  ],
-  "Notification": [
-    {
-      "matcher": "elicitation_dialog",
-      "hooks": [{ "type": "command", "command": "acd claude-hook question" }]
-    },
-    {
-      "matcher": "permission_prompt",
-      "hooks": [{ "type": "command", "command": "acd claude-hook attention" }]
-    }
-  ]
-}
-```
+**Status:** Resolved (2026-02-08)
 
-**Prerequisite:** The `Status` enum currently has `Working`, `Attention`,
-`Question`, `Closed`. The `claude-hook` subcommand's `Status` argument must
-accept `closed` and `question` as valid values.
+`acd install` writes 6 hooks to `~/.claude/settings.json`, verifies `acd` is in
+PATH, and prints next steps. `acd uninstall` removes hooks cleanly. Both are
+idempotent. Implemented in acd-qe8 and acd-71n.
 
-Source: https://code.claude.com/docs/en/hooks#hook-events
+E2E smoke test passed: `cargo install` → `acd install` → hooks fire → daemon
+lazy-starts → sessions tracked → `acd uninstall`.
 
-### B4 (P1): Hook format may need restructuring
+### B7: Socket path not configurable via hooks
 
-**Problem:** Our `plugin.json` embeds hooks directly. The plugin reference says
-hooks can be inline in `plugin.json` OR in a separate `hooks/hooks.json`. Both
-formats are valid per the docs:
-
-> `hooks`: string|array|object — Hook config paths or inline config
-
-The inline format we use is valid. However, if we switch to `~/.claude/settings.json`
-(B1 fix option 1), we bypass the plugin entirely and define hooks directly in
-settings. The plugin.json hooks become irrelevant for personal use.
-
-**Decision needed:** Keep plugin.json for distribution AND add `acd install`
-for personal setup? Or remove the plugin approach entirely?
-
-### B5 (P2): No root README
-
-**Problem:** No documentation for new users. No explanation of what ACD does,
-how to install, or how to use it.
-
-**Fix:** Create `README.md` with: overview, installation, setup, usage.
-
-### B6 (P2): No `acd install` command
-
-**Problem:** No automated setup. Users must manually:
-1. Build and install the binary
-2. Edit `~/.claude/settings.json` to add hooks
-3. Restart Claude Code
-
-**Fix:** Add `acd install` subcommand that:
-1. Verifies `acd` is in PATH (or suggests `cargo install`)
-2. Writes hooks to `~/.claude/settings.json` (merging with existing hooks)
-3. Prints next steps (restart Claude Code)
-
-Corresponding `acd uninstall` to remove hooks cleanly.
-
-### B7 (P2): Socket path not configurable via hooks
-
-**Problem:** The default socket `/tmp/agent-console-dashboard.sock` is
-hardcoded in the CLI default. Hook commands don't pass `--socket`, so they
-always use the default. This works for single-user setups but won't scale
-to multi-user or custom configurations.
+**Problem:** The default socket `/tmp/agent-console-dashboard.sock` is hardcoded
+in the CLI default. Hook commands don't pass `--socket`, so they always use the
+default. This works for single-user setups but won't scale to multi-user or
+custom configurations.
 
 **Fix:** Low priority. Default works for personal use.
 
 ## End-to-End User Journey (Target)
 
-```
+```text
 1. cargo install --path crates/agent-console-dashboard
    (puts `acd` in ~/.cargo/bin/)
 
@@ -195,9 +135,20 @@ to multi-user or custom configurations.
 
 - Daemon lifecycle (spawn, socket, sessions, shutdown)
 - IPC protocol (SET, STATUS, DUMP, RESURRECT, LIST, SUB)
-- TUI rendering (sessions, status, timestamps, usage)
+- TUI rendering (sessions, status, timestamps, usage, column headers, mouse)
 - Lazy-start (daemon auto-spawns from hooks or TUI)
 - Config system (TOML from XDG paths)
 - All CLI subcommands parse and execute correctly
 - Inactive session detection (1 hour threshold)
 - Build system generates plugin.json with version sync
+- `acd install` / `acd uninstall` for hook management
+- All 6 hook events registered (SessionStart, UserPromptSubmit, Stop,
+  SessionEnd, Notification/elicitation_dialog, Notification/permission_prompt)
+- README.md with installation and usage guide
+- E2E smoke test verified (2026-02-08)
+
+## Non-Goals
+
+- **System service (launchd/systemd):** Deliberately avoided. Lazy-start from
+  hooks replaces the need for a persistent daemon. The daemon spawns on first
+  hook event and stays running. No service management required.
