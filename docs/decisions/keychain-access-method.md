@@ -1,4 +1,4 @@
-# macOS Keychain ACL and Password Prompts
+# macOS Keychain ACL (Access Control List) and Password Prompts
 
 This document explains why accessing another application's Keychain items
 triggers password prompts, and how to avoid them.

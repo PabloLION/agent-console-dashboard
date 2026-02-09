@@ -52,8 +52,7 @@ Zellij is the reference multiplexer. ACD ships a layout file and launcher script
 that start the dashboard in a dedicated pane alongside Claude Code sessions.
 Session resurrection opens a new pane with `claude --resume`.
 
-See [Zellij setup guide](../guides/zellij.md) for layout configuration and
-usage.
+Implementation tracked in [acd-7u2](../../.beads/issues/acd-7u2.md).
 
 ### Tmux (future)
 
@@ -80,8 +79,8 @@ Design constraints:
 - Credentials are accessed via macOS Keychain (primary) or Linux file fallback
 - Fetch interval is configurable but not yet wired to the daemon timer (acd-j4u)
 
-See [macOS Keychain ACL guide](../guides/macos-keychain-acl.md) for credential
-setup.
+See [Keychain access method decision](../decisions/keychain-access-method.md)
+for why we use `/usr/bin/security` CLI instead of `security-framework` crate.
 
 ## Deferred Integrations
 
