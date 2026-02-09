@@ -180,7 +180,7 @@ mod tests {
     #[test]
     #[ignore = "requires real credentials"]
     #[cfg(feature = "blocking")]
-    fn test_get_usage_integration() {
+    fn env__get_usage() {
         let result = get_usage();
         match result {
             Ok(usage) => {

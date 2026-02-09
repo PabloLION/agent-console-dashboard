@@ -3,7 +3,9 @@
 //! Wraps crossterm events and adds a tick variant for periodic UI refresh.
 
 use crate::tui::app::App;
-use crossterm::event::{Event as CrosstermEvent, EventStream, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{
+    Event as CrosstermEvent, EventStream, KeyCode, KeyEvent, KeyModifiers, MouseEvent,
+};
 use futures::StreamExt;
 use std::time::Duration;
 use tokio::time::interval;
@@ -13,6 +15,8 @@ use tokio::time::interval;
 pub enum Event {
     /// A key was pressed.
     Key(KeyEvent),
+    /// A mouse event occurred.
+    Mouse(MouseEvent),
     /// Terminal was resized.
     Resize(u16, u16),
     /// Periodic tick for UI refresh.
@@ -44,9 +48,10 @@ impl EventHandler {
                 maybe_event = reader.next() => {
                     match maybe_event {
                         Some(Ok(CrosstermEvent::Key(key))) => return Ok(Event::Key(key)),
+                        Some(Ok(CrosstermEvent::Mouse(mouse))) => return Ok(Event::Mouse(mouse)),
                         Some(Ok(CrosstermEvent::Resize(w, h))) => return Ok(Event::Resize(w, h)),
                         Some(Err(e)) => return Err(e),
-                        // Ignore mouse, focus, paste events
+                        // Ignore focus, paste events
                         Some(Ok(_)) => continue,
                         None => return Err(std::io::Error::new(
                             std::io::ErrorKind::UnexpectedEof,

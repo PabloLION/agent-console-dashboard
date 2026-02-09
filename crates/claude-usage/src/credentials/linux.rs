@@ -186,7 +186,7 @@ mod tests {
     // Integration test - only runs manually
     #[test]
     #[ignore = "requires real credentials file"]
-    fn test_get_token_linux_integration() {
+    fn env__get_token_linux() {
         let result = get_token_linux();
         match result {
             Ok(token) => {
