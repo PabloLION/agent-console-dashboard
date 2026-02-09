@@ -55,6 +55,75 @@ dependencies. It's about **perspective and access level**:
 - Client module is `pub(crate)` (internal only)
 - `tests/` folder reserved for future public API tests
 
+## Test Grouping
+
+**Date**: 2026-02-08
+
+Tests that require external resources (network, env vars, running services)
+should be excluded from the default `cargo test` run.
+
+### Mechanism: `#[ignore]`
+
+Use `#[ignore = "reason"]` to mark tests that need external resources.
+
+```rust
+#[test]
+#[ignore = "requires network"]
+fn net__fetch_usage_data() { /* ... */ }
+
+#[test]
+#[ignore = "requires credentials"]
+fn env__get_token_macos() { /* ... */ }
+```
+
+### Filtering: name/module only
+
+The `#[ignore]` reason string is **documentation only** — it is not filterable.
+Rust's test harness provides no way to select ignored tests by reason.
+
+Filtering options:
+
+| Method           | Command                            | Filters by            |
+| ---------------- | ---------------------------------- | --------------------- |
+| Run all ignored  | `cargo test -- --ignored`          | All `#[ignore]` tests |
+| Filter by prefix | `cargo test -- --ignored env__`    | Test name substring   |
+| Filter by module | `cargo test client:: -- --ignored` | Module path           |
+
+The reason string appears in `cargo test` output as
+`test name ... ignored, reason` but cannot be used as a filter argument.
+
+### Naming convention
+
+Prefix ignored test names with a category, separated by double underscore
+(`__`). The `__` delimiter makes it unambiguous where the prefix ends and the
+descriptive name begins — `env__get_token` is clearly prefixed, while
+`env_get_token` could read as a single name.
+
+| Prefix  | Meaning                         | Example                 |
+| ------- | ------------------------------- | ----------------------- |
+| `net__` | Requires network                | `net__fetch_usage_data` |
+| `env__` | Requires env vars / credentials | `env__get_token_macos`  |
+| `svc__` | Requires running service        | `svc__daemon_responds`  |
+
+Run by category: `cargo test -- --ignored env__`
+
+### Alternatives considered
+
+| Approach                                  | Pros                                   | Cons                                                    |
+| ----------------------------------------- | -------------------------------------- | ------------------------------------------------------- |
+| `#[ignore]` + naming                      | Simple, standard Rust, no build config | Manual prefix discipline                                |
+| Feature flags (`#[cfg(feature = "...")]`) | Code excluded from binary              | Heavyweight, tests invisible by default, easy to forget |
+| cargo-nextest                             | Rich filtering syntax                  | External dependency, CI overhead                        |
+
+### Hook integration
+
+- **Pre-commit**: `cargo test` (fast, no ignored tests)
+- **Pre-push**: `cargo test -- --ignored` (all tests including network/env)
+
+The pre-push hook should only run ignored tests after the failing
+`test_fetch_usage_raw_integration` is fixed (it panics when
+`CLAUDE_CODE_OAUTH_TOKEN` is missing instead of skipping gracefully).
+
 ## References
 
 - [The Rust Book - Test Organization](https://doc.rust-lang.org/book/ch11-03-test-organization.html)
