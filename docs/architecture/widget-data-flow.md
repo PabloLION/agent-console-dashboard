@@ -1,7 +1,7 @@
 # Widget Data Flow Architecture
 
-**Created:** 2026-01-31 **Status:** Active **Related Decisions:** D3, D4 in
-[2026-01-31-discussion-decisions.md](./2026-01-31-discussion-decisions.md)
+**Created:** 2026-01-31 **Status:** Active **Related Decisions:**
+[Widget Data Source](../decisions/widget-data-source.md)
 
 ## Overview
 
@@ -167,7 +167,9 @@ Valid values: `"1m"`, `"3m"`, `"5m"`, `"10m"`
 
 ## Related Documentation
 
-- [E005 - Widget System](../epic/E005-widget-system.md)
-- [E009 - API Usage Tracking](../epic/E009-api-usage-tracking.md)
-- [Discussion Decisions D3, D4](./2026-01-31-discussion-decisions.md)
-- [Decision Amendments 3, 4](./2026-01-31-decision-amendments.md)
+- [Widget Data Source Decision](../decisions/widget-data-source.md)
+- [E005 - Widget System](../archive/epic/E005-widget-system.md)
+- [E009 - API Usage Tracking](../archive/epic/E009-api-usage-tracking.md)
+- [D3, D4](../archive/planning/discussion-decisions.md) |
+  [Amendments 3, 4](../archive/planning/decision-amendments.md) (archived
+  sources)

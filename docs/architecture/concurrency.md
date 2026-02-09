@@ -1,7 +1,7 @@
 # Concurrency Model
 
-**Created:** 2026-01-31 **Status:** Active **Related Decisions:** D1 in
-[2026-01-31-discussion-decisions.md](./2026-01-31-discussion-decisions.md)
+**Created:** 2026-01-31 **Status:** Active **Related Decisions:**
+[Concurrency Model](../decisions/concurrency-model.md)
 
 ## Summary
 
@@ -121,7 +121,6 @@ For v0/v1, single-threaded is sufficient.
 
 ## References
 
-- [D1: Concurrency Model](./2026-01-31-discussion-decisions.md)
-- [Amendment 2: Bounded Channel for Broadcasts](./2026-01-31-decision-amendments.md)
-  — per-subscriber bounded channels with backpressure disconnection for slow
-  clients
+- [Concurrency Model Decision](../decisions/concurrency-model.md)
+- [D1](../archive/planning/discussion-decisions.md) |
+  [Amendment 2](../archive/planning/decision-amendments.md) (archived sources)

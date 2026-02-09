@@ -1,7 +1,7 @@
 # Error Handling Strategy
 
-**Created:** 2026-01-31 **Status:** Active **Related Decisions:** D7 in
-[2026-01-31-discussion-decisions.md](./2026-01-31-discussion-decisions.md)
+**Created:** 2026-01-31 **Status:** Active **Related Decisions:**
+[Error Propagation](../decisions/error-propagation.md)
 
 ## Summary
 
@@ -86,5 +86,6 @@ Errors appear in the bottom-right status area:
 
 ## References
 
-- [D7: Error Propagation](./2026-01-31-discussion-decisions.md)
-- [Q24: Daemon Crash Recovery](../plans/7-decisions.md)
+- [Error Propagation Decision](../decisions/error-propagation.md)
+- [D7](../archive/planning/discussion-decisions.md) |
+  [Q24](../archive/planning/7-decisions.md) (archived sources)
