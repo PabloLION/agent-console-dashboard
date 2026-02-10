@@ -21,6 +21,8 @@ pub enum DaemonMessage {
         session_id: String,
         /// New session status.
         status: Status,
+        /// Seconds since the session entered this status (from daemon).
+        elapsed_seconds: u64,
     },
     /// Updated API usage data.
     UsageUpdate(UsageData),
@@ -56,9 +58,14 @@ pub async fn subscribe_to_daemon(
                     let parts: Vec<&str> = line.split_whitespace().collect();
                     if parts.len() >= 2 {
                         if let Ok(status) = parts[1].parse::<Status>() {
+                            let elapsed_seconds = parts
+                                .get(2)
+                                .and_then(|s| s.parse::<u64>().ok())
+                                .unwrap_or(0);
                             let msg = DaemonMessage::SessionUpdate {
                                 session_id: parts[0].to_string(),
                                 status,
+                                elapsed_seconds,
                             };
                             let _ = tx.send(msg).await;
                         }
@@ -118,9 +125,14 @@ pub fn parse_daemon_line(line: &str) -> Option<DaemonMessage> {
     if parts.len() >= 3 && parts[0] == "UPDATE" {
         match parts[2].parse::<Status>() {
             Ok(status) => {
+                let elapsed_seconds = parts
+                    .get(3)
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .unwrap_or(0);
                 return Some(DaemonMessage::SessionUpdate {
                     session_id: parts[1].to_string(),
                     status,
+                    elapsed_seconds,
                 });
             }
             Err(_) => {
@@ -141,9 +153,27 @@ mod tests {
     fn test_parse_update_message() {
         let msg = parse_daemon_line("UPDATE session-1 working 120");
         match msg {
-            Some(DaemonMessage::SessionUpdate { session_id, status }) => {
+            Some(DaemonMessage::SessionUpdate {
+                session_id,
+                status,
+                elapsed_seconds,
+            }) => {
                 assert_eq!(session_id, "session-1");
                 assert_eq!(status, Status::Working);
+                assert_eq!(elapsed_seconds, 120);
+            }
+            other => panic!("expected SessionUpdate, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_update_message_without_elapsed_defaults_to_zero() {
+        let msg = parse_daemon_line("UPDATE session-1 working");
+        match msg {
+            Some(DaemonMessage::SessionUpdate {
+                elapsed_seconds, ..
+            }) => {
+                assert_eq!(elapsed_seconds, 0);
             }
             other => panic!("expected SessionUpdate, got {:?}", other),
         }

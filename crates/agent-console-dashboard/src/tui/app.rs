@@ -209,7 +209,16 @@ impl App {
     }
 
     /// Applies a daemon update message to the session list.
-    fn apply_update(&mut self, session_id: &str, status: Status) {
+    ///
+    /// `elapsed_seconds` is the time since the session entered its current
+    /// status, as reported by the daemon. We backdate `session.since` by
+    /// subtracting this duration from `Instant::now()` so elapsed time
+    /// displays correctly even though `Instant` cannot survive IPC.
+    fn apply_update(&mut self, session_id: &str, status: Status, elapsed_seconds: u64) {
+        let backdated_since = Instant::now()
+            .checked_sub(Duration::from_secs(elapsed_seconds))
+            .unwrap_or_else(Instant::now);
+
         if let Some(session) = self.sessions.iter_mut().find(|s| s.id == session_id) {
             if session.status != status {
                 session.history.push(crate::StateTransition {
@@ -219,14 +228,16 @@ impl App {
                     duration: session.since.elapsed(),
                 });
                 session.status = status;
-                session.since = Instant::now();
+                session.since = backdated_since;
             }
         } else {
-            let session = Session::new(
+            let mut session = Session::new(
                 session_id.to_string(),
                 AgentType::ClaudeCode,
                 PathBuf::from("unknown"),
             );
+            session.status = status;
+            session.since = backdated_since;
             self.sessions.push(session);
             if self.selected_index.is_none() {
                 self.selected_index = Some(0);
@@ -272,9 +283,11 @@ impl App {
             // Drain daemon updates before rendering
             while let Ok(msg) = update_rx.try_recv() {
                 match msg {
-                    DaemonMessage::SessionUpdate { session_id, status } => {
-                        self.apply_update(&session_id, status)
-                    }
+                    DaemonMessage::SessionUpdate {
+                        session_id,
+                        status,
+                        elapsed_seconds,
+                    } => self.apply_update(&session_id, status, elapsed_seconds),
                     DaemonMessage::UsageUpdate(data) => {
                         self.usage = Some(data);
                     }
