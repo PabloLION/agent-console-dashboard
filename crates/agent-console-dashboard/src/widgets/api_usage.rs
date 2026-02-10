@@ -87,12 +87,12 @@ fn render_full(
     let mut spans = vec![
         Span::raw("Quota: 5h "),
         Span::styled(
-            format!("{:.0}%", five_h_pct),
+            format!("{:.0}%", five_h_pct.floor()),
             Style::default().fg(utilization_color(five_h_pct)),
         ),
         Span::raw(" | 7d "),
         Span::styled(
-            format!("{:.0}%", seven_d_pct),
+            format!("{:.0}%", seven_d_pct.floor()),
             Style::default().fg(utilization_color(seven_d_pct)),
         ),
     ];
@@ -110,12 +110,12 @@ fn render_compact(five_h_pct: f64, seven_d_pct: f64) -> Line<'static> {
     Line::from(vec![
         Span::raw("[5h:"),
         Span::styled(
-            format!("{:.0}%", five_h_pct),
+            format!("{:.0}%", five_h_pct.floor()),
             Style::default().fg(utilization_color(five_h_pct)),
         ),
         Span::raw(" 7d:"),
         Span::styled(
-            format!("{:.0}%", seven_d_pct),
+            format!("{:.0}%", seven_d_pct.floor()),
             Style::default().fg(utilization_color(seven_d_pct)),
         ),
         Span::raw("]"),
@@ -395,6 +395,44 @@ mod tests {
         // 100 > 95 => Red
         let five_h_span = &line.spans[1];
         assert_eq!(five_h_span.style.fg, Some(Color::Red));
+    }
+
+    // --- Floor rounding ---
+
+    #[test]
+    fn test_floor_rounding_displays_lower_integer() {
+        // 79.7% should display as "79%" (floor), not "80%" (round)
+        let usage = make_usage(79.7, 94.9, None);
+        let sessions: Vec<Session> = vec![];
+        let ctx = WidgetContext::new(&sessions).with_usage(&usage);
+        let w = ApiUsageWidget::new();
+        let line = w.render(40, &ctx);
+        let text = line.to_string();
+        assert!(text.contains("79%"), "expected '79%' in '{}'", text);
+        assert!(text.contains("94%"), "expected '94%' in '{}'", text);
+        assert!(
+            !text.contains("80%"),
+            "should NOT contain '80%' in '{}'",
+            text
+        );
+        assert!(
+            !text.contains("95%"),
+            "should NOT contain '95%' in '{}'",
+            text
+        );
+    }
+
+    #[test]
+    fn test_floor_rounding_compact_format() {
+        // Same floor behavior in compact format
+        let usage = make_usage(79.7, 94.9, None);
+        let sessions: Vec<Session> = vec![];
+        let ctx = WidgetContext::new(&sessions).with_usage(&usage);
+        let w = ApiUsageWidget::new();
+        let line = w.render(25, &ctx);
+        let text = line.to_string();
+        assert!(text.contains("79%"), "expected '79%' in '{}'", text);
+        assert!(text.contains("94%"), "expected '94%' in '{}'", text);
     }
 
     // --- Structural: no get_usage import ---
