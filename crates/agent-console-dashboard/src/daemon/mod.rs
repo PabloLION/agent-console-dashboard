@@ -205,8 +205,33 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::broadcast::channel(1);
 
+        // Load TOML config and parse usage_fetch_interval
+        let fetch_interval = match crate::config::loader::ConfigLoader::load_default() {
+            Ok(toml_config) => {
+                let interval_str = &toml_config.daemon.usage_fetch_interval;
+                match humantime::parse_duration(interval_str) {
+                    Ok(d) => {
+                        info!(interval = %interval_str, "usage fetch interval from config");
+                        d
+                    }
+                    Err(e) => {
+                        warn!(
+                            interval = %interval_str,
+                            error = %e,
+                            "invalid usage_fetch_interval, falling back to 180s"
+                        );
+                        Duration::from_secs(180)
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(error = %e, "failed to load config, using default fetch interval (180s)");
+                Duration::from_secs(180)
+            }
+        };
+
         // Create and wire the usage fetcher
-        let usage_fetcher = Arc::new(usage::UsageFetcher::new());
+        let usage_fetcher = Arc::new(usage::UsageFetcher::with_interval(fetch_interval));
         server.set_usage_fetcher(Arc::clone(&usage_fetcher));
 
         // Clone the store for the idle check loop before moving server
