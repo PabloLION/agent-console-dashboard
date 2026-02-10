@@ -35,6 +35,17 @@ See [CC-Hub history](../archive/planning/1-history.md) for the full evolution.
 - **Multiplexer-agnostic** -- Works with Zellij, tmux, or bare terminals. No
   multiplexer lock-in.
 
+## Scale Assumptions
+
+Design target for performance and protocol decisions:
+
+- 100 concurrent sessions (20 active, 80 inactive)
+- 100 TUI consumers connected to the daemon simultaneously
+- Status history: bounded queue, ~10 transitions per session
+
+At this scale, JSON Lines IPC with full session info per message is lightweight
+(~1000 small objects per LIST response).
+
 ## Features
 
 ### Core (v0)

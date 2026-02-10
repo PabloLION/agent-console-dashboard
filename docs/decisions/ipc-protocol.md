@@ -49,6 +49,11 @@ JSON was chosen because:
 Protocol details from Q60-Q62: newline-delimited framing, version field in every
 message, lenient backward/forward compatibility.
 
+**Status (2026-02-10):** Implementation diverged from this decision. The current
+IPC uses plain text (`SET session_id status /path\n`, `split_whitespace()`
+parsing) instead of JSON Lines. This breaks on paths with spaces and prevents
+carrying full session info. Being corrected under acd-rxy.
+
 [Original Q15](../archive/planning/6-open-questions.md) |
 [D2](../archive/planning/discussion-decisions.md) |
 [Q60-Q62](../archive/planning/6-open-questions.md)
