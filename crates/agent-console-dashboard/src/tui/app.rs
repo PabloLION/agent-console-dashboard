@@ -54,6 +54,11 @@ pub struct App {
     pub usage: Option<UsageData>,
     /// Last click time and position for double-click detection.
     last_click: Option<(Instant, u16, u16)>,
+    /// Shell command to execute on double-click, with placeholder support.
+    ///
+    /// Loaded from `tui.double_click_hook` in config. `None` means no hook
+    /// configured (empty string in config is treated as no hook).
+    pub double_click_hook: Option<String>,
 }
 
 impl App {
@@ -69,6 +74,7 @@ impl App {
             layout_preset: 1,
             usage: None,
             last_click: None,
+            double_click_hook: None,
         }
     }
 
@@ -145,6 +151,28 @@ impl App {
         }
     }
 
+    /// Executes the double-click hook for the given session, if configured.
+    ///
+    /// Substitutes `{session_id}`, `{working_dir}`, and `{status}` placeholders
+    /// in the hook command, then spawns it via `sh -c` in fire-and-forget mode.
+    /// The child process is detached (stdout/stderr piped to null).
+    fn execute_double_click_hook(&self, session: &Session) {
+        if let Some(ref hook) = self.double_click_hook {
+            let cmd = substitute_hook_placeholders(hook, session);
+            tracing::debug!("executing double-click hook: {}", cmd);
+            match std::process::Command::new("sh")
+                .arg("-c")
+                .arg(&cmd)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+            {
+                Ok(_) => tracing::debug!("double-click hook spawned: {}", cmd),
+                Err(e) => tracing::warn!("double-click hook failed: {}: {}", cmd, e),
+            }
+        }
+    }
+
     /// Calculates which session index was clicked based on mouse row coordinate.
     ///
     /// Returns None if the click was outside the session list area.
@@ -186,7 +214,12 @@ impl App {
                     self.selected_index = Some(idx);
                     if is_double_click {
                         self.last_click = None;
-                        return Action::OpenDetail(idx);
+                        // Double-click: fire hook if configured, otherwise no-op
+                        if let Some(session) = self.sessions.get(idx) {
+                            let session_clone = session.clone();
+                            self.execute_double_click_hook(&session_clone);
+                        }
+                        return Action::None;
                     }
                     // Single click: select + open inline detail
                     self.open_detail(idx);
@@ -346,10 +379,7 @@ impl App {
                     }
                 }
                 Event::Mouse(mouse) => {
-                    if let Action::OpenDetail(idx) = self.handle_mouse_event(mouse) {
-                        tracing::debug!("open detail view for session index {idx} (mouse)");
-                        self.open_detail(idx);
-                    }
+                    self.handle_mouse_event(mouse);
                 }
                 Event::Tick => {
                     self.tick_count += 1;
@@ -374,6 +404,19 @@ fn restore_terminal() -> io::Result<()> {
     disable_raw_mode()?;
     execute!(stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
     Ok(())
+}
+
+/// Substitutes placeholders in a hook command template with session values.
+///
+/// Supported placeholders:
+/// - `{session_id}` — replaced with `session.id`
+/// - `{working_dir}` — replaced with `session.working_dir` display string
+/// - `{status}` — replaced with `session.status` display string
+pub fn substitute_hook_placeholders(template: &str, session: &Session) -> String {
+    template
+        .replace("{session_id}", &session.id)
+        .replace("{working_dir}", &session.working_dir.display().to_string())
+        .replace("{status}", &session.status.to_string())
 }
 
 #[cfg(test)]
@@ -750,14 +793,14 @@ mod tests {
     }
 
     #[test]
-    fn test_mouse_double_click_returns_open_detail_action() {
+    fn test_mouse_double_click_fires_hook_returns_none() {
         let mut app = make_app_with_sessions(3);
         // First click: selects and opens inline detail
         let mouse1 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
         let action1 = app.handle_mouse_event(mouse1);
         assert_eq!(action1, Action::None);
         assert_eq!(app.selected_index, Some(1));
-        // Single click now opens inline detail
+        // Single click opens inline detail
         assert_eq!(
             app.view,
             View::Detail {
@@ -766,10 +809,13 @@ mod tests {
             }
         );
 
-        // Second click in quick succession at same position
+        // Second click in quick succession at same position (double-click)
+        // Double-click returns None (hook fires internally, not via Action)
         let mouse2 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
         let action2 = app.handle_mouse_event(mouse2);
-        assert_eq!(action2, Action::OpenDetail(1));
+        assert_eq!(action2, Action::None);
+        // last_click should be cleared after double-click
+        assert!(app.last_click.is_none());
     }
 
     #[test]
@@ -883,5 +929,65 @@ mod tests {
     fn test_last_click_initialized_to_none() {
         let app = App::new(PathBuf::from("/tmp/test.sock"));
         assert!(app.last_click.is_none());
+    }
+
+    #[test]
+    fn test_double_click_hook_default_none() {
+        let app = App::new(PathBuf::from("/tmp/test.sock"));
+        assert!(app.double_click_hook.is_none());
+    }
+
+    // --- substitute_hook_placeholders tests ---
+
+    #[test]
+    fn test_substitute_hook_all_placeholders() {
+        let session = Session::new(
+            "sess-123".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/home/user/project"),
+        );
+        let result = substitute_hook_placeholders("open {working_dir} --id={session_id}", &session);
+        assert_eq!(result, "open /home/user/project --id=sess-123");
+    }
+
+    #[test]
+    fn test_substitute_hook_status_placeholder() {
+        let mut session = Session::new(
+            "sess-456".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+        session.status = crate::Status::Attention;
+        let result = substitute_hook_placeholders("echo {status}", &session);
+        assert_eq!(result, "echo attention");
+    }
+
+    #[test]
+    fn test_substitute_hook_no_placeholders() {
+        let session = Session::new(
+            "sess-789".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/tmp"),
+        );
+        let result = substitute_hook_placeholders("echo hello", &session);
+        assert_eq!(result, "echo hello");
+    }
+
+    #[test]
+    fn test_substitute_hook_repeated_placeholders() {
+        let session = Session::new(
+            "abc".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/x"),
+        );
+        let result = substitute_hook_placeholders("{session_id} and {session_id}", &session);
+        assert_eq!(result, "abc and abc");
+    }
+
+    #[test]
+    fn test_substitute_hook_empty_template() {
+        let session = Session::new("s".to_string(), AgentType::ClaudeCode, PathBuf::from("/"));
+        let result = substitute_hook_placeholders("", &session);
+        assert_eq!(result, "");
     }
 }

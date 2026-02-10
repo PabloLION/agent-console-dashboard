@@ -52,6 +52,17 @@ pub struct TuiConfig {
     /// Render tick rate as a human-readable duration (e.g. `"250ms"`).
     /// Hot-reloadable: No (restart required).
     pub tick_rate: String,
+    /// Shell command to execute on double-click.
+    ///
+    /// Supports placeholder substitution:
+    /// - `{session_id}` — the session's identifier
+    /// - `{working_dir}` — the session's working directory
+    /// - `{status}` — the session's current status (working, attention, etc.)
+    ///
+    /// Executed via `sh -c` in a fire-and-forget manner.
+    /// Empty string means double-click has no effect.
+    /// Hot-reloadable: Yes.
+    pub double_click_hook: String,
 }
 
 impl Default for TuiConfig {
@@ -63,6 +74,7 @@ impl Default for TuiConfig {
                 "api-usage".to_string(),
             ],
             tick_rate: "250ms".to_string(),
+            double_click_hook: String::new(),
         }
     }
 }
@@ -369,5 +381,30 @@ log_level = "debug"
         assert_eq!(config.daemon.idle_timeout, "60m");
         assert_eq!(config.daemon.usage_fetch_interval, "3m");
         assert_eq!(config.tui.layout, LayoutPreset::Default);
+    }
+
+    #[test]
+    fn default_double_click_hook_is_empty() {
+        let config = Config::default();
+        assert_eq!(config.tui.double_click_hook, "");
+    }
+
+    #[test]
+    fn parse_double_click_hook() {
+        let toml_str = r#"
+[tui]
+double_click_hook = "open {working_dir}"
+"#;
+        let config: Config = toml::from_str(toml_str).expect("should parse double_click_hook");
+        assert_eq!(config.tui.double_click_hook, "open {working_dir}");
+    }
+
+    #[test]
+    fn double_click_hook_roundtrip() {
+        let mut config = Config::default();
+        config.tui.double_click_hook = "echo {session_id}".to_string();
+        let toml_str = toml::to_string(&config).expect("serialization should succeed");
+        let parsed: Config = toml::from_str(&toml_str).expect("roundtrip should parse");
+        assert_eq!(parsed.tui.double_click_hook, "echo {session_id}");
     }
 }

@@ -132,6 +132,14 @@ fn main() -> ExitCode {
                 tokio::runtime::Runtime::new().expect("failed to create tokio runtime for TUI");
             if let Err(e) = rt.block_on(async {
                 let mut app = App::new(socket);
+                // Wire double-click hook from config if available
+                if let Ok(config) =
+                    agent_console_dashboard::config::loader::ConfigLoader::load_default()
+                {
+                    if !config.tui.double_click_hook.is_empty() {
+                        app.double_click_hook = Some(config.tui.double_click_hook);
+                    }
+                }
                 app.run().await
             }) {
                 eprintln!("TUI error: {}", e);

@@ -49,6 +49,14 @@ widgets = ["session-status:two-line", "api-usage"]
 # Note: Changing this requires a restart (not hot-reloadable).
 tick_rate = "250ms"
 
+# Shell command to run on double-click.
+# Supports placeholders: {session_id}, {working_dir}, {status}
+# Executed via `sh -c` (fire-and-forget, no callback).
+# Empty string means double-click has no effect.
+# Examples: "code {working_dir}", "tmux new-window -c {working_dir}"
+# Hot-reloadable: Yes
+double_click_hook = ""
+
 # ==============================================================================
 # Agent Configuration
 # ==============================================================================
