@@ -248,18 +248,31 @@ impl App {
         }
     }
 
-    /// Applies a daemon update message to the session list.
+    /// Applies a daemon update message (full `SessionSnapshot`) to the session list.
     ///
     /// `elapsed_seconds` is the time since the session entered its current
     /// status, as reported by the daemon. We backdate `session.since` by
     /// subtracting this duration from `Instant::now()` so elapsed time
     /// displays correctly even though `Instant` cannot survive IPC.
-    fn apply_update(&mut self, session_id: &str, status: Status, elapsed_seconds: u64) {
+    fn apply_update(&mut self, info: &crate::SessionSnapshot) {
+        let status: Status = info.status.parse().unwrap_or(Status::Working);
         let backdated_since = Instant::now()
-            .checked_sub(Duration::from_secs(elapsed_seconds))
+            .checked_sub(Duration::from_secs(info.elapsed_seconds))
             .unwrap_or_else(Instant::now);
+        let backdated_activity = Instant::now()
+            .checked_sub(Duration::from_secs(info.idle_seconds))
+            .unwrap_or_else(Instant::now);
+        let working_dir = info
+            .working_dir
+            .as_ref()
+            .map(PathBuf::from)
+            .unwrap_or_default();
 
-        if let Some(session) = self.sessions.iter_mut().find(|s| s.id == session_id) {
+        if let Some(session) = self.sessions.iter_mut().find(|s| s.id == info.session_id) {
+            // Update working_dir from daemon if non-empty
+            if !working_dir.as_os_str().is_empty() {
+                session.working_dir = working_dir;
+            }
             if session.status != status {
                 session.history.push(crate::StateTransition {
                     timestamp: Instant::now(),
@@ -270,14 +283,51 @@ impl App {
                 session.status = status;
                 session.since = backdated_since;
             }
+            session.last_activity = backdated_activity;
+            session.closed = info.closed;
         } else {
-            let mut session = Session::new(
-                session_id.to_string(),
-                AgentType::ClaudeCode,
-                PathBuf::from("unknown"),
-            );
+            let mut session =
+                Session::new(info.session_id.clone(), AgentType::ClaudeCode, working_dir);
             session.status = status;
             session.since = backdated_since;
+            session.last_activity = backdated_activity;
+            session.closed = info.closed;
+            // Reconstruct history from wire StatusChange entries
+            let now_secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let entries = &info.history;
+            for i in 0..entries.len() {
+                let to = entries[i]
+                    .status
+                    .parse::<Status>()
+                    .unwrap_or(Status::Working);
+                let from = if i > 0 {
+                    entries[i - 1]
+                        .status
+                        .parse::<Status>()
+                        .unwrap_or(Status::Working)
+                } else {
+                    Status::Working
+                };
+                let duration = if i > 0 {
+                    Duration::from_secs(entries[i].at_secs.saturating_sub(entries[i - 1].at_secs))
+                } else {
+                    Duration::from_secs(0)
+                };
+                // Approximate Instant from unix timestamp
+                let secs_ago = now_secs.saturating_sub(entries[i].at_secs);
+                let timestamp = Instant::now()
+                    .checked_sub(Duration::from_secs(secs_ago))
+                    .unwrap_or_else(Instant::now);
+                session.history.push(crate::StateTransition {
+                    timestamp,
+                    from,
+                    to,
+                    duration,
+                });
+            }
             self.sessions.push(session);
             if self.selected_index.is_none() {
                 self.selected_index = Some(0);
@@ -323,11 +373,7 @@ impl App {
             // Drain daemon updates before rendering
             while let Ok(msg) = update_rx.try_recv() {
                 match msg {
-                    DaemonMessage::SessionUpdate {
-                        session_id,
-                        status,
-                        elapsed_seconds,
-                    } => self.apply_update(&session_id, status, elapsed_seconds),
+                    DaemonMessage::SessionUpdate(info) => self.apply_update(&info),
                     DaemonMessage::UsageUpdate(data) => {
                         self.usage = Some(data);
                     }

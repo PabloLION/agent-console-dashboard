@@ -329,14 +329,9 @@ impl Drop for SocketServer {
 
 /// Handles a single client connection.
 ///
-/// This function reads commands from the client and processes them:
-/// - SET <session_id> <status> [working_dir] - Create or update session
-/// - RM <session_id> - Close session (mark as closed, don't remove)
-/// - LIST - List all sessions
-/// - GET <session_id> - Get a single session
-/// - SUB - Subscribe to session updates
-/// - RESURRECT <session_id> - Resurrect a closed session
-/// - STATUS - Return daemon health information as JSON
+/// Reads JSON Lines commands from the client and dispatches to handlers.
+/// Each command is a JSON object with `version`, `cmd`, and command-specific
+/// fields. Responses are also JSON Lines.
 ///
 /// # Arguments
 ///
@@ -350,6 +345,8 @@ async fn handle_client(
     stream: UnixStream,
     state: &DaemonState,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use crate::{IpcCommand, IpcResponse};
+
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
@@ -361,36 +358,43 @@ async fn handle_client(
         let bytes_read = reader.read_line(&mut line).await?;
 
         if bytes_read == 0 {
-            // Connection closed by client
             tracing::debug!("Client disconnected");
             break;
         }
 
         let trimmed = line.trim();
-        let parts: Vec<&str> = trimmed.split_whitespace().collect();
-
-        if parts.is_empty() {
-            writer.write_all(b"ERR empty command\n").await?;
+        if trimmed.is_empty() {
+            let resp = IpcResponse::error("empty command");
+            writer.write_all(resp.to_json_line().as_bytes()).await?;
             writer.flush().await?;
             continue;
         }
 
-        let command = parts[0].to_uppercase();
+        // Parse JSON command
+        let cmd: IpcCommand = match serde_json::from_str(trimmed) {
+            Ok(c) => c,
+            Err(e) => {
+                let resp = IpcResponse::error(format!("invalid JSON: {}", e));
+                writer.write_all(resp.to_json_line().as_bytes()).await?;
+                writer.flush().await?;
+                continue;
+            }
+        };
+
+        let command = cmd.cmd.to_uppercase();
         let response = match command.as_str() {
-            "SET" => handle_set_command(&parts[1..], &state.store).await,
-            "RM" => handle_rm_command(&parts[1..], &state.store).await,
+            "SET" => handle_set_command(&cmd, &state.store).await,
+            "RM" => handle_rm_command(&cmd, &state.store).await,
             "LIST" => handle_list_command(&state.store).await,
-            "GET" => handle_get_command(&parts[1..], &state.store).await,
-            "RESURRECT" => handle_resurrect_command(&parts[1..], &state.store).await,
+            "GET" => handle_get_command(&cmd, &state.store).await,
+            "RESURRECT" => handle_resurrect_command(&cmd, &state.store).await,
             "STATUS" => handle_status_command(state).await,
             "DUMP" => handle_dump_command(state).await,
             "SUB" => {
-                // Subscribe mode: send UPDATE and USAGE notifications to client
                 handle_sub_command(&state.store, state.usage_fetcher.as_ref(), &mut writer).await?;
-                // After SUB returns (client disconnected or error), exit the loop
                 break;
             }
-            _ => format!("ERR unknown command: {}\n", parts[0]),
+            _ => IpcResponse::error(format!("unknown command: {}", cmd.cmd)).to_json_line(),
         };
 
         writer.write_all(response.as_bytes()).await?;

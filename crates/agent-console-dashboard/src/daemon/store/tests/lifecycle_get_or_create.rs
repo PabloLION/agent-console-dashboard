@@ -59,8 +59,9 @@ async fn test_get_or_create_session_returns_existing_and_updates_status() {
         .await;
 
     assert_eq!(retrieved.id, "existing-session");
-    // Working dir and session_id preserved from original
-    assert_eq!(retrieved.working_dir, PathBuf::from("/original/path"));
+    // Working dir updated from new call (non-empty path replaces old)
+    assert_eq!(retrieved.working_dir, PathBuf::from("/different/path"));
+    // session_id preserved from original (not overwritten)
     assert_eq!(
         retrieved.session_id,
         Some("original-session-id".to_string())
@@ -105,7 +106,8 @@ async fn test_get_or_create_session_after_set() {
         .await;
 
     assert_eq!(session2.id, "test-id");
-    assert_eq!(session2.working_dir, PathBuf::from("/home/user/test-id"));
+    // working_dir updated from new call (non-empty path replaces old)
+    assert_eq!(session2.working_dir, PathBuf::from("/new/path"));
     assert_eq!(session2.status, Status::Attention);
 }
 
@@ -134,7 +136,9 @@ async fn test_get_or_create_session_after_create_session() {
         .await;
 
     assert_eq!(session.id, "test-id");
-    assert_eq!(session.working_dir, PathBuf::from("/original/path"));
+    // working_dir updated from new call (non-empty path replaces old)
+    assert_eq!(session.working_dir, PathBuf::from("/new/path"));
+    // session_id preserved from original
     assert_eq!(session.session_id, Some("original-id".to_string()));
     assert_eq!(session.status, Status::Question);
 }
@@ -194,10 +198,10 @@ async fn test_get_or_create_session_idempotent() {
         )
         .await;
 
-    // Working dir preserved from first call
+    // Working dir updated on each call (non-empty path replaces old)
     assert_eq!(session1.working_dir, PathBuf::from("/path/1"));
-    assert_eq!(session2.working_dir, PathBuf::from("/path/1"));
-    assert_eq!(session3.working_dir, PathBuf::from("/path/1"));
+    assert_eq!(session2.working_dir, PathBuf::from("/path/2"));
+    assert_eq!(session3.working_dir, PathBuf::from("/path/3"));
 
     let sessions = store.list_all().await;
     assert_eq!(sessions.len(), 1);

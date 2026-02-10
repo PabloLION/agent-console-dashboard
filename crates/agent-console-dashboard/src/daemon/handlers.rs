@@ -1,7 +1,8 @@
 //! Command handlers for the daemon socket protocol.
 //!
-//! Each `handle_*` function processes a single command received from a client
-//! connection and returns a response string (or streams data for SUB).
+//! Each `handle_*` function processes a single JSON IPC command received from
+//! a client connection and returns a JSON Lines response string (or streams
+//! data for SUB).
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -14,8 +15,8 @@ use tokio::sync::broadcast;
 use crate::daemon::store::SessionStore;
 use crate::daemon::usage::UsageFetcher;
 use crate::{
-    get_memory_usage_mb, AgentType, DaemonDump, HealthStatus, SessionCounts, SessionSnapshot,
-    Status,
+    get_memory_usage_mb, AgentType, DaemonDump, HealthStatus, IpcCommand, IpcNotification,
+    IpcResponse, SessionCounts, SessionSnapshot, Status,
 };
 
 /// Shared daemon state passed to each client handler.
@@ -28,35 +29,41 @@ pub(super) struct DaemonState {
     pub(super) usage_fetcher: Option<Arc<UsageFetcher>>,
 }
 
-/// Handles the SET command: SET <session_id> <status> [working_dir]
+/// Handles the SET command.
 ///
+/// Expects `cmd.session_id` and `cmd.status`. Optional `cmd.working_dir`.
 /// Creates a new session if it doesn't exist, or updates the status if it does.
-pub(super) async fn handle_set_command(args: &[&str], store: &SessionStore) -> String {
-    if args.len() < 2 {
-        return "ERR SET requires: <session_id> <status> [working_dir]\n".to_string();
-    }
-
-    let session_id = args[0];
-    let status_str = args[1];
-    let working_dir = if args.len() > 2 {
-        PathBuf::from(args[2])
-    } else {
-        PathBuf::from("unknown")
+pub(super) async fn handle_set_command(cmd: &IpcCommand, store: &SessionStore) -> String {
+    let session_id = match &cmd.session_id {
+        Some(id) => id,
+        None => return IpcResponse::error("SET requires session_id").to_json_line(),
     };
+
+    let status_str = match &cmd.status {
+        Some(s) => s,
+        None => return IpcResponse::error("SET requires status").to_json_line(),
+    };
+
+    let working_dir = cmd
+        .working_dir
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or_default();
 
     let status: Status = match status_str.parse() {
         Ok(s) => s,
         Err(_) => {
-            return format!(
-                "ERR invalid status: {} (expected: working, attention, question, closed)\n",
+            return IpcResponse::error(format!(
+                "invalid status: {} (expected: working, attention, question, closed)",
                 status_str
-            );
+            ))
+            .to_json_line();
         }
     };
 
     let session = store
         .get_or_create_session(
-            session_id.to_string(),
+            session_id.clone(),
             AgentType::ClaudeCode,
             working_dir,
             None,
@@ -64,77 +71,77 @@ pub(super) async fn handle_set_command(args: &[&str], store: &SessionStore) -> S
         )
         .await;
 
-    format!("OK {} {}\n", session.id, session.status)
+    let info = SessionSnapshot::from(&session);
+    IpcResponse::success(Some(
+        serde_json::to_value(&info).expect("failed to serialize SessionSnapshot"),
+    ))
+    .to_json_line()
 }
 
-/// Handles the RM command: RM <session_id>
+/// Handles the RM command.
 ///
-/// Closes the session (marks as closed, doesn't remove from store).
-pub(super) async fn handle_rm_command(args: &[&str], store: &SessionStore) -> String {
-    if args.is_empty() {
-        return "ERR RM requires: <session_id>\n".to_string();
-    }
-
-    let session_id = args[0];
+/// Expects `cmd.session_id`. Closes the session (marks as closed, doesn't
+/// remove from store).
+pub(super) async fn handle_rm_command(cmd: &IpcCommand, store: &SessionStore) -> String {
+    let session_id = match &cmd.session_id {
+        Some(id) => id,
+        None => return IpcResponse::error("RM requires session_id").to_json_line(),
+    };
 
     match store.close_session(session_id).await {
-        Some(session) => format!("OK {} closed\n", session.id),
-        None => format!("ERR session not found: {}\n", session_id),
+        Some(session) => {
+            let info = SessionSnapshot::from(&session);
+            IpcResponse::success(Some(
+                serde_json::to_value(&info).expect("failed to serialize SessionSnapshot"),
+            ))
+            .to_json_line()
+        }
+        None => IpcResponse::error(format!("session not found: {}", session_id)).to_json_line(),
     }
 }
 
-/// Handles the LIST command: LIST
+/// Handles the LIST command.
 ///
-/// Returns all sessions in the format: OK\n<session_id> <status> <elapsed_seconds>\n...
+/// Returns all sessions as an array of `SessionSnapshot` objects.
 pub(super) async fn handle_list_command(store: &SessionStore) -> String {
     let sessions = store.list_all().await;
+    let infos: Vec<SessionSnapshot> = sessions.iter().map(SessionSnapshot::from).collect();
 
-    if sessions.is_empty() {
-        return "OK\n".to_string();
-    }
-
-    let mut response = String::from("OK\n");
-    for session in sessions {
-        let elapsed = session.since.elapsed().as_secs();
-        response.push_str(&format!("{} {} {}\n", session.id, session.status, elapsed));
-    }
-
-    response
+    IpcResponse::success(Some(
+        serde_json::to_value(&infos).expect("failed to serialize session list"),
+    ))
+    .to_json_line()
 }
 
-/// Handles the GET command: GET <session_id>
+/// Handles the GET command.
 ///
-/// Returns a single session in the format: OK <session_id> <status> <elapsed_seconds> <working_dir>
-pub(super) async fn handle_get_command(args: &[&str], store: &SessionStore) -> String {
-    if args.is_empty() {
-        return "ERR GET requires: <session_id>\n".to_string();
-    }
-
-    let session_id = args[0];
+/// Expects `cmd.session_id`. Returns a single `SessionSnapshot`.
+pub(super) async fn handle_get_command(cmd: &IpcCommand, store: &SessionStore) -> String {
+    let session_id = match &cmd.session_id {
+        Some(id) => id,
+        None => return IpcResponse::error("GET requires session_id").to_json_line(),
+    };
 
     match store.get(session_id).await {
         Some(session) => {
-            let elapsed = session.since.elapsed().as_secs();
-            format!(
-                "OK {} {} {} {}\n",
-                session.id,
-                session.status,
-                elapsed,
-                session.working_dir.display()
-            )
+            let info = SessionSnapshot::from(&session);
+            IpcResponse::success(Some(
+                serde_json::to_value(&info).expect("failed to serialize SessionSnapshot"),
+            ))
+            .to_json_line()
         }
-        None => format!("ERR session not found: {}\n", session_id),
+        None => IpcResponse::error(format!("session not found: {}", session_id)).to_json_line(),
     }
 }
 
-/// Handles the SUB command: SUB
+/// Handles the SUB command.
 ///
-/// Subscribes to session updates and usage updates, sending both to the client.
+/// Subscribes to session updates and usage updates, sending JSON notifications.
 ///
-/// Wire format:
-/// - Session updates: `UPDATE <session_id> <status> <elapsed_seconds>\n`
-/// - Usage updates: `USAGE <json>\n`
-/// - Lag warnings: `WARN lagged <count>\n`
+/// Wire format (JSON Lines):
+/// - Session updates: `IpcNotification` with type "update"
+/// - Usage updates: `IpcNotification` with type "usage"
+/// - Lag warnings: `IpcNotification` with type "warn"
 ///
 /// On initial subscription, sends the current usage state (if available) as
 /// the first USAGE message so clients don't have to wait for the next fetch.
@@ -145,7 +152,8 @@ pub(super) async fn handle_sub_command(
     usage_fetcher: Option<&Arc<UsageFetcher>>,
     writer: &mut tokio::net::unix::OwnedWriteHalf,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    writer.write_all(b"OK subscribed\n").await?;
+    let ok_msg = IpcResponse::success(Some(serde_json::json!("subscribed")));
+    writer.write_all(ok_msg.to_json_line().as_bytes()).await?;
     writer.flush().await?;
 
     let mut session_rx = store.subscribe();
@@ -165,9 +173,8 @@ pub(super) async fn handle_sub_command(
             }
         };
         if let Some(data) = snapshot {
-            let json = serde_json::to_string(&data).expect("failed to serialize UsageData");
-            let message = format!("USAGE {}\n", json);
-            if write_or_disconnect(writer, &message).await {
+            let notification = IpcNotification::usage_update(&data);
+            if write_or_disconnect(writer, &notification.to_json_line()).await {
                 return Ok(());
             }
         }
@@ -183,11 +190,26 @@ pub(super) async fn handle_sub_command(
                 result = session_rx.recv() => {
                     match result {
                         Ok(update) => {
-                            let message = format!(
-                                "UPDATE {} {} {}\n",
-                                update.session_id, update.status, update.elapsed_seconds
-                            );
-                            if write_or_disconnect(writer, &message).await {
+                            // Look up the full session to send complete SessionSnapshot
+                            let notification = if let Some(session) = store.get(&update.session_id).await {
+                                let info = SessionSnapshot::from(&session);
+                                IpcNotification::session_update(info)
+                            } else {
+                                // Session might have been removed; send minimal info
+                                let info = SessionSnapshot {
+                                    session_id: update.session_id.clone(),
+                                    agent_type: "claudecode".to_string(),
+                                    status: update.status.to_string(),
+                                    working_dir: None,
+                                    elapsed_seconds: update.elapsed_seconds,
+                                    idle_seconds: 0,
+                                    history: vec![],
+                                    closed: update.status == Status::Closed,
+
+                                };
+                                IpcNotification::session_update(info)
+                            };
+                            if write_or_disconnect(writer, &notification.to_json_line()).await {
                                 break;
                             }
                         }
@@ -197,8 +219,8 @@ pub(super) async fn handle_sub_command(
                         }
                         Err(broadcast::error::RecvError::Lagged(count)) => {
                             tracing::warn!("Session subscriber lagged, missed {} messages", count);
-                            let lag_message = format!("WARN lagged {}\n", count);
-                            if write_or_disconnect(writer, &lag_message).await {
+                            let notification = IpcNotification::warn(format!("lagged {}", count));
+                            if write_or_disconnect(writer, &notification.to_json_line()).await {
                                 break;
                             }
                         }
@@ -207,10 +229,8 @@ pub(super) async fn handle_sub_command(
                 result = usage.recv() => {
                     match result {
                         Ok(super::usage::UsageState::Available(data)) => {
-                            let json = serde_json::to_string(&data)
-                                .expect("failed to serialize UsageData");
-                            let message = format!("USAGE {}\n", json);
-                            if write_or_disconnect(writer, &message).await {
+                            let notification = IpcNotification::usage_update(&data);
+                            if write_or_disconnect(writer, &notification.to_json_line()).await {
                                 break;
                             }
                         }
@@ -229,14 +249,26 @@ pub(super) async fn handle_sub_command(
                 }
             }
         } else {
-            // No usage fetcher — session-only mode (backwards-compatible)
+            // No usage fetcher -- session-only mode (backwards-compatible)
             match session_rx.recv().await {
                 Ok(update) => {
-                    let message = format!(
-                        "UPDATE {} {} {}\n",
-                        update.session_id, update.status, update.elapsed_seconds
-                    );
-                    if write_or_disconnect(writer, &message).await {
+                    let notification = if let Some(session) = store.get(&update.session_id).await {
+                        let info = SessionSnapshot::from(&session);
+                        IpcNotification::session_update(info)
+                    } else {
+                        let info = SessionSnapshot {
+                            session_id: update.session_id.clone(),
+                            agent_type: "claudecode".to_string(),
+                            status: update.status.to_string(),
+                            working_dir: None,
+                            elapsed_seconds: update.elapsed_seconds,
+                            idle_seconds: 0,
+                            history: vec![],
+                            closed: update.status == Status::Closed,
+                        };
+                        IpcNotification::session_update(info)
+                    };
+                    if write_or_disconnect(writer, &notification.to_json_line()).await {
                         break;
                     }
                 }
@@ -246,8 +278,8 @@ pub(super) async fn handle_sub_command(
                 }
                 Err(broadcast::error::RecvError::Lagged(count)) => {
                     tracing::warn!("Subscriber lagged, missed {} messages", count);
-                    let lag_message = format!("WARN lagged {}\n", count);
-                    if write_or_disconnect(writer, &lag_message).await {
+                    let notification = IpcNotification::warn(format!("lagged {}", count));
+                    if write_or_disconnect(writer, &notification.to_json_line()).await {
                         break;
                     }
                 }
@@ -271,27 +303,25 @@ async fn write_or_disconnect(writer: &mut tokio::net::unix::OwnedWriteHalf, mess
     false
 }
 
-/// Handles the RESURRECT command: RESURRECT <session-id>
+/// Handles the RESURRECT command.
 ///
-/// Validates that the session exists, is resumable, and its working directory
-/// still exists. On success, returns resurrection metadata and removes the
-/// session from the closed queue. On failure, returns an error with reason.
-///
-/// Format: OK <json>\n or ERR <message>\n
-pub(super) async fn handle_resurrect_command(args: &[&str], store: &SessionStore) -> String {
-    if args.is_empty() {
-        return "ERR RESURRECT requires: <session-id>\n".to_string();
-    }
-
-    let session_id = args[0];
+/// Expects `cmd.session_id`. Validates that the session exists, is resumable,
+/// and its working directory still exists. On success, returns resurrection
+/// metadata and removes the session from the closed queue.
+pub(super) async fn handle_resurrect_command(cmd: &IpcCommand, store: &SessionStore) -> String {
+    let session_id = match &cmd.session_id {
+        Some(id) => id,
+        None => return IpcResponse::error("RESURRECT requires session_id").to_json_line(),
+    };
 
     let closed = match store.get_closed(session_id).await {
         Some(c) => c,
         None => {
-            return format!(
-                "ERR SESSION_NOT_FOUND No closed session with ID: {}\n",
+            return IpcResponse::error(format!(
+                "SESSION_NOT_FOUND No closed session with ID: {}",
                 session_id
-            );
+            ))
+            .to_json_line();
         }
     };
 
@@ -300,14 +330,15 @@ pub(super) async fn handle_resurrect_command(args: &[&str], store: &SessionStore
             .not_resumable_reason
             .as_deref()
             .unwrap_or("session cannot be resumed");
-        return format!("ERR NOT_RESUMABLE {}\n", reason);
+        return IpcResponse::error(format!("NOT_RESUMABLE {}", reason)).to_json_line();
     }
 
     if !closed.working_dir.exists() {
-        return format!(
-            "ERR WORKING_DIR_MISSING Working directory no longer exists: {}\n",
+        return IpcResponse::error(format!(
+            "WORKING_DIR_MISSING Working directory no longer exists: {}",
             closed.working_dir.display()
-        );
+        ))
+        .to_json_line();
     }
 
     let info = serde_json::json!({
@@ -318,13 +349,12 @@ pub(super) async fn handle_resurrect_command(args: &[&str], store: &SessionStore
 
     store.remove_closed(session_id).await;
 
-    format!("OK {}\n", info)
+    IpcResponse::success(Some(info)).to_json_line()
 }
 
-/// Handles the STATUS command: STATUS
+/// Handles the STATUS command.
 ///
 /// Returns daemon health information as JSON.
-/// Format: OK <json>\n
 pub(super) async fn handle_status_command(state: &DaemonState) -> String {
     let sessions = state.store.list_all().await;
     let active_count = sessions.iter().filter(|s| !s.closed).count();
@@ -341,22 +371,23 @@ pub(super) async fn handle_status_command(state: &DaemonState) -> String {
         socket_path: state.socket_path.clone(),
     };
 
-    let json = serde_json::to_string(&health).expect("failed to serialize HealthStatus");
-    format!("OK {}\n", json)
+    IpcResponse::success(Some(
+        serde_json::to_value(&health).expect("failed to serialize HealthStatus"),
+    ))
+    .to_json_line()
 }
 
-/// Handles the DUMP command: DUMP
+/// Handles the DUMP command.
 ///
 /// Returns a full daemon state snapshot as JSON.
-/// Format: OK <json>\n
 pub(super) async fn handle_dump_command(state: &DaemonState) -> String {
     let sessions = state.store.list_all().await;
     let active_count = sessions.iter().filter(|s| !s.closed).count();
     let closed_count = sessions.iter().filter(|s| s.closed).count();
 
-    let snapshots: Vec<SessionSnapshot> = sessions
+    let snapshots: Vec<crate::DumpSession> = sessions
         .iter()
-        .map(|s| SessionSnapshot {
+        .map(|s| crate::DumpSession {
             id: s.id.clone(),
             status: s.status.to_string(),
             working_dir: s.working_dir.display().to_string(),
@@ -376,6 +407,8 @@ pub(super) async fn handle_dump_command(state: &DaemonState) -> String {
         connections: state.active_connections.load(Ordering::Relaxed),
     };
 
-    let json = serde_json::to_string(&dump).expect("failed to serialize DaemonDump");
-    format!("OK {}\n", json)
+    IpcResponse::success(Some(
+        serde_json::to_value(&dump).expect("failed to serialize DaemonDump"),
+    ))
+    .to_json_line()
 }

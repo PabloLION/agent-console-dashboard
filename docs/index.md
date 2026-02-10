@@ -44,6 +44,8 @@ Each file answers "why did we choose this approach?"
   from hook JSON stdin
 - [session-lifecycle.md](decisions/session-lifecycle.md) — Status transitions,
   closed session handling
+- [variable-naming.md](decisions/variable-naming.md) — Naming rationale for
+  types and structs (SessionSnapshot, etc.)
 - [credential-storage.md](decisions/credential-storage.md) — Keychain + file
   fallback
 - [keychain-access-method.md](decisions/keychain-access-method.md) — Why

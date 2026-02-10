@@ -367,9 +367,13 @@ impl SessionStore {
     ) -> Session {
         let mut sessions = self.sessions.write().await;
 
-        // If session exists, update status and return
+        // If session exists, update status and working_dir, then return
         if let Some(existing) = sessions.get_mut(&id) {
             let old_status = existing.status;
+            // Update working_dir if the caller provides a non-empty path
+            if !working_dir.as_os_str().is_empty() {
+                existing.working_dir = working_dir;
+            }
             existing.set_status(status);
             let updated = existing.clone();
             self.broadcast_status_change(old_status, &updated);

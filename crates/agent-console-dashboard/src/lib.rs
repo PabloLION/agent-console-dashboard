@@ -98,7 +98,7 @@ impl FromStr for Status {
 }
 
 /// Agent type enumeration representing different AI coding agents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AgentType {
     /// Claude Code - Anthropic's AI coding assistant
     ClaudeCode,
@@ -118,7 +118,7 @@ pub struct StateTransition {
 }
 
 /// API token usage tracking for a session.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ApiUsage {
     /// Number of input tokens consumed.
     pub input_tokens: u64,
@@ -311,16 +311,16 @@ pub struct DaemonDump {
     /// Path to the Unix domain socket.
     pub socket_path: String,
     /// Snapshot of all sessions.
-    pub sessions: Vec<SessionSnapshot>,
+    pub sessions: Vec<DumpSession>,
     /// Session count breakdown.
     pub session_counts: SessionCounts,
     /// Count of active connections to the daemon.
     pub connections: usize,
 }
 
-/// Snapshot of a single session for dump output.
+/// Summary of a single session for dump output.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct SessionSnapshot {
+pub struct DumpSession {
     /// Unique session identifier.
     pub id: String,
     /// Current session status as string.
@@ -430,6 +430,226 @@ impl SessionUpdate {
             status,
             elapsed_seconds,
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// IPC wire types (JSON Lines protocol)
+// ---------------------------------------------------------------------------
+
+/// IPC protocol version. Included in every message for forward/backward
+/// compatibility.
+pub const IPC_VERSION: u32 = 1;
+
+/// Incoming command from a client to the daemon.
+///
+/// Every message is a single JSON line:
+/// `{"version": 1, "cmd": "SET", ...}\n`
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct IpcCommand {
+    /// Protocol version (must be [`IPC_VERSION`]).
+    pub version: u32,
+    /// Command name (SET, LIST, GET, RM, SUB, STATUS, DUMP, RESURRECT).
+    pub cmd: String,
+    /// Session identifier (for SET, GET, RM, RESURRECT).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    /// Session status string (for SET).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// Working directory (for SET). None if unknown.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub working_dir: Option<String>,
+}
+
+/// Response envelope from daemon to client.
+///
+/// Sent as a single JSON line: `{"version": 1, "ok": true, ...}\n`
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct IpcResponse {
+    /// Protocol version.
+    pub version: u32,
+    /// Whether the command succeeded.
+    pub ok: bool,
+    /// Error message when `ok` is false.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// Command-specific payload (varies by command).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<serde_json::Value>,
+}
+
+impl IpcResponse {
+    /// Creates a success response with optional data payload.
+    pub fn success(data: Option<serde_json::Value>) -> Self {
+        Self {
+            version: IPC_VERSION,
+            ok: true,
+            error: None,
+            data,
+        }
+    }
+
+    /// Creates an error response with the given message.
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            version: IPC_VERSION,
+            ok: false,
+            error: Some(message.into()),
+            data: None,
+        }
+    }
+
+    /// Serializes to a JSON line (with trailing newline).
+    pub fn to_json_line(&self) -> String {
+        let json = serde_json::to_string(self).expect("failed to serialize IpcResponse");
+        format!("{}\n", json)
+    }
+}
+
+/// Serializable point-in-time view of a session for the IPC wire format.
+///
+/// Converts from `&Session` (which contains non-serializable `Instant` fields)
+/// into a fully serializable struct with elapsed/idle seconds computed at
+/// conversion time.
+///
+/// See `docs/decisions/variable-naming.md` for naming rationale.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct SessionSnapshot {
+    /// Session identifier (was `Session.id`).
+    pub session_id: String,
+    /// Agent type as string (e.g., "claude-code").
+    pub agent_type: String,
+    /// Current status as lowercase string.
+    pub status: String,
+    /// Working directory, or None if unknown.
+    pub working_dir: Option<String>,
+    /// Seconds since the session entered its current status.
+    pub elapsed_seconds: u64,
+    /// Seconds since last hook activity.
+    pub idle_seconds: u64,
+    /// State transition history (bounded queue, ~10 entries).
+    pub history: Vec<StatusChange>,
+    /// Whether session has been closed.
+    pub closed: bool,
+}
+
+/// A single status change in the history, serializable for IPC.
+///
+/// Each entry records "became status X at time T". Consumers derive duration
+/// (diff between consecutive `at_secs`) and previous status (prior entry's
+/// `status`).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct StatusChange {
+    /// The new status after this transition.
+    pub status: String,
+    /// Unix timestamp (seconds since epoch) when this status began.
+    pub at_secs: u64,
+}
+
+impl From<&Session> for SessionSnapshot {
+    fn from(session: &Session) -> Self {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let working_dir_str = session.working_dir.display().to_string();
+        let working_dir = if working_dir_str.is_empty() || working_dir_str == "unknown" {
+            None
+        } else {
+            Some(working_dir_str)
+        };
+
+        let now_instant = Instant::now();
+        let now_system = SystemTime::now();
+        let history = session
+            .history
+            .iter()
+            .map(|t| {
+                // Approximate unix timestamp from monotonic Instant
+                let elapsed = now_instant.duration_since(t.timestamp);
+                let transition_time = now_system - elapsed;
+                let at_secs = transition_time
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                StatusChange {
+                    status: t.to.to_string(),
+                    at_secs,
+                }
+            })
+            .collect();
+
+        Self {
+            session_id: session.id.clone(),
+            agent_type: format!("{:?}", session.agent_type).to_lowercase(),
+            status: session.status.to_string(),
+            working_dir,
+            elapsed_seconds: session.since.elapsed().as_secs(),
+            idle_seconds: session.last_activity.elapsed().as_secs(),
+            history,
+            closed: session.closed,
+        }
+    }
+}
+
+/// A SUB notification pushed from daemon to subscriber.
+///
+/// Sent as a single JSON line on the SUB stream.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct IpcNotification {
+    /// Protocol version.
+    pub version: u32,
+    /// Notification type: "update", "usage", "warn".
+    #[serde(rename = "type")]
+    pub notification_type: String,
+    /// Full session snapshot (for "update" notifications).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session: Option<SessionSnapshot>,
+    /// Usage data (for "usage" notifications).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<serde_json::Value>,
+    /// Warning message (for "warn" notifications).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+impl IpcNotification {
+    /// Creates an "update" notification with full session snapshot.
+    pub fn session_update(info: SessionSnapshot) -> Self {
+        Self {
+            version: IPC_VERSION,
+            notification_type: "update".to_string(),
+            session: Some(info),
+            usage: None,
+            message: None,
+        }
+    }
+
+    /// Creates a "usage" notification with API usage data.
+    pub fn usage_update(data: &claude_usage::UsageData) -> Self {
+        Self {
+            version: IPC_VERSION,
+            notification_type: "usage".to_string(),
+            session: None,
+            usage: Some(serde_json::to_value(data).expect("failed to serialize UsageData")),
+            message: None,
+        }
+    }
+
+    /// Creates a "warn" notification.
+    pub fn warn(message: impl Into<String>) -> Self {
+        Self {
+            version: IPC_VERSION,
+            notification_type: "warn".to_string(),
+            session: None,
+            usage: None,
+            message: Some(message.into()),
+        }
+    }
+
+    /// Serializes to a JSON line (with trailing newline).
+    pub fn to_json_line(&self) -> String {
+        let json = serde_json::to_string(self).expect("failed to serialize IpcNotification");
+        format!("{}\n", json)
     }
 }
 
@@ -1218,7 +1438,7 @@ mod tests {
         let dump = DaemonDump {
             uptime_seconds: 3600,
             socket_path: "/tmp/test.sock".to_string(),
-            sessions: vec![SessionSnapshot {
+            sessions: vec![DumpSession {
                 id: "session-1".to_string(),
                 status: "working".to_string(),
                 working_dir: "/home/user/project".to_string(),
@@ -1239,8 +1459,8 @@ mod tests {
     }
 
     #[test]
-    fn test_session_snapshot_serialization() {
-        let snapshot = SessionSnapshot {
+    fn test_dump_session_serialization() {
+        let entry = DumpSession {
             id: "snap-1".to_string(),
             status: "attention".to_string(),
             working_dir: "/tmp/work".to_string(),
@@ -1248,10 +1468,10 @@ mod tests {
             closed: true,
         };
 
-        let json = serde_json::to_string(&snapshot).expect("failed to serialize SessionSnapshot");
-        let parsed: SessionSnapshot =
-            serde_json::from_str(&json).expect("failed to deserialize SessionSnapshot");
-        assert_eq!(parsed, snapshot);
+        let json = serde_json::to_string(&entry).expect("failed to serialize DumpSession");
+        let parsed: DumpSession =
+            serde_json::from_str(&json).expect("failed to deserialize DumpSession");
+        assert_eq!(parsed, entry);
     }
 
     #[test]
@@ -1280,21 +1500,21 @@ mod tests {
             uptime_seconds: 7200,
             socket_path: "/tmp/multi.sock".to_string(),
             sessions: vec![
-                SessionSnapshot {
+                DumpSession {
                     id: "s1".to_string(),
                     status: "working".to_string(),
                     working_dir: "/project-a".to_string(),
                     elapsed_seconds: 60,
                     closed: false,
                 },
-                SessionSnapshot {
+                DumpSession {
                     id: "s2".to_string(),
                     status: "closed".to_string(),
                     working_dir: "/project-b".to_string(),
                     elapsed_seconds: 300,
                     closed: true,
                 },
-                SessionSnapshot {
+                DumpSession {
                     id: "s3".to_string(),
                     status: "question".to_string(),
                     working_dir: "/project-c".to_string(),

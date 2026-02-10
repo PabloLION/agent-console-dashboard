@@ -49,10 +49,85 @@ JSON was chosen because:
 Protocol details from Q60-Q62: newline-delimited framing, version field in every
 message, lenient backward/forward compatibility.
 
-**Status (2026-02-10):** Implementation diverged from this decision. The current
-IPC uses plain text (`SET session_id status /path\n`, `split_whitespace()`
-parsing) instead of JSON Lines. This breaks on paths with spaces and prevents
-carrying full session info. Being corrected under acd-rxy.
+**Status (2026-02-10):** Implemented under acd-rxy. All commands and responses
+use JSON Lines. Plain text `split_whitespace()` protocol has been removed.
+
+## Wire Format
+
+### Commands (client -> daemon)
+
+All commands are `IpcCommand` structs serialized as JSON Lines:
+
+```json
+{"version": 1, "cmd": "SET", "session_id": "uuid", "status": "working", "working_dir": "/path"}
+{"version": 1, "cmd": "LIST"}
+{"version": 1, "cmd": "GET", "session_id": "uuid"}
+{"version": 1, "cmd": "RM", "session_id": "uuid"}
+{"version": 1, "cmd": "SUB"}
+{"version": 1, "cmd": "STATUS"}
+{"version": 1, "cmd": "DUMP"}
+{"version": 1, "cmd": "RESURRECT", "session_id": "uuid"}
+```
+
+### Responses (daemon -> client)
+
+All responses are `IpcResponse` structs:
+
+```json
+{"version": 1, "ok": true, "data": ...}
+{"version": 1, "ok": false, "error": "message"}
+```
+
+### SessionSnapshot (wire struct)
+
+The `Session` struct contains `Instant` fields (not serializable).
+`SessionSnapshot` is the serializable point-in-time view sent over IPC.
+Conversion computes elapsed/idle seconds at the moment of serialization.
+
+See `variable-naming.md` for naming rationale.
+
+```text
+SessionSnapshot
+├── session_id: String
+├── agent_type: String
+├── status: String
+├── working_dir: Option<String>   # None if unknown, never "unknown"
+├── elapsed_seconds: u64          # since session entered current status
+├── idle_seconds: u64             # since last hook activity
+├── history: Vec<StatusChange>    # bounded queue, ~10 entries
+└── closed: bool
+```
+
+### StatusChange (history entry)
+
+Each entry records "became status X at time T". Consumers derive duration (diff
+between consecutive `at_secs`) and previous status (prior entry's `status`). No
+redundant `from` field.
+
+```text
+StatusChange
+├── status: String    # the new status
+└── at_secs: u64      # unix timestamp (seconds since epoch)
+```
+
+### Design Rationale
+
+- **No `api_usage` in snapshot** — not consumed by any client yet. Add when
+  implementing API usage tracking (v0 feature, not yet built).
+- **No `from` in history** — redundant with previous entry's `status`. Avoids
+  "from nothing" edge case on first transition.
+- **`at_secs` as Unix timestamp** — self-contained, no reference time needed.
+  TUI computes "5 min ago" via `now - at_secs`.
+
+### Notifications (daemon -> SUB subscribers)
+
+SUB clients receive `IpcNotification` JSON lines:
+
+```json
+{"version": 1, "type": "update", "session": {SessionSnapshot}}
+{"version": 1, "type": "usage", "usage": {UsageData}}
+{"version": 1, "type": "warn", "message": "lagged 5"}
+```
 
 [Original Q15](../archive/planning/6-open-questions.md) |
 [D2](../archive/planning/discussion-decisions.md) |

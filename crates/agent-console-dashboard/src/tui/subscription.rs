@@ -1,29 +1,21 @@
 //! Daemon subscription and message parsing for the TUI.
 //!
 //! Handles connecting to the daemon, subscribing to live updates (session
-//! changes and usage data), and parsing the SUB wire protocol into typed
+//! changes and usage data), and parsing the JSON Lines IPC protocol into typed
 //! messages.
 
 use crate::client::connect_with_lazy_start;
-use crate::Status;
+use crate::{IpcCommand, IpcNotification, IpcResponse, SessionSnapshot, IPC_VERSION};
 use claude_usage::UsageData;
 use std::path::Path;
-use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
 
 /// Messages received from the daemon via the SUB subscription.
 #[derive(Debug)]
 pub enum DaemonMessage {
-    /// A session status update.
-    SessionUpdate {
-        /// Session identifier.
-        session_id: String,
-        /// New session status.
-        status: Status,
-        /// Seconds since the session entered this status (from daemon).
-        elapsed_seconds: u64,
-    },
+    /// A session update with full session info.
+    SessionUpdate(SessionSnapshot),
     /// Updated API usage data.
     UsageUpdate(UsageData),
 }
@@ -39,54 +31,56 @@ pub async fn subscribe_to_daemon(
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
 
-    // Fetch initial session list
-    writer.write_all(b"LIST\n").await?;
+    // Send LIST command as JSON
+    let list_cmd = IpcCommand {
+        version: IPC_VERSION,
+        cmd: "LIST".to_string(),
+        session_id: None,
+        status: None,
+        working_dir: None,
+    };
+    let list_json = serde_json::to_string(&list_cmd).expect("failed to serialize LIST command");
+    writer.write_all(list_json.as_bytes()).await?;
+    writer.write_all(b"\n").await?;
     writer.flush().await?;
 
     let mut line = String::new();
-    reader.read_line(&mut line).await?; // "OK\n" header
-    if line.trim() == "OK" {
-        // Read session lines until empty line or next command
-        loop {
-            line.clear();
-            // Use a short timeout to detect end of LIST response
-            match tokio::time::timeout(Duration::from_millis(100), reader.read_line(&mut line))
-                .await
-            {
-                Ok(Ok(0)) => break,
-                Ok(Ok(_)) => {
-                    let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 2 {
-                        if let Ok(status) = parts[1].parse::<Status>() {
-                            let elapsed_seconds = parts
-                                .get(2)
-                                .and_then(|s| s.parse::<u64>().ok())
-                                .unwrap_or(0);
-                            let msg = DaemonMessage::SessionUpdate {
-                                session_id: parts[0].to_string(),
-                                status,
-                                elapsed_seconds,
-                            };
-                            let _ = tx.send(msg).await;
-                        }
+    reader.read_line(&mut line).await?;
+
+    // Parse LIST response as IpcResponse
+    if let Ok(resp) = serde_json::from_str::<IpcResponse>(line.trim()) {
+        if resp.ok {
+            if let Some(data) = resp.data {
+                if let Ok(sessions) = serde_json::from_value::<Vec<SessionSnapshot>>(data) {
+                    for info in sessions {
+                        let _ = tx.send(DaemonMessage::SessionUpdate(info)).await;
                     }
                 }
-                _ => break,
             }
         }
     }
 
-    // Now subscribe for live updates — need a new connection since LIST consumed the first
+    // Now subscribe for live updates -- need a new connection since LIST consumed the first
     let client = connect_with_lazy_start(socket_path).await?;
     let stream = client.into_stream();
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
 
-    writer.write_all(b"SUB\n").await?;
+    // Send SUB command as JSON
+    let sub_cmd = IpcCommand {
+        version: IPC_VERSION,
+        cmd: "SUB".to_string(),
+        session_id: None,
+        status: None,
+        working_dir: None,
+    };
+    let sub_json = serde_json::to_string(&sub_cmd).expect("failed to serialize SUB command");
+    writer.write_all(sub_json.as_bytes()).await?;
+    writer.write_all(b"\n").await?;
     writer.flush().await?;
 
     line.clear();
-    reader.read_line(&mut line).await?; // "OK subscribed\n"
+    reader.read_line(&mut line).await?; // IpcResponse {"ok": true, "data": "subscribed"}
 
     loop {
         line.clear();
@@ -106,74 +100,70 @@ pub async fn subscribe_to_daemon(
     Ok(())
 }
 
-/// Parses a single line from the daemon SUB stream into a `DaemonMessage`.
+/// Parses a single JSON line from the daemon SUB stream into a `DaemonMessage`.
 ///
-/// Returns `None` for unrecognized or malformed lines (WARN, etc.).
+/// Returns `None` for unrecognized or malformed lines.
 pub fn parse_daemon_line(line: &str) -> Option<DaemonMessage> {
-    if let Some(json) = line.strip_prefix("USAGE ") {
-        match serde_json::from_str::<UsageData>(json) {
-            Ok(data) => return Some(DaemonMessage::UsageUpdate(data)),
-            Err(e) => {
-                tracing::warn!("failed to parse USAGE message: {}", e);
-                return None;
+    let notification: IpcNotification = match serde_json::from_str(line) {
+        Ok(n) => n,
+        Err(_) => return None,
+    };
+
+    match notification.notification_type.as_str() {
+        "update" => {
+            let info = notification.session?;
+            Some(DaemonMessage::SessionUpdate(info))
+        }
+        "usage" => {
+            let usage_value = notification.usage?;
+            match serde_json::from_value::<UsageData>(usage_value) {
+                Ok(data) => Some(DaemonMessage::UsageUpdate(data)),
+                Err(e) => {
+                    tracing::warn!("failed to parse usage data: {}", e);
+                    None
+                }
             }
         }
-    }
-
-    let parts: Vec<&str> = line.split_whitespace().collect();
-    // UPDATE <session_id> <status> <elapsed>
-    if parts.len() >= 3 && parts[0] == "UPDATE" {
-        match parts[2].parse::<Status>() {
-            Ok(status) => {
-                let elapsed_seconds = parts
-                    .get(3)
-                    .and_then(|s| s.parse::<u64>().ok())
-                    .unwrap_or(0);
-                return Some(DaemonMessage::SessionUpdate {
-                    session_id: parts[1].to_string(),
-                    status,
-                    elapsed_seconds,
-                });
+        "warn" => {
+            if let Some(msg) = notification.message {
+                tracing::warn!("daemon warning: {}", msg);
             }
-            Err(_) => {
-                tracing::warn!("failed to parse UPDATE status: {}", parts[2]);
-                return None;
-            }
+            None
         }
+        _ => None,
     }
-
-    None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::IPC_VERSION;
 
-    #[test]
-    fn test_parse_update_message() {
-        let msg = parse_daemon_line("UPDATE session-1 working 120");
-        match msg {
-            Some(DaemonMessage::SessionUpdate {
-                session_id,
-                status,
-                elapsed_seconds,
-            }) => {
-                assert_eq!(session_id, "session-1");
-                assert_eq!(status, Status::Working);
-                assert_eq!(elapsed_seconds, 120);
-            }
-            other => panic!("expected SessionUpdate, got {:?}", other),
-        }
+    fn make_update_notification(session_id: &str, status: &str) -> String {
+        let info = SessionSnapshot {
+            session_id: session_id.to_string(),
+            agent_type: "claudecode".to_string(),
+            status: status.to_string(),
+            working_dir: Some("/tmp/test".to_string()),
+            elapsed_seconds: 120,
+            idle_seconds: 5,
+            history: vec![],
+            closed: false,
+        };
+        let notification = IpcNotification::session_update(info);
+        serde_json::to_string(&notification).expect("failed to serialize notification")
     }
 
     #[test]
-    fn test_parse_update_message_without_elapsed_defaults_to_zero() {
-        let msg = parse_daemon_line("UPDATE session-1 working");
+    fn test_parse_update_message() {
+        let json = make_update_notification("session-1", "working");
+        let msg = parse_daemon_line(&json);
         match msg {
-            Some(DaemonMessage::SessionUpdate {
-                elapsed_seconds, ..
-            }) => {
-                assert_eq!(elapsed_seconds, 0);
+            Some(DaemonMessage::SessionUpdate(info)) => {
+                assert_eq!(info.session_id, "session-1");
+                assert_eq!(info.status, "working");
+                assert_eq!(info.elapsed_seconds, 120);
+                assert_eq!(info.working_dir, Some("/tmp/test".to_string()));
             }
             other => panic!("expected SessionUpdate, got {:?}", other),
         }
@@ -181,8 +171,21 @@ mod tests {
 
     #[test]
     fn test_parse_usage_message() {
-        let json = r#"USAGE {"five_hour":{"utilization":25.0},"seven_day":{"utilization":50.0}}"#;
-        let msg = parse_daemon_line(json);
+        let data = claude_usage::UsageData {
+            five_hour: claude_usage::UsagePeriod {
+                utilization: 25.0,
+                resets_at: None,
+            },
+            seven_day: claude_usage::UsagePeriod {
+                utilization: 50.0,
+                resets_at: None,
+            },
+            seven_day_sonnet: None,
+            extra_usage: None,
+        };
+        let notification = IpcNotification::usage_update(&data);
+        let json = serde_json::to_string(&notification).expect("failed to serialize");
+        let msg = parse_daemon_line(&json);
         match msg {
             Some(DaemonMessage::UsageUpdate(data)) => {
                 assert!((data.five_hour.utilization - 25.0).abs() < f64::EPSILON);
@@ -193,8 +196,17 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_unknown_line_returns_none() {
-        assert!(parse_daemon_line("WARN lagged 5").is_none());
+    fn test_parse_warn_message() {
+        let notification = IpcNotification {
+            version: IPC_VERSION,
+            notification_type: "warn".to_string(),
+            session: None,
+            usage: None,
+            message: Some("lagged 5".to_string()),
+        };
+        let json = serde_json::to_string(&notification).expect("failed to serialize");
+        // Warn messages return None (they're logged, not forwarded)
+        assert!(parse_daemon_line(&json).is_none());
     }
 
     #[test]
@@ -203,12 +215,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_malformed_usage_returns_none() {
-        assert!(parse_daemon_line("USAGE {invalid json}").is_none());
+    fn test_parse_invalid_json_returns_none() {
+        assert!(parse_daemon_line("{invalid json}").is_none());
     }
 
     #[test]
-    fn test_parse_update_invalid_status_returns_none() {
-        assert!(parse_daemon_line("UPDATE session-1 invalid_status 120").is_none());
+    fn test_parse_unknown_notification_type_returns_none() {
+        let json = r#"{"version":1,"type":"unknown","session":null,"usage":null,"message":null}"#;
+        assert!(parse_daemon_line(json).is_none());
     }
 }

@@ -5,7 +5,7 @@
 
 use agent_console_dashboard::{
     client::connect_with_lazy_start, daemon::run_daemon, format_uptime, tui::app::App,
-    DaemonConfig, DaemonDump, HealthStatus, Status,
+    DaemonConfig, DaemonDump, HealthStatus, IpcCommand, IpcResponse, Status, IPC_VERSION,
 };
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -240,7 +240,7 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Connects to daemon, sends SET command to create/update a session.
+/// Connects to daemon, sends SET command as JSON to create/update a session.
 fn run_set_command(
     socket: &PathBuf,
     session_id: &str,
@@ -268,9 +268,18 @@ fn run_set_command(
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|_| ".".to_string())
         });
-    let cmd = format!("SET {} {} {}\n", session_id, status, wd);
 
-    if writer.write_all(cmd.as_bytes()).is_err() || writer.flush().is_err() {
+    let cmd = IpcCommand {
+        version: IPC_VERSION,
+        cmd: "SET".to_string(),
+        session_id: Some(session_id.to_string()),
+        status: Some(status.to_string()),
+        working_dir: Some(wd),
+    };
+    let json = serde_json::to_string(&cmd).expect("failed to serialize SET command");
+    let line = format!("{}\n", json);
+
+    if writer.write_all(line.as_bytes()).is_err() || writer.flush().is_err() {
         eprintln!("Error: failed to send SET command");
         return ExitCode::FAILURE;
     }
@@ -281,12 +290,19 @@ fn run_set_command(
         return ExitCode::FAILURE;
     }
 
-    let trimmed = response.trim();
-    if trimmed.starts_with("OK") {
-        ExitCode::SUCCESS
-    } else {
-        eprintln!("{}", trimmed);
-        ExitCode::FAILURE
+    match serde_json::from_str::<IpcResponse>(response.trim()) {
+        Ok(resp) if resp.ok => ExitCode::SUCCESS,
+        Ok(resp) => {
+            eprintln!(
+                "Error: {}",
+                resp.error.unwrap_or_else(|| "unknown error".to_string())
+            );
+            ExitCode::FAILURE
+        }
+        Err(e) => {
+            eprintln!("Error: failed to parse daemon response: {}", e);
+            ExitCode::FAILURE
+        }
     }
 }
 
@@ -300,13 +316,13 @@ struct HookInput {
     cwd: String,
 }
 
-/// Connects to daemon via lazy-start (spawning if needed), sends SET command.
+/// Connects to daemon via lazy-start (spawning if needed), sends SET command as JSON.
 ///
 /// Exit codes per Claude Code hook spec:
 /// - 0: success (outputs `{"continue": true}` on stdout)
 ///
 /// This function never returns a non-zero exit code after stdin parsing
-/// succeeds — hook failures are reported via systemMessage to avoid blocking
+/// succeeds -- hook failures are reported via systemMessage to avoid blocking
 /// Claude Code.
 async fn run_claude_hook_async(
     socket: &std::path::Path,
@@ -334,9 +350,17 @@ async fn run_claude_hook_async(
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
 
-    let cmd = format!("SET {} {} {}\n", input.session_id, status, input.cwd);
+    let cmd = IpcCommand {
+        version: IPC_VERSION,
+        cmd: "SET".to_string(),
+        session_id: Some(input.session_id.clone()),
+        status: Some(status.to_string()),
+        working_dir: Some(input.cwd.clone()),
+    };
+    let cmd_json = serde_json::to_string(&cmd).expect("failed to serialize SET command");
+    let cmd_line = format!("{}\n", cmd_json);
 
-    if writer.write_all(cmd.as_bytes()).await.is_err() || writer.flush().await.is_err() {
+    if writer.write_all(cmd_line.as_bytes()).await.is_err() || writer.flush().await.is_err() {
         let json = serde_json::json!({
             "continue": true,
             "systemMessage": format!(
@@ -361,22 +385,36 @@ async fn run_claude_hook_async(
         return ExitCode::SUCCESS;
     }
 
-    if line.trim().starts_with("OK") {
-        println!(r#"{{"continue": true}}"#);
-    } else {
-        let json = serde_json::json!({
-            "continue": true,
-            "systemMessage": format!(
-                "acd daemon error: {}, session {} not tracked",
-                line.trim(), input.session_id
-            ),
-        });
-        println!("{}", json);
+    match serde_json::from_str::<IpcResponse>(line.trim()) {
+        Ok(resp) if resp.ok => {
+            println!(r#"{{"continue": true}}"#);
+        }
+        Ok(resp) => {
+            let err = resp.error.unwrap_or_else(|| "unknown error".to_string());
+            let json = serde_json::json!({
+                "continue": true,
+                "systemMessage": format!(
+                    "acd daemon error: {}, session {} not tracked",
+                    err, input.session_id
+                ),
+            });
+            println!("{}", json);
+        }
+        Err(_) => {
+            let json = serde_json::json!({
+                "continue": true,
+                "systemMessage": format!(
+                    "acd daemon: invalid response, session {} not tracked",
+                    input.session_id
+                ),
+            });
+            println!("{}", json);
+        }
     }
     ExitCode::SUCCESS
 }
 
-/// Connects to the daemon socket, sends STATUS, and displays health info.
+/// Connects to the daemon socket, sends STATUS as JSON, and displays health info.
 ///
 /// Returns `ExitCode::SUCCESS` if the daemon is running, `ExitCode::FAILURE` if unreachable.
 fn run_status_command(socket: &PathBuf) -> ExitCode {
@@ -395,7 +433,17 @@ fn run_status_command(socket: &PathBuf) -> ExitCode {
     let mut writer = stream.try_clone().expect("failed to clone unix stream");
     let mut reader = BufReader::new(stream);
 
-    if writer.write_all(b"STATUS\n").is_err() || writer.flush().is_err() {
+    let cmd = IpcCommand {
+        version: IPC_VERSION,
+        cmd: "STATUS".to_string(),
+        session_id: None,
+        status: None,
+        working_dir: None,
+    };
+    let json = serde_json::to_string(&cmd).expect("failed to serialize STATUS command");
+    let line = format!("{}\n", json);
+
+    if writer.write_all(line.as_bytes()).is_err() || writer.flush().is_err() {
         println!("Agent Console Daemon");
         println!("  Status:      not running");
         return ExitCode::FAILURE;
@@ -408,38 +456,51 @@ fn run_status_command(socket: &PathBuf) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let trimmed = response.trim();
-    if let Some(json_str) = trimmed.strip_prefix("OK ") {
-        match serde_json::from_str::<HealthStatus>(json_str) {
-            Ok(health) => {
-                let memory_str = match health.memory_mb {
-                    Some(mb) => format!("{:.1} MB", mb),
-                    None => "N/A".to_string(),
-                };
-                println!("Agent Console Daemon");
-                println!("  Status:      running");
-                println!("  Uptime:      {}", format_uptime(health.uptime_seconds));
-                println!(
-                    "  Sessions:    {} active, {} closed",
-                    health.sessions.active, health.sessions.closed
-                );
-                println!("  Connections: {} dashboards", health.connections);
-                println!("  Memory:      {}", memory_str);
-                println!("  Socket:      {}", health.socket_path);
-                return ExitCode::SUCCESS;
+    match serde_json::from_str::<IpcResponse>(response.trim()) {
+        Ok(resp) if resp.ok => {
+            if let Some(data) = resp.data {
+                match serde_json::from_value::<HealthStatus>(data) {
+                    Ok(health) => {
+                        let memory_str = match health.memory_mb {
+                            Some(mb) => format!("{:.1} MB", mb),
+                            None => "N/A".to_string(),
+                        };
+                        println!("Agent Console Daemon");
+                        println!("  Status:      running");
+                        println!("  Uptime:      {}", format_uptime(health.uptime_seconds));
+                        println!(
+                            "  Sessions:    {} active, {} closed",
+                            health.sessions.active, health.sessions.closed
+                        );
+                        println!("  Connections: {} dashboards", health.connections);
+                        println!("  Memory:      {}", memory_str);
+                        println!("  Socket:      {}", health.socket_path);
+                        return ExitCode::SUCCESS;
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to parse health data: {}", e);
+                        return ExitCode::FAILURE;
+                    }
+                }
             }
-            Err(e) => {
-                eprintln!("Failed to parse daemon response: {}", e);
-                return ExitCode::FAILURE;
-            }
+            eprintln!("Unexpected response: no data in STATUS response");
+            ExitCode::FAILURE
+        }
+        Ok(resp) => {
+            eprintln!(
+                "Error: {}",
+                resp.error.unwrap_or_else(|| "unknown error".to_string())
+            );
+            ExitCode::FAILURE
+        }
+        Err(e) => {
+            eprintln!("Failed to parse daemon response: {}", e);
+            ExitCode::FAILURE
         }
     }
-
-    eprintln!("Unexpected daemon response: {}", trimmed);
-    ExitCode::FAILURE
 }
 
-/// Connects to the daemon socket, sends DUMP, and prints raw JSON.
+/// Connects to the daemon socket, sends DUMP as JSON, and prints raw JSON.
 ///
 /// Returns `ExitCode::SUCCESS` if the daemon responds, `ExitCode::FAILURE` if unreachable.
 fn run_dump_command(socket: &PathBuf) -> ExitCode {
@@ -457,7 +518,17 @@ fn run_dump_command(socket: &PathBuf) -> ExitCode {
     let mut writer = stream.try_clone().expect("failed to clone unix stream");
     let mut reader = BufReader::new(stream);
 
-    if writer.write_all(b"DUMP\n").is_err() || writer.flush().is_err() {
+    let cmd = IpcCommand {
+        version: IPC_VERSION,
+        cmd: "DUMP".to_string(),
+        session_id: None,
+        status: None,
+        working_dir: None,
+    };
+    let json = serde_json::to_string(&cmd).expect("failed to serialize DUMP command");
+    let line = format!("{}\n", json);
+
+    if writer.write_all(line.as_bytes()).is_err() || writer.flush().is_err() {
         eprintln!("Error: failed to send DUMP command");
         return ExitCode::FAILURE;
     }
@@ -468,26 +539,42 @@ fn run_dump_command(socket: &PathBuf) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let trimmed = response.trim();
-    if let Some(json_str) = trimmed.strip_prefix("OK ") {
-        // Validate it parses, then print raw JSON
-        match serde_json::from_str::<DaemonDump>(json_str) {
-            Ok(_) => {
-                println!("{}", json_str);
-                return ExitCode::SUCCESS;
+    match serde_json::from_str::<IpcResponse>(response.trim()) {
+        Ok(resp) if resp.ok => {
+            if let Some(data) = resp.data {
+                // Validate it parses as DaemonDump, then print raw JSON
+                match serde_json::from_value::<DaemonDump>(data.clone()) {
+                    Ok(_) => {
+                        println!(
+                            "{}",
+                            serde_json::to_string(&data).expect("failed to re-serialize dump data")
+                        );
+                        return ExitCode::SUCCESS;
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to parse dump data: {}", e);
+                        return ExitCode::FAILURE;
+                    }
+                }
             }
-            Err(e) => {
-                eprintln!("Failed to parse daemon response: {}", e);
-                return ExitCode::FAILURE;
-            }
+            eprintln!("Unexpected response: no data in DUMP response");
+            ExitCode::FAILURE
+        }
+        Ok(resp) => {
+            eprintln!(
+                "Error: {}",
+                resp.error.unwrap_or_else(|| "unknown error".to_string())
+            );
+            ExitCode::FAILURE
+        }
+        Err(e) => {
+            eprintln!("Failed to parse daemon response: {}", e);
+            ExitCode::FAILURE
         }
     }
-
-    eprintln!("Unexpected daemon response: {}", trimmed);
-    ExitCode::FAILURE
 }
 
-/// Connects to daemon, sends RESURRECT, and displays resurrection metadata.
+/// Connects to daemon, sends RESURRECT as JSON, and displays resurrection metadata.
 fn run_resurrect_command(socket: &PathBuf, session_id: &str, quiet: bool) -> ExitCode {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;
@@ -503,8 +590,17 @@ fn run_resurrect_command(socket: &PathBuf, session_id: &str, quiet: bool) -> Exi
     let mut writer = stream.try_clone().expect("failed to clone unix stream");
     let mut reader = BufReader::new(stream);
 
-    let cmd = format!("RESURRECT {}\n", session_id);
-    if writer.write_all(cmd.as_bytes()).is_err() || writer.flush().is_err() {
+    let cmd = IpcCommand {
+        version: IPC_VERSION,
+        cmd: "RESURRECT".to_string(),
+        session_id: Some(session_id.to_string()),
+        status: None,
+        working_dir: None,
+    };
+    let json = serde_json::to_string(&cmd).expect("failed to serialize RESURRECT command");
+    let line = format!("{}\n", json);
+
+    if writer.write_all(line.as_bytes()).is_err() || writer.flush().is_err() {
         eprintln!("Error: failed to send RESURRECT command");
         return ExitCode::FAILURE;
     }
@@ -515,35 +611,36 @@ fn run_resurrect_command(socket: &PathBuf, session_id: &str, quiet: bool) -> Exi
         return ExitCode::FAILURE;
     }
 
-    let trimmed = response.trim();
-    if let Some(json_str) = trimmed.strip_prefix("OK ") {
-        match serde_json::from_str::<serde_json::Value>(json_str) {
-            Ok(info) => {
-                let sid = info["session_id"].as_str().unwrap_or(session_id);
-                let wd = info["working_dir"].as_str().unwrap_or("<unknown>");
-                let cmd = info["command"].as_str().unwrap_or("claude --resume");
+    match serde_json::from_str::<IpcResponse>(response.trim()) {
+        Ok(resp) if resp.ok => {
+            if let Some(data) = resp.data {
+                let sid = data["session_id"].as_str().unwrap_or(session_id);
+                let wd = data["working_dir"].as_str().unwrap_or("<unknown>");
+                let resume_cmd = data["command"].as_str().unwrap_or("claude --resume");
                 if quiet {
-                    println!("cd {} && {}", wd, cmd);
+                    println!("cd {} && {}", wd, resume_cmd);
                 } else {
                     println!("To resurrect session {}:", sid);
                     println!("  cd {}", wd);
-                    println!("  {}", cmd);
+                    println!("  {}", resume_cmd);
                 }
                 return ExitCode::SUCCESS;
             }
-            Err(e) => {
-                eprintln!("Failed to parse daemon response: {}", e);
-                return ExitCode::FAILURE;
-            }
+            eprintln!("Unexpected response: no data in RESURRECT response");
+            ExitCode::FAILURE
+        }
+        Ok(resp) => {
+            eprintln!(
+                "Error: {}",
+                resp.error.unwrap_or_else(|| "unknown error".to_string())
+            );
+            ExitCode::FAILURE
+        }
+        Err(e) => {
+            eprintln!("Failed to parse daemon response: {}", e);
+            ExitCode::FAILURE
         }
     }
-
-    if let Some(err_msg) = trimmed.strip_prefix("ERR ") {
-        eprintln!("Error: {}", err_msg);
-    } else {
-        eprintln!("Unexpected daemon response: {}", trimmed);
-    }
-    ExitCode::FAILURE
 }
 
 /// Returns the complete list of ACD hooks to install.
