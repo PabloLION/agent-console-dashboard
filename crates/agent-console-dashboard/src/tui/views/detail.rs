@@ -57,8 +57,82 @@ pub fn render_detail(
     let inner = block.inner(modal_area);
     frame.render_widget(block, modal_area);
 
-    // Build content lines
-    let mut lines: Vec<Line<'_>> = Vec::new();
+    let lines = build_detail_lines(session, inner.width, history_scroll, now, true);
+
+    let paragraph = Paragraph::new(lines);
+    frame.render_widget(paragraph, inner);
+}
+
+/// Renders the session detail as an inline panel below the session list.
+///
+/// Unlike `render_detail`, this renders into the given `area` directly
+/// without clearing background or centering. Used for the non-modal layout
+/// where detail appears as a fixed section below the session list.
+pub fn render_inline_detail(
+    frame: &mut Frame,
+    session: &Session,
+    area: Rect,
+    history_scroll: usize,
+    now: Instant,
+) {
+    if area.height < 3 || area.width < 20 {
+        return; // Too small to render meaningfully
+    }
+
+    let title = session
+        .working_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&session.id);
+
+    let block = Block::default()
+        .title(format!("── {} ──", title))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let lines = build_detail_lines(session, inner.width, history_scroll, now, false);
+
+    let paragraph = Paragraph::new(lines);
+    frame.render_widget(paragraph, inner);
+}
+
+/// Renders a placeholder message when no session is selected.
+pub fn render_detail_placeholder(frame: &mut Frame, area: Rect) {
+    if area.height < 3 || area.width < 20 {
+        return;
+    }
+
+    let block = Block::default()
+        .title("── Detail ──")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::DarkGray));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let text = Paragraph::new(Line::from(vec![Span::styled(
+        "Select a session to show detail",
+        Style::default().fg(Color::DarkGray),
+    )]));
+    frame.render_widget(text, inner);
+}
+
+/// Builds the content lines for a detail view (shared between modal and inline).
+///
+/// When `show_actions` is true, footer action hints are appended (modal mode).
+/// For inline mode, actions are omitted since keybindings are shown in the
+/// main footer.
+fn build_detail_lines<'a>(
+    session: &'a Session,
+    panel_width: u16,
+    history_scroll: usize,
+    now: Instant,
+    show_actions: bool,
+) -> Vec<Line<'a>> {
+    let mut lines: Vec<Line<'a>> = Vec::new();
 
     // Status line
     let elapsed = now.duration_since(session.since);
@@ -75,7 +149,7 @@ pub fn render_detail(
 
     // Working directory
     let wd = session.working_dir.display().to_string();
-    let max_wd_len = (inner.width as usize).saturating_sub(13);
+    let max_wd_len = (panel_width as usize).saturating_sub(13);
     let wd_display = if wd.len() > max_wd_len {
         format!("…{}", &wd[wd.len().saturating_sub(max_wd_len - 1)..])
     } else {
@@ -87,7 +161,7 @@ pub fn render_detail(
     ]));
 
     // Session ID (truncated)
-    let id_max = (inner.width as usize).saturating_sub(5);
+    let id_max = (panel_width as usize).saturating_sub(5);
     let id_display = if session.id.len() > id_max {
         format!("{}…", &session.id[..id_max.saturating_sub(1)])
     } else {
@@ -152,32 +226,26 @@ pub fn render_detail(
         }
     }
 
-    // Action bar (fill remaining space, push to bottom)
-    let content_height = lines.len() as u16;
-    let remaining = inner.height.saturating_sub(content_height + 1);
-    for _ in 0..remaining {
-        lines.push(Line::raw(""));
-    }
-
-    // Footer actions
-    let mut actions = vec![Span::styled(
-        "[ESC] Back",
-        Style::default().fg(Color::DarkGray),
-    )];
-    if session.status == Status::Closed {
+    if show_actions {
+        // Footer actions (modal mode only)
+        let mut actions = vec![Span::styled(
+            "[ESC] Back",
+            Style::default().fg(Color::DarkGray),
+        )];
+        if session.status == Status::Closed {
+            actions.insert(
+                0,
+                Span::styled("[R]esurrect  ", Style::default().fg(Color::Yellow)),
+            );
+        }
         actions.insert(
-            0,
-            Span::styled("[R]esurrect  ", Style::default().fg(Color::Yellow)),
+            actions.len() - 1,
+            Span::styled("[C]lose  ", Style::default().fg(Color::Red)),
         );
+        lines.push(Line::from(actions));
     }
-    actions.insert(
-        actions.len() - 1,
-        Span::styled("[C]lose  ", Style::default().fg(Color::Red)),
-    );
-    lines.push(Line::from(actions));
 
-    let paragraph = Paragraph::new(lines);
-    frame.render_widget(paragraph, inner);
+    lines
 }
 
 /// Returns the display color for a session status.
@@ -384,5 +452,102 @@ mod tests {
                 render_detail(frame, &session, frame.area(), 3, now);
             })
             .expect("draw should not fail with scroll offset");
+    }
+
+    // --- render_inline_detail tests ---
+
+    #[test]
+    fn test_render_inline_detail_no_panic_normal() {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let session = make_session("test-inline");
+        terminal
+            .draw(|frame| {
+                render_inline_detail(frame, &session, frame.area(), 0, Instant::now());
+            })
+            .expect("draw should not fail");
+    }
+
+    #[test]
+    fn test_render_inline_detail_too_small_no_panic() {
+        let backend = ratatui::backend::TestBackend::new(10, 2);
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let session = make_session("test-tiny-inline");
+        terminal
+            .draw(|frame| {
+                render_inline_detail(frame, &session, frame.area(), 0, Instant::now());
+            })
+            .expect("draw should not fail when too small");
+    }
+
+    #[test]
+    fn test_render_inline_detail_with_history() {
+        let backend = ratatui::backend::TestBackend::new(80, 20);
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut session = make_session("test-inline-history");
+        let now = Instant::now();
+        for i in 0..6 {
+            session.history.push(StateTransition {
+                timestamp: now - Duration::from_secs(60 * (6 - i)),
+                from: Status::Working,
+                to: Status::Attention,
+                duration: Duration::from_secs(30),
+            });
+        }
+        terminal
+            .draw(|frame| {
+                render_inline_detail(frame, &session, frame.area(), 0, now);
+            })
+            .expect("draw should not fail");
+    }
+
+    // --- render_detail_placeholder tests ---
+
+    #[test]
+    fn test_render_detail_placeholder_no_panic() {
+        let backend = ratatui::backend::TestBackend::new(80, 10);
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        terminal
+            .draw(|frame| {
+                render_detail_placeholder(frame, frame.area());
+            })
+            .expect("draw should not fail");
+    }
+
+    #[test]
+    fn test_render_detail_placeholder_too_small_no_panic() {
+        let backend = ratatui::backend::TestBackend::new(10, 2);
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        terminal
+            .draw(|frame| {
+                render_detail_placeholder(frame, frame.area());
+            })
+            .expect("draw should not fail when too small");
+    }
+
+    // --- build_detail_lines tests ---
+
+    #[test]
+    fn test_build_detail_lines_with_actions() {
+        let session = make_session("test-lines");
+        let lines = build_detail_lines(&session, 60, 0, Instant::now(), true);
+        // Should contain status, dir, id, quota, blank, history header, history content, actions
+        assert!(
+            lines.len() >= 7,
+            "expected at least 7 lines, got {}",
+            lines.len()
+        );
+    }
+
+    #[test]
+    fn test_build_detail_lines_without_actions() {
+        let session = make_session("test-lines-no-actions");
+        let lines_with = build_detail_lines(&session, 60, 0, Instant::now(), true);
+        let lines_without = build_detail_lines(&session, 60, 0, Instant::now(), false);
+        // Without actions should have fewer lines (no action bar)
+        assert!(
+            lines_without.len() < lines_with.len(),
+            "inline mode should have fewer lines than modal"
+        );
     }
 }

@@ -3,8 +3,9 @@
 //! Provides the top-level `render_dashboard` function that composes
 //! the header, session list, and footer into a cohesive layout.
 
-use crate::tui::app::App;
+use crate::tui::app::{App, View};
 use crate::tui::views::dashboard::render_session_list;
+use crate::tui::views::detail::{render_detail_placeholder, render_inline_detail};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
@@ -12,6 +13,7 @@ use ratatui::{
     widgets::Paragraph,
     Frame,
 };
+use std::time::Instant;
 
 /// Header text displayed at the top of the dashboard.
 const HEADER_TEXT: &str = "Agent Console Dashboard";
@@ -19,23 +21,42 @@ const HEADER_TEXT: &str = "Agent Console Dashboard";
 /// Footer text showing available keybindings.
 const FOOTER_TEXT: &str = "[j/k] Navigate  [Enter] Details  [r] Resurrect  [q] Quit";
 
-/// Renders the full dashboard layout: header, session list, and footer.
+/// Renders the full dashboard layout: header, session list, optional detail, and footer.
 ///
-/// The layout is split vertically into three regions:
+/// When the detail view is active, the layout splits into four regions:
 /// - Header: 1 line showing the application title
-/// - Session list: flexible height showing all sessions
+/// - Session list: flexible height (min 3 rows) showing all sessions
+/// - Detail panel: fixed height showing selected session detail
 /// - Footer: 1 line showing keybinding hints
+///
+/// When in dashboard-only mode, the detail panel is omitted and the session
+/// list gets all available vertical space.
 pub fn render_dashboard(frame: &mut Frame, app: &App) {
     let area = frame.area();
+    let now = Instant::now();
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1), // header
-            Constraint::Min(1),    // session list
-            Constraint::Length(1), // footer
-        ])
-        .split(area);
+    let detail_active = matches!(app.view, View::Detail { .. });
+
+    let chunks = if detail_active {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),  // header
+                Constraint::Min(3),     // session list (minimum 3 rows)
+                Constraint::Length(12), // detail panel
+                Constraint::Length(1),  // footer
+            ])
+            .split(area)
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1), // header
+                Constraint::Min(1),    // session list
+                Constraint::Length(1), // footer
+            ])
+            .split(area)
+    };
 
     // Header
     let header = Paragraph::new(Line::from(vec![Span::styled(
@@ -53,12 +74,28 @@ pub fn render_dashboard(frame: &mut Frame, app: &App) {
         area.width,
     );
 
+    // Detail panel (only when detail view is active)
+    if detail_active {
+        if let View::Detail {
+            session_index,
+            history_scroll,
+        } = app.view
+        {
+            if let Some(session) = app.sessions.get(session_index) {
+                render_inline_detail(frame, session, chunks[2], history_scroll, now);
+            } else {
+                render_detail_placeholder(frame, chunks[2]);
+            }
+        }
+    }
+
     // Footer
+    let footer_idx = if detail_active { 3 } else { 2 };
     let footer = Paragraph::new(Line::from(vec![Span::styled(
         FOOTER_TEXT,
         Style::default().fg(Color::DarkGray),
     )]));
-    frame.render_widget(footer, chunks[2]);
+    frame.render_widget(footer, chunks[footer_idx]);
 }
 
 #[cfg(test)]
@@ -174,5 +211,56 @@ mod tests {
         assert!(FOOTER_TEXT.contains("[q] Quit"));
         assert!(FOOTER_TEXT.contains("[r] Resurrect"));
         assert!(FOOTER_TEXT.contains("[Enter] Details"));
+    }
+
+    // --- Detail view (inline panel) tests ---
+
+    #[test]
+    fn test_render_dashboard_with_detail_view_no_panic() {
+        let backend = ratatui::backend::TestBackend::new(80, 30);
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut app = make_app_with_sessions(5);
+        app.selected_index = Some(1);
+        app.open_detail(1);
+        terminal
+            .draw(|frame| render_dashboard(frame, &app))
+            .expect("draw should not fail with detail view active");
+    }
+
+    #[test]
+    fn test_render_dashboard_detail_view_narrow_no_panic() {
+        let backend = ratatui::backend::TestBackend::new(30, 20);
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut app = make_app_with_sessions(3);
+        app.open_detail(0);
+        terminal
+            .draw(|frame| render_dashboard(frame, &app))
+            .expect("draw should not fail with detail view on narrow terminal");
+    }
+
+    #[test]
+    fn test_render_dashboard_detail_view_minimal_height_no_panic() {
+        let backend = ratatui::backend::TestBackend::new(80, 5);
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut app = make_app_with_sessions(3);
+        app.open_detail(0);
+        terminal
+            .draw(|frame| render_dashboard(frame, &app))
+            .expect("draw should not fail with detail on minimal height");
+    }
+
+    #[test]
+    fn test_render_dashboard_detail_view_out_of_bounds_session_no_panic() {
+        let backend = ratatui::backend::TestBackend::new(80, 30);
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let mut app = make_app_with_sessions(2);
+        // Force detail view with out-of-bounds index to test placeholder path
+        app.view = View::Detail {
+            session_index: 99,
+            history_scroll: 0,
+        };
+        terminal
+            .draw(|frame| render_dashboard(frame, &app))
+            .expect("draw should not fail with out-of-bounds detail index");
     }
 }

@@ -5,7 +5,6 @@
 use crate::tui::event::{handle_key_event, Action, Event, EventHandler};
 use crate::tui::subscription::{subscribe_to_daemon, DaemonMessage};
 use crate::tui::ui::render_dashboard;
-use crate::tui::views::detail::render_detail;
 use crate::{AgentType, Session, Status};
 use claude_usage::UsageData;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -166,13 +165,11 @@ impl App {
 
     /// Handles a mouse event and returns the appropriate action.
     ///
-    /// Only processes mouse events when in Dashboard view.
+    /// Processes mouse events in both Dashboard and Detail views since the
+    /// detail panel is rendered inline (not as a modal overlay). Left click
+    /// selects a session and immediately opens the inline detail panel.
+    /// Double-click fires a configurable hook (see `double_click_hook`).
     fn handle_mouse_event(&mut self, mouse: MouseEvent) -> Action {
-        // Only handle mouse events in Dashboard view
-        if self.view != View::Dashboard {
-            return Action::None;
-        }
-
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let now = Instant::now();
@@ -191,17 +188,27 @@ impl App {
                         self.last_click = None;
                         return Action::OpenDetail(idx);
                     }
+                    // Single click: select + open inline detail
+                    self.open_detail(idx);
                 }
 
                 self.last_click = Some((now, mouse.row, mouse.column));
                 Action::None
             }
             MouseEventKind::ScrollDown => {
-                self.select_next();
+                if matches!(self.view, View::Detail { .. }) {
+                    self.scroll_history_down();
+                } else {
+                    self.select_next();
+                }
                 Action::None
             }
             MouseEventKind::ScrollUp => {
-                self.select_previous();
+                if matches!(self.view, View::Detail { .. }) {
+                    self.scroll_history_up();
+                } else {
+                    self.select_previous();
+                }
                 Action::None
             }
             _ => Action::None,
@@ -295,19 +302,8 @@ impl App {
             }
 
             // Render
-            let now = Instant::now();
             terminal.draw(|frame| {
                 render_dashboard(frame, self);
-                // Render detail overlay on top if active
-                if let View::Detail {
-                    session_index,
-                    history_scroll,
-                } = self.view
-                {
-                    if let Some(session) = self.sessions.get(session_index) {
-                        render_detail(frame, session, frame.area(), history_scroll, now);
-                    }
-                }
             })?;
 
             // Handle events
@@ -726,13 +722,21 @@ mod tests {
     }
 
     #[test]
-    fn test_mouse_left_click_selects_session() {
+    fn test_mouse_left_click_selects_and_opens_detail() {
         let mut app = make_app_with_sessions(5);
         app.selected_index = Some(0);
         let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 4, 10);
         let action = app.handle_mouse_event(mouse);
         assert_eq!(action, Action::None);
         assert_eq!(app.selected_index, Some(2));
+        // Single click should also open inline detail
+        assert_eq!(
+            app.view,
+            View::Detail {
+                session_index: 2,
+                history_scroll: 0,
+            }
+        );
     }
 
     #[test]
@@ -746,14 +750,21 @@ mod tests {
     }
 
     #[test]
-    fn test_mouse_double_click_opens_detail() {
+    fn test_mouse_double_click_returns_open_detail_action() {
         let mut app = make_app_with_sessions(3);
-        // First click
+        // First click: selects and opens inline detail
         let mouse1 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
         let action1 = app.handle_mouse_event(mouse1);
         assert_eq!(action1, Action::None);
         assert_eq!(app.selected_index, Some(1));
-        assert_eq!(app.view, View::Dashboard);
+        // Single click now opens inline detail
+        assert_eq!(
+            app.view,
+            View::Detail {
+                session_index: 1,
+                history_scroll: 0,
+            }
+        );
 
         // Second click in quick succession at same position
         let mouse2 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
@@ -812,22 +823,50 @@ mod tests {
     }
 
     #[test]
-    fn test_mouse_events_ignored_in_detail_view() {
+    fn test_mouse_click_in_detail_view_reselects() {
         let mut app = make_app_with_sessions(3);
         app.open_detail(0);
-        app.selected_index = Some(1);
+        app.selected_index = Some(0);
 
-        // Try left click
+        // Click on a different session row while detail is open
         let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
         let action = app.handle_mouse_event(mouse);
         assert_eq!(action, Action::None);
-        assert_eq!(app.selected_index, Some(1)); // No change
+        // Should have selected new session and opened detail for it
+        assert_eq!(app.selected_index, Some(1));
+        assert_eq!(
+            app.view,
+            View::Detail {
+                session_index: 1,
+                history_scroll: 0,
+            }
+        );
+    }
 
-        // Try scroll
+    #[test]
+    fn test_mouse_scroll_in_detail_view_scrolls_history() {
+        let mut app = make_app_with_sessions(1);
+        for _ in 0..10 {
+            app.sessions[0].history.push(crate::StateTransition {
+                timestamp: std::time::Instant::now(),
+                from: crate::Status::Working,
+                to: crate::Status::Attention,
+                duration: std::time::Duration::from_secs(1),
+            });
+        }
+        app.open_detail(0);
+
+        // Scroll down should scroll history, not select next session
         let scroll = make_mouse_event(MouseEventKind::ScrollDown, 5, 10);
         let action = app.handle_mouse_event(scroll);
         assert_eq!(action, Action::None);
-        assert_eq!(app.selected_index, Some(1)); // No change
+        assert_eq!(
+            app.view,
+            View::Detail {
+                session_index: 0,
+                history_scroll: 1,
+            }
+        );
     }
 
     #[test]
