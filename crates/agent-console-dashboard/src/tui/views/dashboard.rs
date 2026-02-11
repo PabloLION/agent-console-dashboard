@@ -89,7 +89,7 @@ fn compute_directory_display_names(
     // Helper: extract components as strings from a path
     fn path_components(path: &Path) -> Vec<String> {
         path.components()
-            .filter_map(|c| c.as_os_str().to_str().map(String::from))
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
             .collect()
     }
 
@@ -1158,19 +1158,117 @@ mod tests {
         let s2 = make_test_session("s2", Some(PathBuf::from("/work/alice/project")));
         let sessions = vec![s1, s2];
         let names = compute_directory_display_names(&sessions);
+
+        // Verify they are different
         assert_ne!(
             names.get("s1"),
             names.get("s2"),
             "Colliding parent/basename should be disambiguated"
         );
-        // Should add grandparent level
-        assert!(names
-            .get("s1")
-            .map(|n| n.contains("home") || n.contains("alice"))
-            .unwrap_or(false));
-        assert!(names
-            .get("s2")
-            .map(|n| n.contains("work") || n.contains("alice"))
-            .unwrap_or(false));
+
+        // Verify exact output values with grandparent level
+        assert_eq!(
+            names.get("s1"),
+            Some(&"home/alice/project".to_string()),
+            "s1 should show home/alice/project"
+        );
+        assert_eq!(
+            names.get("s2"),
+            Some(&"work/alice/project".to_string()),
+            "s2 should show work/alice/project"
+        );
+    }
+
+    #[test]
+    fn test_disambiguation_three_level_collision() {
+        // Three sessions sharing basename AND 2 parent levels
+        let s1 = make_test_session("s1", Some(PathBuf::from("/a/shared/parent/project")));
+        let s2 = make_test_session("s2", Some(PathBuf::from("/b/shared/parent/project")));
+        let sessions = vec![s1, s2];
+        let names = compute_directory_display_names(&sessions);
+
+        // Should disambiguate with 3-level path
+        assert_eq!(
+            names.get("s1"),
+            Some(&"a/shared/parent/project".to_string()),
+            "s1 should show a/shared/parent/project"
+        );
+        assert_eq!(
+            names.get("s2"),
+            Some(&"b/shared/parent/project".to_string()),
+            "s2 should show b/shared/parent/project"
+        );
+    }
+
+    #[test]
+    fn test_disambiguation_single_component_path() {
+        // Path with only root + one component (no parent to add)
+        let s1 = make_test_session("s1", Some(PathBuf::from("/project")));
+        let s2 = make_test_session("s2", Some(PathBuf::from("/other")));
+        let sessions = vec![s1, s2];
+        let names = compute_directory_display_names(&sessions);
+
+        // Different basenames, no collision - should show basenames
+        assert_eq!(
+            names.get("s1"),
+            Some(&"project".to_string()),
+            "s1 should show project"
+        );
+        assert_eq!(
+            names.get("s2"),
+            Some(&"other".to_string()),
+            "s2 should show other"
+        );
+    }
+
+    #[test]
+    fn test_disambiguation_identical_paths() {
+        // Two sessions with exact same path - must handle gracefully
+        let s1 = make_test_session("s1", Some(PathBuf::from("/home/user/project")));
+        let s2 = make_test_session("s2", Some(PathBuf::from("/home/user/project")));
+        let sessions = vec![s1, s2];
+        let names = compute_directory_display_names(&sessions);
+
+        // Both should show the same display name (fall back to full path)
+        let name1 = names.get("s1").expect("s1 should have a display name");
+        let name2 = names.get("s2").expect("s2 should have a display name");
+        assert_eq!(
+            name1, name2,
+            "Identical paths should produce identical display names"
+        );
+        // Should be the full path as fallback
+        assert_eq!(
+            name1, "/home/user/project",
+            "Identical paths should fall back to full path"
+        );
+    }
+
+    #[test]
+    fn test_disambiguation_none_mixed_with_collisions() {
+        // None session should not interfere with real path disambiguation
+        let s1 = make_test_session("s1", None);
+        let s2 = make_test_session("s2", Some(PathBuf::from("/work/project")));
+        let s3 = make_test_session("s3", Some(PathBuf::from("/home/project")));
+        let sessions = vec![s1, s2, s3];
+        let names = compute_directory_display_names(&sessions);
+
+        // s1 (None) should show <error>
+        assert_eq!(
+            names.get("s1"),
+            Some(&"<error>".to_string()),
+            "None path should show <error>"
+        );
+
+        // s2 and s3 share basename "project" and should be disambiguated
+        assert_eq!(
+            names.get("s2"),
+            Some(&"work/project".to_string()),
+            "s2 should show work/project"
+        );
+        assert_eq!(
+            names.get("s3"),
+            Some(&"home/project".to_string()),
+            "s3 should show home/project"
+        );
     }
 }
