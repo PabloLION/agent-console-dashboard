@@ -79,22 +79,10 @@ enum Commands {
         socket: PathBuf,
     },
 
-    /// Start the daemon process
+    /// Daemon management
     Daemon {
-        /// Run as a background daemon (detached from terminal)
-        #[arg(long)]
-        daemonize: bool,
-
-        /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
-        socket: PathBuf,
-    },
-
-    /// Stop the daemon process
-    DaemonStop {
-        /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
-        socket: PathBuf,
+        #[command(subcommand)]
+        command: DaemonCommands,
     },
 
     /// Handle Claude Code hook events (reads JSON from stdin)
@@ -111,6 +99,29 @@ enum Commands {
 
     /// Remove ACD hooks from Claude Code settings
     Uninstall,
+}
+
+/// Daemon management subcommands
+#[derive(Subcommand)]
+enum DaemonCommands {
+    /// Start the daemon
+    Start {
+        /// Socket path for IPC communication
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
+        socket: PathBuf,
+        /// Run daemon in background (detach from terminal)
+        #[arg(short, long)]
+        detach: bool,
+    },
+    /// Stop the running daemon
+    Stop {
+        /// Socket path for IPC communication
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
+        socket: PathBuf,
+        /// Stop without confirmation prompt
+        #[arg(short, long)]
+        force: bool,
+    },
 }
 
 /// Actions for the `config` subcommand.
@@ -236,22 +247,30 @@ fn main() -> ExitCode {
         } => {
             return run_set_command(&socket, &session_id, &status, working_dir.as_deref());
         }
-        Commands::Daemon { daemonize, socket } => {
-            // Create DaemonConfig from CLI args
-            let config = DaemonConfig::new(socket, daemonize);
+        Commands::Daemon { command } => match command {
+            DaemonCommands::Start { socket, detach } => {
+                // Check if daemon is already running
+                if is_daemon_running(&socket) {
+                    println!("Daemon already running on {}", socket.display());
+                    return ExitCode::SUCCESS;
+                }
 
-            // Run the daemon - this will:
-            // 1. Call daemonize_process() if --daemonize flag set
-            // 2. Start Tokio runtime AFTER daemonization
-            // 3. Wait for shutdown signal (SIGINT/SIGTERM)
-            if let Err(e) = run_daemon(config) {
-                eprintln!("Error: {}", e);
-                return ExitCode::FAILURE;
+                // Create DaemonConfig from CLI args
+                let config = DaemonConfig::new(socket, detach);
+
+                // Run the daemon - this will:
+                // 1. Call daemonize_process() if --detach flag set
+                // 2. Start Tokio runtime AFTER daemonization
+                // 3. Wait for shutdown signal (SIGINT/SIGTERM)
+                if let Err(e) = run_daemon(config) {
+                    eprintln!("Error: {}", e);
+                    return ExitCode::FAILURE;
+                }
             }
-        }
-        Commands::DaemonStop { socket } => {
-            return run_daemon_stop_command(&socket);
-        }
+            DaemonCommands::Stop { socket, force } => {
+                return run_daemon_stop_command(&socket, force);
+            }
+        },
         Commands::ClaudeHook { status, socket } => {
             // Parse stdin synchronously before creating async runtime
             let input: HookInput = match serde_json::from_reader(std::io::stdin()) {
@@ -277,8 +296,18 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Checks if daemon is already running by attempting to connect to the socket.
+///
+/// Returns `true` if the socket exists and accepts connections, `false` otherwise.
+fn is_daemon_running(socket: &std::path::Path) -> bool {
+    use std::os::unix::net::UnixStream;
+    UnixStream::connect(socket).is_ok()
+}
+
 /// Connects to daemon, sends STOP command, handles confirmation, and triggers shutdown.
-fn run_daemon_stop_command(socket: &std::path::Path) -> ExitCode {
+///
+/// If `force` is true, skips the confirmation prompt and stops the daemon immediately.
+fn run_daemon_stop_command(socket: &std::path::Path, force: bool) -> ExitCode {
     use std::io::{self, BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;
 
@@ -326,18 +355,26 @@ fn run_daemon_stop_command(socket: &std::path::Path) -> ExitCode {
                             .get("active_count")
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0) as usize;
-                        println!("Warning: {} active session(s) are running.", count);
-                        println!("Stopping the daemon will disconnect the TUI but Claude Code sessions will continue.");
-                        print!("Stop daemon anyway? (y/N): ");
-                        io::stdout().flush().expect("failed to flush stdout");
 
-                        let mut input = String::new();
-                        if io::stdin().read_line(&mut input).is_err() {
-                            eprintln!("Error: failed to read user input");
-                            return ExitCode::FAILURE;
-                        }
+                        let confirmed = if force {
+                            // Force mode: skip prompt and auto-confirm
+                            true
+                        } else {
+                            // Interactive mode: prompt user
+                            println!("Warning: {} active session(s) are running.", count);
+                            println!("Stopping the daemon will disconnect the TUI but Claude Code sessions will continue.");
+                            print!("Stop daemon anyway? (y/N): ");
+                            io::stdout().flush().expect("failed to flush stdout");
 
-                        let confirmed = input.trim().eq_ignore_ascii_case("y");
+                            let mut input = String::new();
+                            if io::stdin().read_line(&mut input).is_err() {
+                                eprintln!("Error: failed to read user input");
+                                return ExitCode::FAILURE;
+                            }
+
+                            input.trim().eq_ignore_ascii_case("y")
+                        };
+
                         if !confirmed {
                             println!("Cancelled.");
                             return ExitCode::SUCCESS;
@@ -490,6 +527,41 @@ struct HookInput {
     cwd: String,
 }
 
+/// Validates HookInput fields. Returns warnings for invalid fields.
+/// Does not reject input — Claude Code should not be blocked by validation.
+fn validate_hook_input(input: &HookInput) -> Vec<String> {
+    let mut warnings = Vec::new();
+
+    // session_id: 36 chars, hex + dashes only
+    // TODO(acd-rhr): Consider full UUID v4 validation
+    if input.session_id.len() != 36 {
+        warnings.push(format!(
+            "session_id length is {} (expected 36): {}",
+            input.session_id.len(),
+            input.session_id
+        ));
+    } else if !input
+        .session_id
+        .chars()
+        .all(|c| c.is_ascii_hexdigit() || c == '-')
+    {
+        warnings.push(format!(
+            "session_id contains invalid characters: {}",
+            input.session_id
+        ));
+    }
+
+    // cwd: non-empty absolute path
+    // TODO(acd-8vx): Consider validating path exists
+    if input.cwd.is_empty() {
+        warnings.push("cwd is empty".to_string());
+    } else if !input.cwd.starts_with('/') {
+        warnings.push(format!("cwd is not an absolute path: {}", input.cwd));
+    }
+
+    warnings
+}
+
 /// Connects to daemon via lazy-start (spawning if needed), sends SET command as JSON.
 ///
 /// Exit codes per Claude Code hook spec:
@@ -504,6 +576,11 @@ async fn run_claude_hook_async(
     input: &HookInput,
 ) -> ExitCode {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    let warnings = validate_hook_input(input);
+    for w in &warnings {
+        eprintln!("acd claude-hook: warning: {}", w);
+    }
 
     let client = match connect_with_lazy_start(socket).await {
         Ok(c) => c,
@@ -842,6 +919,11 @@ fn acd_hook_definitions() -> Vec<(claude_hooks::HookEvent, &'static str, Option<
             "acd claude-hook attention",
             Some("permission_prompt".to_string()),
         ),
+        // PreToolUse + PostToolUse bridge the gap when Claude resumes after
+        // permission_prompt or elicitation_dialog. Without these, status stays
+        // "attention" while Claude is actively working.
+        (HookEvent::PreToolUse, "acd claude-hook working", None),
+        (HookEvent::PostToolUse, "acd claude-hook working", None),
     ]
 }
 
@@ -1002,18 +1084,20 @@ mod tests {
     }
 
     #[test]
-    fn test_daemon_subcommand_exists() {
-        // Verify the daemon subcommand can be parsed
+    fn test_daemon_without_subcommand_fails() {
+        // Verify bare daemon command requires a subcommand
         let result = Cli::try_parse_from(["agent-console-dashboard", "daemon"]);
-        assert!(result.is_ok());
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_default_socket_path() {
         // Verify default socket path is /tmp/agent-console-dashboard.sock
-        let cli = Cli::try_parse_from(["agent-console-dashboard", "daemon"]).unwrap();
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "daemon", "start"]).unwrap();
         match cli.command {
-            Commands::Daemon { socket, .. } => {
+            Commands::Daemon {
+                command: DaemonCommands::Start { socket, .. },
+            } => {
                 assert_eq!(socket, PathBuf::from("/tmp/agent-console-dashboard.sock"));
             }
             _ => panic!("unexpected command variant"),
@@ -1026,12 +1110,15 @@ mod tests {
         let cli = Cli::try_parse_from([
             "agent-console-dashboard",
             "daemon",
+            "start",
             "--socket",
             "/custom/path.sock",
         ])
         .unwrap();
         match cli.command {
-            Commands::Daemon { socket, .. } => {
+            Commands::Daemon {
+                command: DaemonCommands::Start { socket, .. },
+            } => {
                 assert_eq!(socket, PathBuf::from("/custom/path.sock"));
             }
             _ => panic!("unexpected command variant"),
@@ -1039,47 +1126,55 @@ mod tests {
     }
 
     #[test]
-    fn test_daemonize_flag_default_false() {
-        // Verify daemonize flag defaults to false
-        let cli = Cli::try_parse_from(["agent-console-dashboard", "daemon"]).unwrap();
+    fn test_detach_flag_default_false() {
+        // Verify detach flag defaults to false
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "daemon", "start"]).unwrap();
         match cli.command {
-            Commands::Daemon { daemonize, .. } => {
-                assert!(!daemonize);
+            Commands::Daemon {
+                command: DaemonCommands::Start { detach, .. },
+            } => {
+                assert!(!detach);
             }
             _ => panic!("unexpected command variant"),
         }
     }
 
     #[test]
-    fn test_daemonize_flag_true() {
-        // Verify daemonize flag can be set to true
-        let cli =
-            Cli::try_parse_from(["agent-console-dashboard", "daemon", "--daemonize"]).unwrap();
+    fn test_detach_flag_true() {
+        // Verify detach flag can be set to true
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "daemon", "start", "--detach"])
+            .unwrap();
         match cli.command {
-            Commands::Daemon { daemonize, .. } => {
-                assert!(daemonize);
+            Commands::Daemon {
+                command: DaemonCommands::Start { detach, .. },
+            } => {
+                assert!(detach);
             }
             _ => panic!("unexpected command variant"),
         }
     }
 
     #[test]
-    fn test_daemon_help_contains_expected_options() {
-        // Verify that the daemon subcommand help contains --daemonize and --socket
+    fn test_daemon_start_help_contains_expected_options() {
+        // Verify that daemon start subcommand help contains --detach and --socket
         let cmd = Cli::command();
         let daemon_cmd = cmd
             .get_subcommands()
             .find(|sc| sc.get_name() == "daemon")
             .expect("daemon subcommand should exist");
+        let start_cmd = daemon_cmd
+            .get_subcommands()
+            .find(|sc| sc.get_name() == "start")
+            .expect("daemon start subcommand should exist");
 
-        // Check that --daemonize option exists
-        let daemonize_arg = daemon_cmd
+        // Check that --detach option exists
+        let detach_arg = start_cmd
             .get_arguments()
-            .find(|arg| arg.get_id() == "daemonize");
-        assert!(daemonize_arg.is_some(), "--daemonize flag should exist");
+            .find(|arg| arg.get_id() == "detach");
+        assert!(detach_arg.is_some(), "--detach flag should exist");
 
         // Check that --socket option exists
-        let socket_arg = daemon_cmd
+        let socket_arg = start_cmd
             .get_arguments()
             .find(|arg| arg.get_id() == "socket");
         assert!(socket_arg.is_some(), "--socket flag should exist");
@@ -1091,14 +1186,17 @@ mod tests {
         let cli = Cli::try_parse_from([
             "agent-console-dashboard",
             "daemon",
-            "--daemonize",
+            "start",
+            "--detach",
             "--socket",
             "/var/run/my-daemon.sock",
         ])
         .unwrap();
         match cli.command {
-            Commands::Daemon { daemonize, socket } => {
-                assert!(daemonize);
+            Commands::Daemon {
+                command: DaemonCommands::Start { detach, socket },
+            } => {
+                assert!(detach);
                 assert_eq!(socket, PathBuf::from("/var/run/my-daemon.sock"));
             }
             _ => panic!("unexpected command variant"),
@@ -1107,18 +1205,21 @@ mod tests {
 
     #[test]
     fn test_flag_order_independence() {
-        // Verify flags can be specified in any order (--socket before --daemonize)
+        // Verify flags can be specified in any order (--socket before --detach)
         let cli = Cli::try_parse_from([
             "agent-console-dashboard",
             "daemon",
+            "start",
             "--socket",
             "/custom/path.sock",
-            "--daemonize",
+            "--detach",
         ])
         .unwrap();
         match cli.command {
-            Commands::Daemon { daemonize, socket } => {
-                assert!(daemonize);
+            Commands::Daemon {
+                command: DaemonCommands::Start { detach, socket },
+            } => {
+                assert!(detach);
                 assert_eq!(socket, PathBuf::from("/custom/path.sock"));
             }
             _ => panic!("unexpected command variant"),
@@ -1142,7 +1243,8 @@ mod tests {
     #[test]
     fn test_socket_requires_value() {
         // Verify --socket flag requires a value
-        let result = Cli::try_parse_from(["agent-console-dashboard", "daemon", "--socket"]);
+        let result =
+            Cli::try_parse_from(["agent-console-dashboard", "daemon", "start", "--socket"]);
         assert!(result.is_err());
     }
 
@@ -1152,12 +1254,15 @@ mod tests {
         let cli = Cli::try_parse_from([
             "agent-console-dashboard",
             "daemon",
+            "start",
             "--socket",
             "/path/with spaces/socket.sock",
         ])
         .unwrap();
         match cli.command {
-            Commands::Daemon { socket, .. } => {
+            Commands::Daemon {
+                command: DaemonCommands::Start { socket, .. },
+            } => {
                 assert_eq!(socket, PathBuf::from("/path/with spaces/socket.sock"));
             }
             _ => panic!("unexpected command variant"),
@@ -1170,12 +1275,15 @@ mod tests {
         let cli = Cli::try_parse_from([
             "agent-console-dashboard",
             "daemon",
+            "start",
             "--socket",
             "./local.sock",
         ])
         .unwrap();
         match cli.command {
-            Commands::Daemon { socket, .. } => {
+            Commands::Daemon {
+                command: DaemonCommands::Start { socket, .. },
+            } => {
                 assert_eq!(socket, PathBuf::from("./local.sock"));
             }
             _ => panic!("unexpected command variant"),
@@ -1436,9 +1544,9 @@ mod tests {
     }
 
     #[test]
-    fn test_acd_hook_definitions_has_six_entries() {
+    fn test_acd_hook_definitions_has_eight_entries() {
         let defs = acd_hook_definitions();
-        assert_eq!(defs.len(), 6, "should define 6 hooks");
+        assert_eq!(defs.len(), 8, "should define 8 hooks");
     }
 
     #[test]
@@ -1471,6 +1579,19 @@ mod tests {
     }
 
     #[test]
+    fn test_acd_hook_definitions_includes_pre_and_post_tool_use() {
+        let defs = acd_hook_definitions();
+        let has_pre_tool_use = defs
+            .iter()
+            .any(|(event, _, _)| *event == claude_hooks::HookEvent::PreToolUse);
+        let has_post_tool_use = defs
+            .iter()
+            .any(|(event, _, _)| *event == claude_hooks::HookEvent::PostToolUse);
+        assert!(has_pre_tool_use, "should have PreToolUse hook");
+        assert!(has_post_tool_use, "should have PostToolUse hook");
+    }
+
+    #[test]
     fn test_claude_hook_question_parses() {
         let cli = Cli::try_parse_from(["agent-console-dashboard", "claude-hook", "question"])
             .expect("claude-hook question should parse");
@@ -1492,5 +1613,103 @@ mod tests {
             }
             _ => panic!("expected ClaudeHook command"),
         }
+    }
+
+    #[test]
+    fn test_validate_hook_input_valid() {
+        let input = HookInput {
+            session_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            cwd: "/home/user/project".to_string(),
+        };
+        let warnings = validate_hook_input(&input);
+        assert!(warnings.is_empty(), "valid input should have no warnings");
+    }
+
+    #[test]
+    fn test_validate_hook_input_invalid_session_id_length() {
+        let input = HookInput {
+            session_id: "short".to_string(),
+            cwd: "/home/user/project".to_string(),
+        };
+        let warnings = validate_hook_input(&input);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("session_id length is 5"));
+        assert!(warnings[0].contains("(expected 36)"));
+    }
+
+    #[test]
+    fn test_validate_hook_input_invalid_session_id_chars() {
+        let input = HookInput {
+            session_id: "550e8400-e29b-41d4-a716-44665544000G".to_string(),
+            cwd: "/home/user/project".to_string(),
+        };
+        let warnings = validate_hook_input(&input);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("session_id contains invalid characters"));
+    }
+
+    #[test]
+    fn test_validate_hook_input_empty_cwd() {
+        let input = HookInput {
+            session_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            cwd: "".to_string(),
+        };
+        let warnings = validate_hook_input(&input);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("cwd is empty"));
+    }
+
+    #[test]
+    fn test_validate_hook_input_relative_cwd() {
+        let input = HookInput {
+            session_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            cwd: "relative/path".to_string(),
+        };
+        let warnings = validate_hook_input(&input);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("cwd is not an absolute path"));
+        assert!(warnings[0].contains("relative/path"));
+    }
+
+    #[test]
+    fn test_validate_hook_input_multiple_invalid_fields() {
+        let input = HookInput {
+            session_id: "short".to_string(),
+            cwd: "relative".to_string(),
+        };
+        let warnings = validate_hook_input(&input);
+        assert_eq!(warnings.len(), 2);
+        assert!(warnings.iter().any(|w| w.contains("session_id")));
+        assert!(warnings.iter().any(|w| w.contains("cwd")));
+    }
+
+    #[test]
+    fn test_validate_hook_input_uppercase_hex_valid() {
+        let input = HookInput {
+            session_id: "550E8400-E29B-41D4-A716-446655440000".to_string(),
+            cwd: "/home/user/project".to_string(),
+        };
+        let warnings = validate_hook_input(&input);
+        assert!(warnings.is_empty(), "uppercase hex should be valid");
+    }
+
+    #[test]
+    fn test_validate_hook_input_all_dashes_weird_but_passes() {
+        let input = HookInput {
+            session_id: "------------------------------------".to_string(),
+            cwd: "/home/user/project".to_string(),
+        };
+        let warnings = validate_hook_input(&input);
+        assert!(warnings.is_empty(), "36 dashes passes charset validation");
+    }
+
+    #[test]
+    fn test_validate_hook_input_cwd_with_spaces_valid() {
+        let input = HookInput {
+            session_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            cwd: "/home/user/my project".to_string(),
+        };
+        let warnings = validate_hook_input(&input);
+        assert!(warnings.is_empty(), "absolute path with spaces is valid");
     }
 }

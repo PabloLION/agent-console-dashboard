@@ -1,24 +1,10 @@
 #!/bin/sh
 #
 # Pre-commit hook: checks staged files before committing.
-# Chains to global hooks first, then runs project-specific checks.
 #
 # Install: ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit
 
 set -e
-
-# ---------------------------------------------------------------------------
-# Chain to global hooks (if configured)
-# ---------------------------------------------------------------------------
-
-GLOBAL_HOOKS_DIR=$(git config --global core.hooksPath 2>/dev/null || true)
-if [ -n "$GLOBAL_HOOKS_DIR" ]; then
-    HOOK_NAME=$(basename "$0")
-    GLOBAL_HOOK="$GLOBAL_HOOKS_DIR/$HOOK_NAME"
-    if [ -x "$GLOBAL_HOOK" ]; then
-        "$GLOBAL_HOOK" "$@"
-    fi
-fi
 
 # ---------------------------------------------------------------------------
 # Markdown checks

@@ -100,6 +100,14 @@ See [Q94](../archive/planning/6-open-questions.md),
 +-------------------------------------------------------------------+
 ```
 
+### Column layout
+
+Full TUI columns: directory (flex), session_id (40), status (14), elapsed (16).
+Directory fills remaining width after fixed columns. Status width is 14 (even
+number: max label "attention" is 9 chars + 5 padding). Session ID is 40 (UUID 36
+chars + 4 padding). Elapsed is 16 (HH:MM:SS 8 + 8 padding). Narrow mode (< 40
+cols) shows only symbol + session ID, no columnar layout.
+
 ### Responsive behavior
 
 Sessions display horizontally by default (separated by `|`). Vertical layout is
@@ -196,3 +204,4 @@ as last resort (`base/p/w/my-app`). See
 | Focus on terminal refocus | Restore previous selection                | [Q102](../archive/planning/6-open-questions.md) |
 | Name conflicts            | Parent folder or session ID suffix        | [Q41](../archive/planning/6-open-questions.md)  |
 | Long name truncation      | Abbreviate parents, truncate middle       | [Q42](../archive/planning/6-open-questions.md)  |
+| Column widths (Full TUI)  | dir=flex, id=40, status=14, elapsed=16    | —                                               |

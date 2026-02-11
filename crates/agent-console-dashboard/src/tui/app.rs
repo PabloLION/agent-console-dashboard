@@ -223,6 +223,10 @@ impl App {
                     }
                     // Single click: select + open inline detail
                     self.open_detail(idx);
+                } else {
+                    // Click on header or outside list → clear selection
+                    self.selected_index = None;
+                    self.view = View::Dashboard;
                 }
 
                 self.last_click = Some((now, mouse.row, mouse.column));
@@ -837,13 +841,58 @@ mod tests {
     }
 
     #[test]
-    fn test_mouse_left_click_outside_list_no_change() {
+    fn test_mouse_left_click_header_clears_selection() {
         let mut app = make_app_with_sessions(3);
         app.selected_index = Some(1);
         let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 10);
         let action = app.handle_mouse_event(mouse);
         assert_eq!(action, Action::None);
-        assert_eq!(app.selected_index, Some(1));
+        assert_eq!(
+            app.selected_index, None,
+            "Header click should clear selection"
+        );
+        assert_eq!(
+            app.view,
+            View::Dashboard,
+            "Header click should close detail view"
+        );
+    }
+
+    #[test]
+    fn test_mouse_header_click_from_detail_view_returns_to_dashboard() {
+        let mut app = make_app_with_sessions(3);
+        app.selected_index = Some(1);
+        app.open_detail(1);
+        assert_eq!(
+            app.view,
+            View::Detail {
+                session_index: 1,
+                history_scroll: 0,
+            },
+            "Should start in Detail view"
+        );
+        // Click header
+        let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 10);
+        let action = app.handle_mouse_event(mouse);
+        assert_eq!(action, Action::None);
+        assert_eq!(
+            app.selected_index, None,
+            "Header click should clear selection"
+        );
+        assert_eq!(
+            app.view,
+            View::Dashboard,
+            "Header click should return to Dashboard view"
+        );
+    }
+
+    #[test]
+    fn test_initial_state_no_selection() {
+        let app = App::new(PathBuf::from("/tmp/test.sock"));
+        assert_eq!(
+            app.selected_index, None,
+            "Initial state should have no selection"
+        );
     }
 
     #[test]
@@ -1093,5 +1142,33 @@ mod tests {
             found_highlight,
             "Clicked session should have highlight in rendered buffer"
         );
+    }
+
+    #[test]
+    fn test_no_selection_renders_no_highlight() {
+        // Create app with sessions but no selection
+        let mut app = make_app_with_sessions(3);
+        app.selected_index = None; // Explicitly set to None
+
+        // Render to buffer
+        let buffer = render_dashboard_to_buffer(&app, 80, 30);
+
+        // Check that NO row has DarkGray background (no highlight anywhere)
+        for row in 0..buffer.area().height {
+            let mut found_highlight_in_row = false;
+            for col in 0..buffer.area().width {
+                if let Some(cell) = buffer.cell((col, row)) {
+                    if cell.bg == Color::DarkGray {
+                        found_highlight_in_row = true;
+                        break;
+                    }
+                }
+            }
+            assert!(
+                !found_highlight_in_row,
+                "No row should have highlight when selected_index is None, but row {} has DarkGray background",
+                row
+            );
+        }
     }
 }

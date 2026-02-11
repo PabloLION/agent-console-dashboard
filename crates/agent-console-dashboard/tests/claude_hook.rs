@@ -40,7 +40,12 @@ fn acd_cmd() -> Command {
 /// Spawn the daemon in the background, wait for the socket to appear.
 fn start_daemon(socket: &Path) -> DaemonGuard {
     let child = std::process::Command::new(ACD_BIN)
-        .args(["daemon", "--socket", socket.to_str().expect("valid path")])
+        .args([
+            "daemon",
+            "start",
+            "--socket",
+            socket.to_str().expect("valid path"),
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

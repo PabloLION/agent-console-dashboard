@@ -279,7 +279,7 @@ pub async fn connect_with_lazy_start(socket_path: &Path) -> ClientResult<Client>
 ///
 /// This function uses `std::process::Command::spawn()` to start the daemon
 /// as a detached background process. The daemon is started with the
-/// `--daemonize` flag to ensure it properly detaches from the terminal.
+/// `--detach` flag to ensure it properly detaches from the terminal.
 ///
 /// # Arguments
 ///
@@ -300,7 +300,7 @@ fn spawn_daemon(socket_path: &Path) -> Result<(), ClientError> {
     tracing::info!("Spawning daemon from {:?}", exe);
 
     let child = Command::new(&exe)
-        .args(["daemon", "--daemonize", "--socket"])
+        .args(["daemon", "start", "--detach", "--socket"])
         .arg(socket_path)
         .spawn()
         .map_err(ClientError::SpawnFailed)?;

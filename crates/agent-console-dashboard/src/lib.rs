@@ -168,9 +168,9 @@ impl Session {
 
     /// Updates the session status, recording a state transition if the status changes.
     ///
-    /// If the new status is the same as the current status, no transition is recorded
-    /// and the method returns early. Otherwise, a `StateTransition` is appended to
-    /// the history with the duration spent in the previous state.
+    /// Same-status transitions reset the elapsed timer but do not record a state
+    /// transition. Different-status transitions append a `StateTransition` to the
+    /// history with the duration spent in the previous state.
     ///
     /// # Arguments
     ///
@@ -200,8 +200,9 @@ impl Session {
         // Always record activity, even if status unchanged (for inactive detection).
         self.last_activity = now;
 
-        // No-op if status unchanged
+        // Same status: reset elapsed timer but don't record transition
         if self.status == new_status {
+            self.since = now;
             return;
         }
         let duration = now.duration_since(self.since);
@@ -872,6 +873,30 @@ mod tests {
     }
 
     #[test]
+    fn test_session_set_status_same_status_resets_since() {
+        let mut session = Session::new(
+            "same-status-reset-test".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp")),
+        );
+        let original_since = session.since;
+
+        // Small delay to ensure time difference
+        std::thread::sleep(Duration::from_millis(10));
+
+        // Setting same status should reset 'since'
+        session.set_status(Status::Working);
+
+        // History should still be empty (no transition recorded)
+        assert!(session.history.is_empty());
+        // But 'since' should be reset to a later time
+        assert!(
+            session.since > original_since,
+            "since should be reset on same-status transition"
+        );
+    }
+
+    #[test]
     fn test_session_set_status_multiple_transitions() {
         let mut session = Session::new(
             "multi-test".to_string(),
@@ -958,16 +983,16 @@ mod tests {
 
         std::thread::sleep(Duration::from_millis(10));
 
-        // Same status: last_activity advances, since does NOT
+        // Same status: both last_activity and since should advance (timer reset)
         session.set_status(Status::Working);
 
         assert!(
             session.last_activity > original_activity,
             "last_activity should advance on same-status call"
         );
-        assert_eq!(
-            session.since, original_since,
-            "since should NOT advance on same-status call"
+        assert!(
+            session.since > original_since,
+            "since should advance on same-status call (timer reset)"
         );
     }
 
