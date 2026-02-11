@@ -45,7 +45,7 @@ const DEFAULT_MAX_CLOSED_SESSIONS: usize = 20;
 ///     let session = Session::new(
 ///         "session-1".to_string(),
 ///         AgentType::ClaudeCode,
-///         PathBuf::from("/home/user/project"),
+///         Some(PathBuf::from("/home/user/project")),
 ///     );
 ///     store.set("session-1".to_string(), session).await;
 ///     let retrieved = store.get("session-1").await;
@@ -265,7 +265,7 @@ impl SessionStore {
     ///     let result = store.create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
-    ///         PathBuf::from("/home/user/project"),
+    ///         Some(PathBuf::from("/home/user/project")),
     ///         Some("claude-session-abc".to_string()),
     ///     ).await;
     ///     assert!(result.is_ok());
@@ -274,7 +274,7 @@ impl SessionStore {
     ///     let result2 = store.create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
-    ///         PathBuf::from("/home/user/project"),
+    ///         Some(PathBuf::from("/home/user/project")),
     ///         None,
     ///     ).await;
     ///     assert!(result2.is_err());
@@ -284,7 +284,7 @@ impl SessionStore {
         &self,
         id: String,
         agent_type: AgentType,
-        working_dir: PathBuf,
+        working_dir: Option<PathBuf>,
         _session_id: Option<String>,
     ) -> Result<Session, StoreError> {
         let mut sessions = self.sessions.write().await;
@@ -338,7 +338,7 @@ impl SessionStore {
     ///     let session1 = store.get_or_create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
-    ///         PathBuf::from("/home/user/project"),
+    ///         Some(PathBuf::from("/home/user/project")),
     ///         Some("claude-session-abc".to_string()),
     ///         Status::Working,
     ///     ).await;
@@ -349,7 +349,7 @@ impl SessionStore {
     ///     let session2 = store.get_or_create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
-    ///         PathBuf::from("/different/path"),
+    ///         Some(PathBuf::from("/different/path")),
     ///         None,
     ///         Status::Attention,
     ///     ).await;
@@ -360,7 +360,7 @@ impl SessionStore {
         &self,
         id: String,
         agent_type: AgentType,
-        working_dir: PathBuf,
+        working_dir: Option<PathBuf>,
         _session_id: Option<String>,
         status: Status,
     ) -> Session {
@@ -369,8 +369,8 @@ impl SessionStore {
         // If session exists, update status and working_dir, then return
         if let Some(existing) = sessions.get_mut(&id) {
             let old_status = existing.status;
-            // Update working_dir if the caller provides a non-empty path
-            if !working_dir.as_os_str().is_empty() {
+            // Update working_dir if the caller provides Some(path)
+            if working_dir.is_some() {
                 existing.working_dir = working_dir;
             }
             existing.set_status(status);
@@ -418,7 +418,7 @@ impl SessionStore {
     ///     let _ = store.create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
-    ///         PathBuf::from("/home/user/project"),
+    ///         Some(PathBuf::from("/home/user/project")),
     ///         None,
     ///     ).await;
     ///
@@ -477,7 +477,7 @@ impl SessionStore {
     ///     let _ = store.create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
-    ///         PathBuf::from("/home/user/project"),
+    ///         Some(PathBuf::from("/home/user/project")),
     ///         None,
     ///     ).await;
     ///
@@ -604,7 +604,7 @@ impl SessionStore {
     ///     let _ = store.create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
-    ///         PathBuf::from("/home/user/project"),
+    ///         Some(PathBuf::from("/home/user/project")),
     ///         None,
     ///     ).await;
     ///

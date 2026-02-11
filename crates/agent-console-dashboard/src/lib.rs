@@ -136,7 +136,7 @@ pub struct Session {
     /// Current session status.
     pub status: Status,
     /// Working directory for this session.
-    pub working_dir: PathBuf,
+    pub working_dir: Option<PathBuf>,
     /// Timestamp when status last changed.
     pub since: Instant,
     /// Timestamp of last hook activity (updated on every `set_status` call,
@@ -152,7 +152,7 @@ pub struct Session {
 
 impl Session {
     /// Creates a new Session with the specified parameters.
-    pub fn new(session_id: String, agent_type: AgentType, working_dir: PathBuf) -> Self {
+    pub fn new(session_id: String, agent_type: AgentType, working_dir: Option<PathBuf>) -> Self {
         Self {
             session_id,
             agent_type,
@@ -185,7 +185,7 @@ impl Session {
     /// let mut session = Session::new(
     ///     "session-1".to_string(),
     ///     AgentType::ClaudeCode,
-    ///     PathBuf::from("/home/user/project"),
+    ///     Some(PathBuf::from("/home/user/project")),
     /// );
     /// assert_eq!(session.status, Status::Working);
     /// assert!(session.history.is_empty());
@@ -232,7 +232,7 @@ impl Session {
 
 impl Default for Session {
     fn default() -> Self {
-        Self::new(String::new(), AgentType::ClaudeCode, PathBuf::new())
+        Self::new(String::new(), AgentType::ClaudeCode, None)
     }
 }
 
@@ -323,7 +323,7 @@ pub struct DumpSession {
     /// Current session status as string.
     pub status: String,
     /// Working directory for this session.
-    pub working_dir: String,
+    pub working_dir: Option<String>,
     /// Elapsed seconds in the current status.
     pub elapsed_seconds: u64,
     /// Whether session has been closed.
@@ -551,12 +551,10 @@ impl From<&Session> for SessionSnapshot {
     fn from(session: &Session) -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
 
-        let working_dir_str = session.working_dir.display().to_string();
-        let working_dir = if working_dir_str.is_empty() || working_dir_str == "unknown" {
-            None
-        } else {
-            Some(working_dir_str)
-        };
+        let working_dir = session
+            .working_dir
+            .as_ref()
+            .map(|p| p.display().to_string());
 
         let now_instant = Instant::now();
         let now_system = SystemTime::now();
@@ -749,12 +747,15 @@ mod tests {
         let session = Session::new(
             "test-session-1".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
         );
         assert_eq!(session.session_id, "test-session-1");
         assert_eq!(session.agent_type, AgentType::ClaudeCode);
         assert_eq!(session.status, Status::Working);
-        assert_eq!(session.working_dir, PathBuf::from("/home/user/project"));
+        assert_eq!(
+            session.working_dir,
+            Some(PathBuf::from("/home/user/project"))
+        );
         assert!(session.history.is_empty());
         assert!(session.api_usage.is_none());
         assert!(!session.closed);
@@ -766,7 +767,7 @@ mod tests {
         assert_eq!(session.session_id, "");
         assert_eq!(session.agent_type, AgentType::ClaudeCode);
         assert_eq!(session.status, Status::Working);
-        assert_eq!(session.working_dir, PathBuf::new());
+        assert_eq!(session.working_dir, None);
         assert!(session.history.is_empty());
         assert!(session.api_usage.is_none());
         assert!(!session.closed);
@@ -777,7 +778,7 @@ mod tests {
         let session = Session::new(
             "clone-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
         );
         let cloned = session.clone();
         assert_eq!(cloned.session_id, session.session_id);
@@ -791,7 +792,7 @@ mod tests {
         let mut session = Session::new(
             "full-session".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
         );
         session.status = Status::Question;
         session.api_usage = Some(ApiUsage {
@@ -818,12 +819,12 @@ mod tests {
         let mut session = Session::default();
         session.session_id = "updated-id".to_string();
         session.status = Status::Attention;
-        session.working_dir = PathBuf::from("/new/path");
+        session.working_dir = Some(PathBuf::from("/new/path"));
         session.closed = true;
 
         assert_eq!(session.session_id, "updated-id");
         assert_eq!(session.status, Status::Attention);
-        assert_eq!(session.working_dir, PathBuf::from("/new/path"));
+        assert_eq!(session.working_dir, Some(PathBuf::from("/new/path")));
         assert!(session.closed);
     }
 
@@ -832,7 +833,7 @@ mod tests {
         let mut session = Session::new(
             "status-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
         assert_eq!(session.status, Status::Working);
 
@@ -845,7 +846,7 @@ mod tests {
         let mut session = Session::new(
             "transition-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
         assert!(session.history.is_empty());
 
@@ -861,7 +862,7 @@ mod tests {
         let mut session = Session::new(
             "same-status-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
 
         // Setting to the same status should not record a transition
@@ -875,7 +876,7 @@ mod tests {
         let mut session = Session::new(
             "multi-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
 
         session.set_status(Status::Attention);
@@ -896,7 +897,7 @@ mod tests {
         let mut session = Session::new(
             "latch-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
 
         // Close the session
@@ -917,7 +918,7 @@ mod tests {
         let mut session = Session::new(
             "since-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
         let original_since = session.since;
 
@@ -935,7 +936,7 @@ mod tests {
         let mut session = Session::new(
             "activity-change-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
         let original = session.last_activity;
 
@@ -950,7 +951,7 @@ mod tests {
         let mut session = Session::new(
             "activity-same-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
         let original_activity = session.last_activity;
         let original_since = session.since;
@@ -975,7 +976,7 @@ mod tests {
         let mut session = Session::new(
             "inactive-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
         let threshold = Duration::from_secs(3600);
 
@@ -995,7 +996,7 @@ mod tests {
         let mut session = Session::new(
             "closed-inactive-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
         let threshold = Duration::from_secs(3600);
 
@@ -1017,7 +1018,7 @@ mod tests {
         let mut session = Session::new(
             "duration-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
 
         // Small delay to ensure measurable duration
@@ -1133,7 +1134,7 @@ mod tests {
         let session = Session::new(
             "debug-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
         let debug_str = format!("{:?}", session);
         // Debug output should contain the session ID
@@ -1437,7 +1438,7 @@ mod tests {
             sessions: vec![DumpSession {
                 session_id: "session-1".to_string(),
                 status: "working".to_string(),
-                working_dir: "/home/user/project".to_string(),
+                working_dir: Some("/home/user/project".to_string()),
                 elapsed_seconds: 120,
                 closed: false,
             }],
@@ -1459,7 +1460,7 @@ mod tests {
         let entry = DumpSession {
             session_id: "snap-1".to_string(),
             status: "attention".to_string(),
-            working_dir: "/tmp/work".to_string(),
+            working_dir: Some("/tmp/work".to_string()),
             elapsed_seconds: 45,
             closed: true,
         };
@@ -1499,21 +1500,21 @@ mod tests {
                 DumpSession {
                     session_id: "s1".to_string(),
                     status: "working".to_string(),
-                    working_dir: "/project-a".to_string(),
+                    working_dir: Some("/project-a".to_string()),
                     elapsed_seconds: 60,
                     closed: false,
                 },
                 DumpSession {
                     session_id: "s2".to_string(),
                     status: "closed".to_string(),
-                    working_dir: "/project-b".to_string(),
+                    working_dir: Some("/project-b".to_string()),
                     elapsed_seconds: 300,
                     closed: true,
                 },
                 DumpSession {
                     session_id: "s3".to_string(),
                     status: "question".to_string(),
-                    working_dir: "/project-c".to_string(),
+                    working_dir: Some("/project-c".to_string()),
                     elapsed_seconds: 10,
                     closed: false,
                 },

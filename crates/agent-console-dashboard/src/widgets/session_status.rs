@@ -236,7 +236,7 @@ mod tests {
         let mut s = Session::new(
             id.to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
         );
         s.status = status;
         s

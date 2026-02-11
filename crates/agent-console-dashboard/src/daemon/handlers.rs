@@ -45,11 +45,7 @@ pub(super) async fn handle_set_command(cmd: &IpcCommand, store: &SessionStore) -
         None => return IpcResponse::error("SET requires status").to_json_line(),
     };
 
-    let working_dir = cmd
-        .working_dir
-        .as_ref()
-        .map(PathBuf::from)
-        .unwrap_or_default();
+    let working_dir = cmd.working_dir.as_ref().map(PathBuf::from);
 
     let status: Status = match status_str.parse() {
         Ok(s) => s,
@@ -334,12 +330,21 @@ pub(super) async fn handle_resurrect_command(cmd: &IpcCommand, store: &SessionSt
         return IpcResponse::error(format!("NOT_RESUMABLE {}", reason)).to_json_line();
     }
 
-    if !closed.working_dir.exists() {
-        return IpcResponse::error(format!(
-            "WORKING_DIR_MISSING Working directory no longer exists: {}",
-            closed.working_dir.display()
-        ))
-        .to_json_line();
+    match &closed.working_dir {
+        None => {
+            return IpcResponse::error(
+                "WORKING_DIR_MISSING No working directory recorded for this session".to_string(),
+            )
+            .to_json_line();
+        }
+        Some(path) if !path.exists() => {
+            return IpcResponse::error(format!(
+                "WORKING_DIR_MISSING Working directory no longer exists: {}",
+                path.display()
+            ))
+            .to_json_line();
+        }
+        Some(_) => {} // working_dir exists, continue
     }
 
     let info = serde_json::json!({
@@ -391,7 +396,7 @@ pub(super) async fn handle_dump_command(state: &DaemonState) -> String {
         .map(|s| crate::DumpSession {
             session_id: s.session_id.clone(),
             status: s.status.to_string(),
-            working_dir: s.working_dir.display().to_string(),
+            working_dir: s.working_dir.as_ref().map(|p| p.display().to_string()),
             elapsed_seconds: s.since.elapsed().as_secs(),
             closed: s.closed,
         })
@@ -510,7 +515,7 @@ mod tests {
             .get_or_create_session(
                 "test-session".to_string(),
                 AgentType::ClaudeCode,
-                std::path::PathBuf::from("/tmp"),
+                Some(std::path::PathBuf::from("/tmp")),
                 None,
                 Status::Working,
             )
@@ -545,7 +550,7 @@ mod tests {
             .get_or_create_session(
                 "test-session".to_string(),
                 AgentType::ClaudeCode,
-                std::path::PathBuf::from("/tmp"),
+                Some(std::path::PathBuf::from("/tmp")),
                 None,
                 Status::Working,
             )
@@ -581,7 +586,7 @@ mod tests {
             .get_or_create_session(
                 "closed-session".to_string(),
                 AgentType::ClaudeCode,
-                std::path::PathBuf::from("/tmp"),
+                Some(std::path::PathBuf::from("/tmp")),
                 None,
                 Status::Closed,
             )
@@ -617,7 +622,7 @@ mod tests {
         let mut session = crate::Session::new(
             "inactive-session".to_string(),
             AgentType::ClaudeCode,
-            std::path::PathBuf::from("/tmp"),
+            Some(std::path::PathBuf::from("/tmp")),
         );
 
         // Backdate last_activity by more than INACTIVE_SESSION_THRESHOLD (3600s)

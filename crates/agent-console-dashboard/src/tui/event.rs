@@ -209,7 +209,7 @@ mod tests {
             app.sessions.push(Session::new(
                 format!("session-{}", i),
                 AgentType::ClaudeCode,
-                PathBuf::from(format!("/home/user/project-{}", i)),
+                Some(PathBuf::from(format!("/home/user/project-{}", i))),
             ));
         }
         app.init_selection();

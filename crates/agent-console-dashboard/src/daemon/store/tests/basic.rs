@@ -35,7 +35,10 @@ async fn test_store_set_and_get() {
     let retrieved = retrieved.unwrap();
     assert_eq!(retrieved.session_id, "session-1");
     assert_eq!(retrieved.agent_type, AgentType::ClaudeCode);
-    assert_eq!(retrieved.working_dir, PathBuf::from("/home/user/session-1"));
+    assert_eq!(
+        retrieved.working_dir,
+        Some(PathBuf::from("/home/user/session-1"))
+    );
 }
 
 #[tokio::test]
@@ -43,13 +46,13 @@ async fn test_store_set_overwrites_existing() {
     let store = SessionStore::new();
     let session1 = create_test_session("session-1");
     let mut session2 = create_test_session("session-1");
-    session2.working_dir = PathBuf::from("/updated/path");
+    session2.working_dir = Some(PathBuf::from("/updated/path"));
 
     store.set("session-1".to_string(), session1).await;
     store.set("session-1".to_string(), session2).await;
 
     let retrieved = store.get("session-1").await.unwrap();
-    assert_eq!(retrieved.working_dir, PathBuf::from("/updated/path"));
+    assert_eq!(retrieved.working_dir, Some(PathBuf::from("/updated/path")));
 }
 
 #[tokio::test]

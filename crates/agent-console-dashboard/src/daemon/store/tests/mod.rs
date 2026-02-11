@@ -29,6 +29,6 @@ pub(super) fn create_test_session(id: &str) -> Session {
     Session::new(
         id.to_string(),
         AgentType::ClaudeCode,
-        PathBuf::from(format!("/home/user/{}", id)),
+        Some(PathBuf::from(format!("/home/user/{}", id))),
     )
 }

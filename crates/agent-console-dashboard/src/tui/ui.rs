@@ -114,7 +114,7 @@ mod tests {
             let mut session = Session::new(
                 format!("session-{}", i),
                 AgentType::ClaudeCode,
-                PathBuf::from(format!("/home/user/project-{}", i)),
+                Some(PathBuf::from(format!("/home/user/project-{}", i))),
             );
             if i % 4 == 1 {
                 session.status = Status::Attention;

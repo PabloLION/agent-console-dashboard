@@ -107,12 +107,12 @@ mod tests {
             Session::new(
                 "s1".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/tmp/a"),
+                Some(PathBuf::from("/tmp/a")),
             ),
             Session::new(
                 "s2".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/tmp/b"),
+                Some(PathBuf::from("/tmp/b")),
             ),
         ]
     }

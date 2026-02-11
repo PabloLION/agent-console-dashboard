@@ -16,7 +16,7 @@ async fn test_close_session() {
         .create_session(
             "close-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
             None,
         )
         .await;
@@ -46,7 +46,7 @@ async fn test_close_session_persists_in_store() {
         .create_session(
             "persist-close".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -68,7 +68,7 @@ async fn test_close_session_records_transition() {
         .create_session(
             "transition-close".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -90,7 +90,7 @@ async fn test_close_session_preserves_metadata() {
         .create_session(
             "preserve-close".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/specific/path"),
+            Some(PathBuf::from("/specific/path")),
             Some("claude-session-xyz".to_string()),
         )
         .await;
@@ -102,7 +102,7 @@ async fn test_close_session_preserves_metadata() {
 
     assert_eq!(session.session_id, "preserve-close");
     assert_eq!(session.agent_type, AgentType::ClaudeCode);
-    assert_eq!(session.working_dir, PathBuf::from("/specific/path"));
+    assert_eq!(session.working_dir, Some(PathBuf::from("/specific/path")));
     assert!(session.closed);
     assert_eq!(session.status, Status::Closed);
 }
@@ -115,7 +115,7 @@ async fn test_close_session_idempotent() {
         .create_session(
             "idempotent-close".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -140,7 +140,7 @@ async fn test_close_session_list_all_includes_closed() {
         .create_session(
             "session-1".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/path/1"),
+            Some(PathBuf::from("/path/1")),
             None,
         )
         .await;
@@ -148,7 +148,7 @@ async fn test_close_session_list_all_includes_closed() {
         .create_session(
             "session-2".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/path/2"),
+            Some(PathBuf::from("/path/2")),
             None,
         )
         .await;
@@ -179,7 +179,7 @@ async fn test_remove_session() {
         .create_session(
             "session-to-remove".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/path/remove"),
+            Some(PathBuf::from("/path/remove")),
             None,
         )
         .await;
@@ -187,7 +187,7 @@ async fn test_remove_session() {
         .create_session(
             "session-to-close".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/path/close"),
+            Some(PathBuf::from("/path/close")),
             None,
         )
         .await;
@@ -195,7 +195,7 @@ async fn test_remove_session() {
         .create_session(
             "session-active".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/path/active"),
+            Some(PathBuf::from("/path/active")),
             None,
         )
         .await;
@@ -249,7 +249,7 @@ async fn test_remove_session_idempotent() {
         .create_session(
             "to-remove".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -269,7 +269,7 @@ async fn test_remove_session_preserves_data() {
         .create_session(
             "data-session".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/specific/path"),
+            Some(PathBuf::from("/specific/path")),
             Some("claude-session-xyz".to_string()),
         )
         .await;
@@ -280,5 +280,5 @@ async fn test_remove_session_preserves_data() {
     let session = removed.expect("already checked is_some");
     assert_eq!(session.session_id, "data-session");
     assert_eq!(session.agent_type, AgentType::ClaudeCode);
-    assert_eq!(session.working_dir, PathBuf::from("/specific/path"));
+    assert_eq!(session.working_dir, Some(PathBuf::from("/specific/path")));
 }

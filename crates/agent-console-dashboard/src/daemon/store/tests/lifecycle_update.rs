@@ -12,7 +12,7 @@ async fn test_update_session() {
         .create_session(
             "update-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
             None,
         )
         .await;
@@ -44,7 +44,7 @@ async fn test_update_session_same_status_no_transition() {
         .create_session(
             "same-status".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -65,7 +65,7 @@ async fn test_update_session_multiple_transitions() {
         .create_session(
             "multi-transition".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -101,7 +101,7 @@ async fn test_update_session_persists_in_store() {
         .create_session(
             "persist-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -123,7 +123,7 @@ async fn test_update_session_preserves_metadata() {
         .create_session(
             "preserve-meta".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/specific/path"),
+            Some(PathBuf::from("/specific/path")),
             Some("claude-session-xyz".to_string()),
         )
         .await;
@@ -137,6 +137,6 @@ async fn test_update_session_preserves_metadata() {
 
     assert_eq!(session.session_id, "preserve-meta");
     assert_eq!(session.agent_type, AgentType::ClaudeCode);
-    assert_eq!(session.working_dir, PathBuf::from("/specific/path"));
+    assert_eq!(session.working_dir, Some(PathBuf::from("/specific/path")));
     assert_eq!(session.status, Status::Attention);
 }

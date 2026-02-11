@@ -11,7 +11,6 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
-use std::path::PathBuf;
 use std::time::Instant;
 
 /// Returns the status symbol for a given session status.
@@ -80,59 +79,94 @@ const WIDE_THRESHOLD: u16 = 80;
 /// Computes display names for session directories with basename disambiguation.
 ///
 /// Returns a map from session_id to display name. If multiple sessions share
-/// the same basename, includes parent folder for disambiguation.
+/// the same basename, includes parent folders for disambiguation (up to 3 levels).
 fn compute_directory_display_names(
     sessions: &[Session],
 ) -> std::collections::HashMap<String, String> {
     use std::collections::HashMap;
+    use std::path::Path;
 
-    // Count basename occurrences
-    let mut basename_counts: HashMap<String, usize> = HashMap::new();
+    // Helper: extract components as strings from a path
+    fn path_components(path: &Path) -> Vec<String> {
+        path.components()
+            .filter_map(|c| c.as_os_str().to_str().map(String::from))
+            .collect()
+    }
+
+    // Initial display names (basename only)
+    let mut display_names = HashMap::new();
     for session in sessions {
-        if session.working_dir == PathBuf::from("unknown") {
-            continue;
+        let name = match &session.working_dir {
+            None => "<error>".to_string(),
+            Some(path) => path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(String::from)
+                .unwrap_or_else(|| "<error>".to_string()),
+        };
+        display_names.insert(session.session_id.clone(), name);
+    }
+
+    // Iteratively add parent levels until no duplicates or max depth reached
+    for depth in 1..=3 {
+        let mut collision_groups: HashMap<String, Vec<String>> = HashMap::new();
+        for (session_id, name) in &display_names {
+            collision_groups
+                .entry(name.clone())
+                .or_default()
+                .push(session_id.clone());
         }
-        if let Some(basename) = session.working_dir.file_name() {
-            if let Some(name) = basename.to_str() {
-                *basename_counts.entry(name.to_string()).or_insert(0) += 1;
+
+        let mut changed = false;
+        for (_colliding_name, session_ids) in collision_groups {
+            if session_ids.len() <= 1 {
+                continue; // No collision
             }
+
+            // Try to disambiguate by adding one more parent level
+            for session_id in &session_ids {
+                let session = sessions
+                    .iter()
+                    .find(|s| &s.session_id == session_id)
+                    .expect("session must exist");
+                if let Some(path) = &session.working_dir {
+                    let components = path_components(path);
+                    if components.len() > depth {
+                        // Build display name with `depth+1` levels
+                        let start = components.len().saturating_sub(depth + 1);
+                        let new_name = components[start..].join("/");
+                        display_names.insert(session_id.clone(), new_name);
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        if !changed {
+            break; // No more improvements possible
         }
     }
 
-    // Build display names
-    let mut display_names = HashMap::new();
-    for session in sessions {
-        let display_name = if session.working_dir == PathBuf::from("unknown") {
-            "<error>".to_string()
-        } else if let Some(basename) = session.working_dir.file_name() {
-            if let Some(basename_str) = basename.to_str() {
-                let count = basename_counts.get(basename_str).copied().unwrap_or(0);
-                if count > 1 {
-                    // Duplicate basename - include parent
-                    if let Some(parent) = session.working_dir.parent() {
-                        if let Some(parent_name) = parent.file_name() {
-                            if let Some(parent_str) = parent_name.to_str() {
-                                format!("{}/{}", parent_str, basename_str)
-                            } else {
-                                basename_str.to_string()
-                            }
-                        } else {
-                            basename_str.to_string()
-                        }
-                    } else {
-                        basename_str.to_string()
-                    }
-                } else {
-                    // Unique basename
-                    basename_str.to_string()
+    // Final pass: if still ambiguous, fall back to full path
+    let mut final_collision_groups: HashMap<String, Vec<String>> = HashMap::new();
+    for (session_id, name) in &display_names {
+        final_collision_groups
+            .entry(name.clone())
+            .or_default()
+            .push(session_id.clone());
+    }
+    for (_, session_ids) in final_collision_groups {
+        if session_ids.len() > 1 {
+            for session_id in &session_ids {
+                let session = sessions
+                    .iter()
+                    .find(|s| &s.session_id == session_id)
+                    .expect("session must exist");
+                if let Some(path) = &session.working_dir {
+                    display_names.insert(session_id.clone(), path.display().to_string());
                 }
-            } else {
-                "<error>".to_string()
             }
-        } else {
-            "<error>".to_string()
-        };
-        display_names.insert(session.session_id.clone(), display_name);
+        }
     }
 
     display_names
@@ -346,10 +380,14 @@ mod tests {
         let mut s = Session::new(
             id.to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
         );
         s.status = status;
         s
+    }
+
+    fn make_test_session(id: &str, working_dir: Option<PathBuf>) -> Session {
+        Session::new(id.to_string(), AgentType::ClaudeCode, working_dir)
     }
 
     // --- status_symbol tests ---
@@ -491,7 +529,7 @@ mod tests {
         let session = Session::new(
             "my-session".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/a-long-project-name"),
+            Some(PathBuf::from("/home/user/a-long-project-name")),
         );
         let long_name = "a-long-project-name";
         let standard_line = format_session_line(&session, 60, long_name);
@@ -633,7 +671,7 @@ mod tests {
         let mut session = Session::new(
             "error-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("unknown"),
+            Some(PathBuf::from("unknown")),
         );
         session.status = Status::Working;
         let line = format_session_line(&session, 60, "<error>");
@@ -660,7 +698,7 @@ mod tests {
         let mut session = Session::new(
             "error-wide-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("unknown"),
+            Some(PathBuf::from("unknown")),
         );
         session.status = Status::Attention;
         let line = format_session_line(&session, 100, "<error>");
@@ -687,7 +725,7 @@ mod tests {
         let session = Session::new(
             "normal-path-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
         );
         let line = format_session_line(&session, 60, "project");
 
@@ -721,7 +759,7 @@ mod tests {
         let session = Session::new(
             "align-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
         );
         let line = format_session_line(&session, 60, "project");
 
@@ -758,7 +796,7 @@ mod tests {
         let session = Session::new(
             "wide-align-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
         );
         let line = format_session_line(&session, 120, "project");
 
@@ -795,7 +833,7 @@ mod tests {
         let session = Session::new(
             "expand-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
 
         // Test at standard width (60 cols)
@@ -958,7 +996,7 @@ mod tests {
         let session = Session::new(
             "align-check".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
         );
         let data_line = format_session_line(&session, 60, "test");
 
@@ -998,12 +1036,12 @@ mod tests {
             Session::new(
                 "s1".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/home/user/project-a"),
+                Some(PathBuf::from("/home/user/project-a")),
             ),
             Session::new(
                 "s2".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/home/user/project-b"),
+                Some(PathBuf::from("/home/user/project-b")),
             ),
         ];
         let display_names = compute_directory_display_names(&sessions);
@@ -1017,12 +1055,12 @@ mod tests {
             Session::new(
                 "s1".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/home/user/project"),
+                Some(PathBuf::from("/home/user/project")),
             ),
             Session::new(
                 "s2".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/work/client/project"),
+                Some(PathBuf::from("/work/client/project")),
             ),
         ];
         let display_names = compute_directory_display_names(&sessions);
@@ -1037,17 +1075,17 @@ mod tests {
             Session::new(
                 "s1".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/home/user/project"),
+                Some(PathBuf::from("/home/user/project")),
             ),
             Session::new(
                 "s2".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/work/client/project"),
+                Some(PathBuf::from("/work/client/project")),
             ),
             Session::new(
                 "s3".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/tmp/unique-name"),
+                Some(PathBuf::from("/tmp/unique-name")),
             ),
         ];
         let display_names = compute_directory_display_names(&sessions);
@@ -1061,15 +1099,11 @@ mod tests {
     #[test]
     fn test_compute_directory_display_names_unknown_paths() {
         let sessions = vec![
-            Session::new(
-                "s1".to_string(),
-                AgentType::ClaudeCode,
-                PathBuf::from("unknown"),
-            ),
+            Session::new("s1".to_string(), AgentType::ClaudeCode, None),
             Session::new(
                 "s2".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/home/user/project"),
+                Some(PathBuf::from("/home/user/project")),
             ),
         ];
         let display_names = compute_directory_display_names(&sessions);
@@ -1084,7 +1118,7 @@ mod tests {
         let sessions = vec![Session::new(
             "s1".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/"),
+            Some(PathBuf::from("/")),
         )];
         let display_names = compute_directory_display_names(&sessions);
         // Root path has no file_name(), should fall back to <error>
@@ -1097,17 +1131,17 @@ mod tests {
             Session::new(
                 "s1".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/home/user/project"),
+                Some(PathBuf::from("/home/user/project")),
             ),
             Session::new(
                 "s2".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/work/client/project"),
+                Some(PathBuf::from("/work/client/project")),
             ),
             Session::new(
                 "s3".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/opt/build/project"),
+                Some(PathBuf::from("/opt/build/project")),
             ),
         ];
         let display_names = compute_directory_display_names(&sessions);
@@ -1115,5 +1149,28 @@ mod tests {
         assert_eq!(display_names.get("s1"), Some(&"user/project".to_string()));
         assert_eq!(display_names.get("s2"), Some(&"client/project".to_string()));
         assert_eq!(display_names.get("s3"), Some(&"build/project".to_string()));
+    }
+
+    #[test]
+    fn test_disambiguation_parent_collision() {
+        // Same basename AND same immediate parent
+        let s1 = make_test_session("s1", Some(PathBuf::from("/home/alice/project")));
+        let s2 = make_test_session("s2", Some(PathBuf::from("/work/alice/project")));
+        let sessions = vec![s1, s2];
+        let names = compute_directory_display_names(&sessions);
+        assert_ne!(
+            names.get("s1"),
+            names.get("s2"),
+            "Colliding parent/basename should be disambiguated"
+        );
+        // Should add grandparent level
+        assert!(names
+            .get("s1")
+            .map(|n| n.contains("home") || n.contains("alice"))
+            .unwrap_or(false));
+        assert!(names
+            .get("s2")
+            .map(|n| n.contains("work") || n.contains("alice"))
+            .unwrap_or(false));
     }
 }

@@ -12,7 +12,7 @@ async fn test_create_session() {
         .create_session(
             "new-session".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
             Some("claude-session-123".to_string()),
         )
         .await;
@@ -21,7 +21,10 @@ async fn test_create_session() {
     let session = result.expect("already checked is_ok");
     assert_eq!(session.session_id, "new-session");
     assert_eq!(session.agent_type, AgentType::ClaudeCode);
-    assert_eq!(session.working_dir, PathBuf::from("/home/user/project"));
+    assert_eq!(
+        session.working_dir,
+        Some(PathBuf::from("/home/user/project"))
+    );
     assert!(!session.closed);
 
     let retrieved = store.get("new-session").await;
@@ -40,7 +43,7 @@ async fn test_create_session_without_session_id() {
         .create_session(
             "no-session-id".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -58,7 +61,7 @@ async fn test_create_session_already_exists_error() {
         .create_session(
             "duplicate-id".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/path/1"),
+            Some(PathBuf::from("/path/1")),
             None,
         )
         .await;
@@ -68,7 +71,7 @@ async fn test_create_session_already_exists_error() {
         .create_session(
             "duplicate-id".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/path/2"),
+            Some(PathBuf::from("/path/2")),
             None,
         )
         .await;
@@ -85,7 +88,7 @@ async fn test_create_session_already_exists_error() {
         .get("duplicate-id")
         .await
         .expect("session should exist");
-    assert_eq!(retrieved.working_dir, PathBuf::from("/path/1"));
+    assert_eq!(retrieved.working_dir, Some(PathBuf::from("/path/1")));
 }
 
 #[tokio::test]
@@ -99,7 +102,7 @@ async fn test_create_session_explicit_vs_set() {
         .create_session(
             "test-id".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/new/path"),
+            Some(PathBuf::from("/new/path")),
             None,
         )
         .await;
@@ -116,7 +119,7 @@ async fn test_create_session_multiple_unique() {
             .create_session(
                 format!("unique-{}", i),
                 AgentType::ClaudeCode,
-                PathBuf::from(format!("/path/{}", i)),
+                Some(PathBuf::from(format!("/path/{}", i))),
                 None,
             )
             .await;

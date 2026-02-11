@@ -45,7 +45,8 @@ pub fn render_detail(
     // Derive title from working directory basename or session ID
     let title = session
         .working_dir
-        .file_name()
+        .as_ref()
+        .and_then(|p| p.file_name())
         .and_then(|n| n.to_str())
         .unwrap_or(&session.session_id);
 
@@ -81,7 +82,8 @@ pub fn render_inline_detail(
 
     let title = session
         .working_dir
-        .file_name()
+        .as_ref()
+        .and_then(|p| p.file_name())
         .and_then(|n| n.to_str())
         .unwrap_or(&session.session_id);
 
@@ -148,10 +150,9 @@ fn build_detail_lines<'a>(
     ]));
 
     // Working directory
-    let wd = if session.working_dir == std::path::PathBuf::from("unknown") {
-        "<error>".to_string()
-    } else {
-        session.working_dir.display().to_string()
+    let (wd, is_error) = match &session.working_dir {
+        None => ("<error>".to_string(), true),
+        Some(path) => (path.display().to_string(), false),
     };
     let max_wd_len = (panel_width as usize).saturating_sub(13);
     let wd_display = if wd.len() > max_wd_len {
@@ -159,7 +160,6 @@ fn build_detail_lines<'a>(
     } else {
         wd
     };
-    let is_error = session.working_dir == std::path::PathBuf::from("unknown");
     let wd_style = if is_error {
         Style::default().fg(Color::Red)
     } else {
@@ -310,7 +310,7 @@ mod tests {
         Session::new(
             id.to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project-a"),
+            Some(PathBuf::from("/home/user/project-a")),
         )
     }
 
@@ -433,8 +433,9 @@ mod tests {
         let backend = ratatui::backend::TestBackend::new(60, 20);
         let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let mut session = make_session("test-long-wd");
-        session.working_dir =
-            PathBuf::from("/very/deeply/nested/path/to/some/project/directory/that/is/quite/long");
+        session.working_dir = Some(PathBuf::from(
+            "/very/deeply/nested/path/to/some/project/directory/that/is/quite/long",
+        ));
         terminal
             .draw(|frame| {
                 render_detail(frame, &session, frame.area(), 0, Instant::now());
@@ -565,11 +566,7 @@ mod tests {
 
     #[test]
     fn test_build_detail_lines_unknown_working_dir_shows_error() {
-        let mut session = Session::new(
-            "test-unknown-dir".to_string(),
-            AgentType::ClaudeCode,
-            PathBuf::from("unknown"),
-        );
+        let mut session = Session::new("test-unknown-dir".to_string(), AgentType::ClaudeCode, None);
         session.status = Status::Working;
         let lines = build_detail_lines(&session, 60, 0, Instant::now(), true);
 
@@ -626,7 +623,7 @@ mod tests {
         let session = Session::new(
             "test-unknown-render".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("unknown"),
+            None,
         );
         terminal
             .draw(|frame| {
@@ -642,7 +639,7 @@ mod tests {
         let session = Session::new(
             "test-unknown-inline".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("unknown"),
+            None,
         );
         terminal
             .draw(|frame| {

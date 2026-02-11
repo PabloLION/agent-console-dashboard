@@ -27,7 +27,7 @@ pub struct ClosedSession {
     /// Unique session identifier (matches the original session ID).
     pub session_id: String,
     /// Working directory the session was using.
-    pub working_dir: PathBuf,
+    pub working_dir: Option<PathBuf>,
     /// Seconds since daemon start when the session was created.
     pub started_at_elapsed: u64,
     /// Seconds since daemon start when the session was closed.
@@ -86,7 +86,7 @@ mod tests {
         Session::new(
             id.to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
         )
     }
 
@@ -97,7 +97,7 @@ mod tests {
         let closed = ClosedSession::from_session(&session, daemon_start);
 
         assert_eq!(closed.session_id, "s1");
-        assert_eq!(closed.working_dir, PathBuf::from("/tmp/test"));
+        assert_eq!(closed.working_dir, Some(PathBuf::from("/tmp/test")));
         assert!(!closed.resumable);
         assert!(closed.not_resumable_reason.is_some());
         assert_eq!(closed.last_status, Status::Working);
@@ -141,7 +141,7 @@ mod tests {
 
         assert_eq!(deserialized.session_id, "s4");
         assert!(!deserialized.resumable);
-        assert_eq!(deserialized.working_dir, PathBuf::from("/tmp/test"));
+        assert_eq!(deserialized.working_dir, Some(PathBuf::from("/tmp/test")));
         // closed_at should be None after deserialization (skipped)
         assert!(deserialized.closed_at.is_none());
     }

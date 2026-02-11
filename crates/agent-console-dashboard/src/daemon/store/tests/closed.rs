@@ -16,7 +16,7 @@ async fn close_session_stores_closed_metadata() {
         .create_session(
             "s1".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/project"),
+            Some(PathBuf::from("/tmp/project")),
             Some("claude-abc".to_string()),
         )
         .await;
@@ -28,7 +28,7 @@ async fn close_session_stores_closed_metadata() {
 
     let meta = &closed[0];
     assert_eq!(meta.session_id, "s1");
-    assert_eq!(meta.working_dir, PathBuf::from("/tmp/project"));
+    assert_eq!(meta.working_dir, Some(PathBuf::from("/tmp/project")));
     assert!(!meta.resumable);
     assert!(meta.not_resumable_reason.is_some());
     assert_eq!(meta.last_status, Status::Closed);
@@ -42,7 +42,7 @@ async fn close_session_without_session_id_not_resumable() {
         .create_session(
             "s2".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/project"),
+            Some(PathBuf::from("/tmp/project")),
             None,
         )
         .await;
@@ -69,7 +69,7 @@ async fn list_closed_returns_most_recent_first() {
             .create_session(
                 id.clone(),
                 AgentType::ClaudeCode,
-                PathBuf::from(format!("/tmp/{}", i)),
+                Some(PathBuf::from(format!("/tmp/{}", i))),
                 None,
             )
             .await;
@@ -95,7 +95,7 @@ async fn get_closed_returns_correct_session() {
         .create_session(
             "target".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/target"),
+            Some(PathBuf::from("/tmp/target")),
             Some("resume-id".to_string()),
         )
         .await;
@@ -128,7 +128,7 @@ async fn retention_limit_evicts_oldest() {
             .create_session(
                 id.clone(),
                 AgentType::ClaudeCode,
-                PathBuf::from(format!("/tmp/{}", i)),
+                Some(PathBuf::from(format!("/tmp/{}", i))),
                 None,
             )
             .await;
@@ -159,7 +159,7 @@ async fn closing_same_session_twice_deduplicates() {
         .create_session(
             "dup".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/dup"),
+            Some(PathBuf::from("/tmp/dup")),
             None,
         )
         .await;
@@ -185,7 +185,7 @@ async fn multiple_sessions_can_be_closed() {
             .create_session(
                 id.to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from(format!("/tmp/{}", id)),
+                Some(PathBuf::from(format!("/tmp/{}", id))),
                 None,
             )
             .await;
@@ -208,7 +208,7 @@ async fn active_sessions_unaffected_by_closed_storage() {
         .create_session(
             "active".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/active"),
+            Some(PathBuf::from("/tmp/active")),
             None,
         )
         .await;
@@ -216,7 +216,7 @@ async fn active_sessions_unaffected_by_closed_storage() {
         .create_session(
             "to-close".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/close"),
+            Some(PathBuf::from("/tmp/close")),
             None,
         )
         .await;
@@ -255,7 +255,7 @@ async fn closed_metadata_includes_all_fields() {
         .create_session(
             "full".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
             Some("claude-session-123".to_string()),
         )
         .await;
@@ -270,7 +270,7 @@ async fn closed_metadata_includes_all_fields() {
         .expect("closed session should exist");
 
     assert_eq!(meta.session_id, "full");
-    assert_eq!(meta.working_dir, PathBuf::from("/home/user/project"));
+    assert_eq!(meta.working_dir, Some(PathBuf::from("/home/user/project")));
     assert!(!meta.resumable);
     assert!(meta.not_resumable_reason.is_some());
     assert_eq!(meta.last_status, Status::Closed);

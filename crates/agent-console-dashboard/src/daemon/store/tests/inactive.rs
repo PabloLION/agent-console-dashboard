@@ -13,7 +13,7 @@ async fn create_inactive_session(store: &SessionStore, id: &str, inactive_secs: 
         .create_session(
             id.to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from(format!("/tmp/{id}")),
+            Some(PathBuf::from(format!("/tmp/{id}"))),
             None,
         )
         .await;
@@ -53,7 +53,7 @@ async fn fresh_sessions_not_counted() {
         .create_session(
             "fresh-1".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/fresh"),
+            Some(PathBuf::from("/tmp/fresh")),
             None,
         )
         .await;
@@ -71,7 +71,7 @@ async fn mixed_active_and_inactive() {
         .create_session(
             "active".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/active"),
+            Some(PathBuf::from("/tmp/active")),
             None,
         )
         .await;
@@ -119,7 +119,7 @@ async fn has_active_includes_fresh_sessions() {
         .create_session(
             "fresh".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/fresh"),
+            Some(PathBuf::from("/tmp/fresh")),
             None,
         )
         .await;
@@ -136,7 +136,7 @@ async fn has_active_mixed_returns_true() {
         .create_session(
             "active".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/active"),
+            Some(PathBuf::from("/tmp/active")),
             None,
         )
         .await;

@@ -135,7 +135,7 @@ async fn test_concurrent_high_contention() {
             let _ = store_clone.get("shared-key").await;
 
             let mut session = create_test_session("shared-key");
-            session.working_dir = PathBuf::from(format!("/path/{}", i));
+            session.working_dir = Some(PathBuf::from(format!("/path/{}", i)));
             store_clone.set("shared-key".to_string(), session).await;
 
             let _ = store_clone.get("shared-key").await;

@@ -12,7 +12,7 @@ async fn test_get_or_create_session_creates_new() {
         .get_or_create_session(
             "new-session".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
             Some("claude-session-123".to_string()),
             Status::Working,
         )
@@ -20,7 +20,10 @@ async fn test_get_or_create_session_creates_new() {
 
     assert_eq!(session.session_id, "new-session");
     assert_eq!(session.agent_type, AgentType::ClaudeCode);
-    assert_eq!(session.working_dir, PathBuf::from("/home/user/project"));
+    assert_eq!(
+        session.working_dir,
+        Some(PathBuf::from("/home/user/project"))
+    );
     assert_eq!(session.status, Status::Working);
     assert!(!session.closed);
 
@@ -40,7 +43,7 @@ async fn test_get_or_create_session_returns_existing_and_updates_status() {
         .get_or_create_session(
             "existing-session".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/original/path"),
+            Some(PathBuf::from("/original/path")),
             Some("original-session-id".to_string()),
             Status::Working,
         )
@@ -51,7 +54,7 @@ async fn test_get_or_create_session_returns_existing_and_updates_status() {
         .get_or_create_session(
             "existing-session".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/different/path"),
+            Some(PathBuf::from("/different/path")),
             Some("different-session-id".to_string()),
             Status::Attention,
         )
@@ -59,7 +62,10 @@ async fn test_get_or_create_session_returns_existing_and_updates_status() {
 
     assert_eq!(retrieved.session_id, "existing-session");
     // Working dir updated from new call (non-empty path replaces old)
-    assert_eq!(retrieved.working_dir, PathBuf::from("/different/path"));
+    assert_eq!(
+        retrieved.working_dir,
+        Some(PathBuf::from("/different/path"))
+    );
     // Status updated
     assert_eq!(retrieved.status, Status::Attention);
 }
@@ -72,7 +78,7 @@ async fn test_get_or_create_session_without_session_id() {
         .get_or_create_session(
             "no-session-id".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
             Status::Working,
         )
@@ -92,7 +98,7 @@ async fn test_get_or_create_session_after_set() {
         .get_or_create_session(
             "test-id".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/new/path"),
+            Some(PathBuf::from("/new/path")),
             None,
             Status::Attention,
         )
@@ -100,7 +106,7 @@ async fn test_get_or_create_session_after_set() {
 
     assert_eq!(session2.session_id, "test-id");
     // working_dir updated from new call (non-empty path replaces old)
-    assert_eq!(session2.working_dir, PathBuf::from("/new/path"));
+    assert_eq!(session2.working_dir, Some(PathBuf::from("/new/path")));
     assert_eq!(session2.status, Status::Attention);
 }
 
@@ -112,7 +118,7 @@ async fn test_get_or_create_session_after_create_session() {
         .create_session(
             "test-id".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/original/path"),
+            Some(PathBuf::from("/original/path")),
             Some("original-id".to_string()),
         )
         .await;
@@ -122,7 +128,7 @@ async fn test_get_or_create_session_after_create_session() {
         .get_or_create_session(
             "test-id".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/new/path"),
+            Some(PathBuf::from("/new/path")),
             Some("new-id".to_string()),
             Status::Question,
         )
@@ -130,7 +136,7 @@ async fn test_get_or_create_session_after_create_session() {
 
     assert_eq!(session.session_id, "test-id");
     // working_dir updated from new call (non-empty path replaces old)
-    assert_eq!(session.working_dir, PathBuf::from("/new/path"));
+    assert_eq!(session.working_dir, Some(PathBuf::from("/new/path")));
     assert_eq!(session.status, Status::Question);
 }
 
@@ -143,7 +149,7 @@ async fn test_get_or_create_session_multiple_unique() {
             .get_or_create_session(
                 format!("session-{}", i),
                 AgentType::ClaudeCode,
-                PathBuf::from(format!("/path/{}", i)),
+                Some(PathBuf::from(format!("/path/{}", i))),
                 None,
                 Status::Working,
             )
@@ -163,7 +169,7 @@ async fn test_get_or_create_session_idempotent() {
         .get_or_create_session(
             "idempotent-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/path/1"),
+            Some(PathBuf::from("/path/1")),
             None,
             Status::Working,
         )
@@ -173,7 +179,7 @@ async fn test_get_or_create_session_idempotent() {
         .get_or_create_session(
             "idempotent-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/path/2"),
+            Some(PathBuf::from("/path/2")),
             None,
             Status::Working,
         )
@@ -183,16 +189,16 @@ async fn test_get_or_create_session_idempotent() {
         .get_or_create_session(
             "idempotent-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/path/3"),
+            Some(PathBuf::from("/path/3")),
             None,
             Status::Working,
         )
         .await;
 
     // Working dir updated on each call (non-empty path replaces old)
-    assert_eq!(session1.working_dir, PathBuf::from("/path/1"));
-    assert_eq!(session2.working_dir, PathBuf::from("/path/2"));
-    assert_eq!(session3.working_dir, PathBuf::from("/path/3"));
+    assert_eq!(session1.working_dir, Some(PathBuf::from("/path/1")));
+    assert_eq!(session2.working_dir, Some(PathBuf::from("/path/2")));
+    assert_eq!(session3.working_dir, Some(PathBuf::from("/path/3")));
 
     let sessions = store.list_all().await;
     assert_eq!(sessions.len(), 1);

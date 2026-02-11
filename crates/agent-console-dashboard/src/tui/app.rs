@@ -262,20 +262,16 @@ impl App {
         let backdated_activity = Instant::now()
             .checked_sub(Duration::from_secs(info.idle_seconds))
             .unwrap_or_else(Instant::now);
-        let working_dir = info
-            .working_dir
-            .as_ref()
-            .map(PathBuf::from)
-            .unwrap_or_default();
+        let working_dir = info.working_dir.as_ref().map(PathBuf::from);
 
         if let Some(session) = self
             .sessions
             .iter_mut()
             .find(|s| s.session_id == info.session_id)
         {
-            // Update working_dir from daemon if non-empty
-            if !working_dir.as_os_str().is_empty() {
-                session.working_dir = working_dir;
+            // Update working_dir from daemon if Some
+            if working_dir.is_some() {
+                session.working_dir = working_dir.clone();
             }
             if session.status != status {
                 session.history.push(crate::StateTransition {
@@ -290,8 +286,11 @@ impl App {
             session.last_activity = backdated_activity;
             session.closed = info.closed;
         } else {
-            let mut session =
-                Session::new(info.session_id.clone(), AgentType::ClaudeCode, working_dir);
+            let mut session = Session::new(
+                info.session_id.clone(),
+                AgentType::ClaudeCode,
+                working_dir.clone(),
+            );
             session.status = status;
             session.since = backdated_since;
             session.last_activity = backdated_activity;
@@ -463,9 +462,14 @@ fn restore_terminal() -> io::Result<()> {
 /// - `{working_dir}` — replaced with `session.working_dir` display string
 /// - `{status}` — replaced with `session.status` display string
 pub fn substitute_hook_placeholders(template: &str, session: &Session) -> String {
+    let working_dir_str = session
+        .working_dir
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "<none>".to_string());
     template
         .replace("{session_id}", &session.session_id)
-        .replace("{working_dir}", &session.working_dir.display().to_string())
+        .replace("{working_dir}", &working_dir_str)
         .replace("{status}", &session.status.to_string())
 }
 
@@ -480,7 +484,7 @@ mod tests {
             app.sessions.push(Session::new(
                 format!("session-{}", i),
                 AgentType::ClaudeCode,
-                PathBuf::from(format!("/home/user/project-{}", i)),
+                Some(PathBuf::from(format!("/home/user/project-{}", i))),
             ));
         }
         app.init_selection();
@@ -994,7 +998,7 @@ mod tests {
         let session = Session::new(
             "sess-123".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
         );
         let result = substitute_hook_placeholders("open {working_dir} --id={session_id}", &session);
         assert_eq!(result, "open /home/user/project --id=sess-123");
@@ -1005,7 +1009,7 @@ mod tests {
         let mut session = Session::new(
             "sess-456".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
         session.status = crate::Status::Attention;
         let result = substitute_hook_placeholders("echo {status}", &session);
@@ -1017,7 +1021,7 @@ mod tests {
         let session = Session::new(
             "sess-789".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp"),
+            Some(PathBuf::from("/tmp")),
         );
         let result = substitute_hook_placeholders("echo hello", &session);
         assert_eq!(result, "echo hello");
@@ -1028,7 +1032,7 @@ mod tests {
         let session = Session::new(
             "abc".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/x"),
+            Some(PathBuf::from("/x")),
         );
         let result = substitute_hook_placeholders("{session_id} and {session_id}", &session);
         assert_eq!(result, "abc and abc");
@@ -1036,7 +1040,11 @@ mod tests {
 
     #[test]
     fn test_substitute_hook_empty_template() {
-        let session = Session::new("s".to_string(), AgentType::ClaudeCode, PathBuf::from("/"));
+        let session = Session::new(
+            "s".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/")),
+        );
         let result = substitute_hook_placeholders("", &session);
         assert_eq!(result, "");
     }

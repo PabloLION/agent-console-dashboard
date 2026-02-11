@@ -88,7 +88,7 @@ async fn test_subscriber_receives_update_on_status_change() {
         .create_session(
             "notify-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/home/user/project"),
+            Some(PathBuf::from("/home/user/project")),
             None,
         )
         .await;
@@ -117,7 +117,7 @@ async fn test_subscriber_no_notification_on_same_status() {
         .create_session(
             "same-status-notify".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -145,7 +145,7 @@ async fn test_subscriber_receives_notification_on_close() {
         .create_session(
             "close-notify".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -173,7 +173,7 @@ async fn test_subscriber_no_notification_on_already_closed() {
         .create_session(
             "already-closed".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -203,7 +203,7 @@ async fn test_subscriber_multiple_updates_receive_all() {
         .create_session(
             "multi-update".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -250,7 +250,7 @@ async fn test_subscriber_multiple_subscribers_all_notified() {
         .create_session(
             "multi-subscriber".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -294,7 +294,7 @@ async fn test_subscriber_notification_does_not_block_without_subscribers() {
         .create_session(
             "no-subscriber".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;
@@ -322,7 +322,7 @@ async fn test_subscriber_update_contains_correct_elapsed_seconds() {
         .create_session(
             "elapsed-test".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/test"),
+            Some(PathBuf::from("/tmp/test")),
             None,
         )
         .await;

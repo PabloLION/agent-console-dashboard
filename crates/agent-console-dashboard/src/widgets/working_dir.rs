@@ -67,7 +67,10 @@ impl Widget for WorkingDirWidget {
             .or_else(|| context.sessions.first())
             .expect("sessions is non-empty, first() must return Some");
 
-        let text = format_path(&session.working_dir, w);
+        let text = match &session.working_dir {
+            None => "<none>".to_string(),
+            Some(path) => format_path(path, w),
+        };
 
         let style = if session.closed {
             Style::default().add_modifier(Modifier::DIM)
@@ -332,7 +335,7 @@ mod tests {
         let sessions = vec![Session::new(
             "s1".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/project"),
+            Some(PathBuf::from("/tmp/project")),
         )];
         let ctx = WidgetContext::new(&sessions);
         let widget = WorkingDirWidget;
@@ -346,12 +349,12 @@ mod tests {
             Session::new(
                 "s1".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/tmp/a"),
+                Some(PathBuf::from("/tmp/a")),
             ),
             Session::new(
                 "s2".to_string(),
                 AgentType::ClaudeCode,
-                PathBuf::from("/tmp/b"),
+                Some(PathBuf::from("/tmp/b")),
             ),
         ];
         let ctx = WidgetContext::new(&sessions).with_selected(1);
@@ -365,7 +368,7 @@ mod tests {
         let mut session = Session::new(
             "s1".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/closed"),
+            Some(PathBuf::from("/tmp/closed")),
         );
         session.closed = true;
         let sessions = vec![session];
@@ -386,7 +389,7 @@ mod tests {
         let sessions = vec![Session::new(
             "s1".to_string(),
             AgentType::ClaudeCode,
-            PathBuf::from("/tmp/active"),
+            Some(PathBuf::from("/tmp/active")),
         )];
         let ctx = WidgetContext::new(&sessions).with_selected(0);
         let widget = WorkingDirWidget;
