@@ -1020,7 +1020,7 @@ fn run_install_command() -> ExitCode {
 
     if installed > 0 {
         println!();
-        println!("Restart Claude Code for hooks to take effect.");
+        println!("You may need to restart Claude Code for hooks to take effect.");
     }
 
     ExitCode::SUCCESS
@@ -1066,7 +1066,7 @@ fn run_uninstall_command() -> ExitCode {
 
     if removed > 0 {
         println!();
-        println!("Restart Claude Code for changes to take effect.");
+        println!("You may need to restart Claude Code for changes to take effect.");
     }
 
     ExitCode::SUCCESS
