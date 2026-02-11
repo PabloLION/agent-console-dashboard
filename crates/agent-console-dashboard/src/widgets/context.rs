@@ -163,7 +163,7 @@ mod tests {
         let sessions = sample_sessions();
         let ctx = WidgetContext::new(&sessions).with_selected(0);
         let selected = ctx.selected_session().expect("session at index 0");
-        assert_eq!(selected.id, "s1");
+        assert_eq!(selected.session_id, "s1");
     }
 
     #[test]
@@ -198,7 +198,7 @@ mod tests {
         assert_eq!(ctx.selected_index, Some(1));
         assert!(ctx.usage.is_some());
         let selected = ctx.selected_session().expect("session at index 1");
-        assert_eq!(selected.id, "s2");
+        assert_eq!(selected.session_id, "s2");
     }
 
     #[test]

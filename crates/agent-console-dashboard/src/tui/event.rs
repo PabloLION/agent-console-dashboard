@@ -129,7 +129,7 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
         KeyCode::Char('r') => {
             if let Some(session) = app.selected_session() {
                 if session.status == crate::Status::Closed {
-                    Action::Resurrect(session.id.clone())
+                    Action::Resurrect(session.session_id.clone())
                 } else {
                     Action::None
                 }
@@ -139,7 +139,7 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
         }
         KeyCode::Char('d') => {
             if let Some(session) = app.selected_session() {
-                Action::Remove(session.id.clone())
+                Action::Remove(session.session_id.clone())
             } else {
                 Action::None
             }
@@ -160,7 +160,7 @@ fn handle_detail_key(app: &App, key: KeyEvent, session_index: usize) -> Action {
         KeyCode::Char('r') | KeyCode::Char('R') => {
             if let Some(session) = app.sessions.get(session_index) {
                 if session.status == crate::Status::Closed {
-                    Action::Resurrect(session.id.clone())
+                    Action::Resurrect(session.session_id.clone())
                 } else {
                     Action::None
                 }
@@ -170,7 +170,7 @@ fn handle_detail_key(app: &App, key: KeyEvent, session_index: usize) -> Action {
         }
         KeyCode::Char('c') | KeyCode::Char('C') => {
             if let Some(session) = app.sessions.get(session_index) {
-                Action::Remove(session.id.clone())
+                Action::Remove(session.session_id.clone())
             } else {
                 Action::None
             }
@@ -404,7 +404,7 @@ mod tests {
         assert_eq!(
             app.selected_session()
                 .expect("should have selected session")
-                .id,
+                .session_id,
             "session-1"
         );
     }

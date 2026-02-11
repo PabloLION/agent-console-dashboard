@@ -47,7 +47,7 @@ pub fn render_detail(
         .working_dir
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or(&session.id);
+        .unwrap_or(&session.session_id);
 
     let block = Block::default()
         .title(format!("── {} ──", title))
@@ -83,7 +83,7 @@ pub fn render_inline_detail(
         .working_dir
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or(&session.id);
+        .unwrap_or(&session.session_id);
 
     let block = Block::default()
         .title(format!("── {} ──", title))
@@ -162,10 +162,10 @@ fn build_detail_lines<'a>(
 
     // Session ID (truncated)
     let id_max = (panel_width as usize).saturating_sub(5);
-    let id_display = if session.id.len() > id_max {
-        format!("{}…", &session.id[..id_max.saturating_sub(1)])
+    let id_display = if session.session_id.len() > id_max {
+        format!("{}…", &session.session_id[..id_max.saturating_sub(1)])
     } else {
-        session.id.clone()
+        session.session_id.clone()
     };
     lines.push(Line::from(vec![
         Span::styled("ID: ", Style::default().add_modifier(Modifier::BOLD)),

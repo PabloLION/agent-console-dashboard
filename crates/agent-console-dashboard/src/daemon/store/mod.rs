@@ -113,7 +113,7 @@ impl SessionStore {
     fn broadcast_status_change(&self, old_status: Status, session: &Session) {
         if old_status != session.status {
             let update = SessionUpdate::new(
-                session.id.clone(),
+                session.session_id.clone(),
                 session.status,
                 session.since.elapsed().as_secs(),
             );
@@ -285,7 +285,7 @@ impl SessionStore {
         id: String,
         agent_type: AgentType,
         working_dir: PathBuf,
-        session_id: Option<String>,
+        _session_id: Option<String>,
     ) -> Result<Session, StoreError> {
         let mut sessions = self.sessions.write().await;
 
@@ -295,8 +295,7 @@ impl SessionStore {
         }
 
         // Create new session
-        let mut session = Session::new(id.clone(), agent_type, working_dir);
-        session.session_id = session_id;
+        let session = Session::new(id.clone(), agent_type, working_dir);
 
         // Insert and return clone
         sessions.insert(id, session.clone());
@@ -343,7 +342,7 @@ impl SessionStore {
     ///         Some("claude-session-abc".to_string()),
     ///         Status::Working,
     ///     ).await;
-    ///     assert_eq!(session1.id, "session-1");
+    ///     assert_eq!(session1.session_id, "session-1");
     ///     assert_eq!(session1.status, Status::Working);
     ///
     ///     // Second call updates status on existing session
@@ -362,7 +361,7 @@ impl SessionStore {
         id: String,
         agent_type: AgentType,
         working_dir: PathBuf,
-        session_id: Option<String>,
+        _session_id: Option<String>,
         status: Status,
     ) -> Session {
         let mut sessions = self.sessions.write().await;
@@ -382,7 +381,6 @@ impl SessionStore {
 
         // Create new session with the requested status
         let mut session = Session::new(id.clone(), agent_type, working_dir);
-        session.session_id = session_id;
         session.set_status(status);
 
         // Insert and return clone
@@ -613,7 +611,7 @@ impl SessionStore {
     ///     // Remove the session permanently
     ///     let removed = store.remove_session("session-1").await;
     ///     assert!(removed.is_some());
-    ///     assert_eq!(removed.unwrap().id, "session-1");
+    ///     assert_eq!(removed.unwrap().session_id, "session-1");
     ///
     ///     // Session is no longer in the store
     ///     let retrieved = store.get("session-1").await;

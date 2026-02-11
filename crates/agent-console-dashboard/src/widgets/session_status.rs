@@ -58,7 +58,7 @@ impl Widget for SessionStatusWidget {
             .map(|s| {
                 let elapsed = context.now.duration_since(s.since);
                 SessionEntry {
-                    name: extract_name(&s.id),
+                    name: extract_name(&s.session_id),
                     status: s.status,
                     elapsed,
                     inactive: s.is_inactive(INACTIVE_SESSION_THRESHOLD),

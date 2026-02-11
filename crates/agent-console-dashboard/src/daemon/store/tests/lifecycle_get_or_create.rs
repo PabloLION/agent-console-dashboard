@@ -18,17 +18,16 @@ async fn test_get_or_create_session_creates_new() {
         )
         .await;
 
-    assert_eq!(session.id, "new-session");
+    assert_eq!(session.session_id, "new-session");
     assert_eq!(session.agent_type, AgentType::ClaudeCode);
     assert_eq!(session.working_dir, PathBuf::from("/home/user/project"));
-    assert_eq!(session.session_id, Some("claude-session-123".to_string()));
     assert_eq!(session.status, Status::Working);
     assert!(!session.closed);
 
     let retrieved = store.get("new-session").await;
     assert!(retrieved.is_some());
     assert_eq!(
-        retrieved.expect("already checked is_some").id,
+        retrieved.expect("already checked is_some").session_id,
         "new-session"
     );
 }
@@ -58,14 +57,9 @@ async fn test_get_or_create_session_returns_existing_and_updates_status() {
         )
         .await;
 
-    assert_eq!(retrieved.id, "existing-session");
+    assert_eq!(retrieved.session_id, "existing-session");
     // Working dir updated from new call (non-empty path replaces old)
     assert_eq!(retrieved.working_dir, PathBuf::from("/different/path"));
-    // session_id preserved from original (not overwritten)
-    assert_eq!(
-        retrieved.session_id,
-        Some("original-session-id".to_string())
-    );
     // Status updated
     assert_eq!(retrieved.status, Status::Attention);
 }
@@ -84,8 +78,7 @@ async fn test_get_or_create_session_without_session_id() {
         )
         .await;
 
-    assert_eq!(session.id, "no-session-id");
-    assert!(session.session_id.is_none());
+    assert_eq!(session.session_id, "no-session-id");
 }
 
 #[tokio::test]
@@ -105,7 +98,7 @@ async fn test_get_or_create_session_after_set() {
         )
         .await;
 
-    assert_eq!(session2.id, "test-id");
+    assert_eq!(session2.session_id, "test-id");
     // working_dir updated from new call (non-empty path replaces old)
     assert_eq!(session2.working_dir, PathBuf::from("/new/path"));
     assert_eq!(session2.status, Status::Attention);
@@ -135,11 +128,9 @@ async fn test_get_or_create_session_after_create_session() {
         )
         .await;
 
-    assert_eq!(session.id, "test-id");
+    assert_eq!(session.session_id, "test-id");
     // working_dir updated from new call (non-empty path replaces old)
     assert_eq!(session.working_dir, PathBuf::from("/new/path"));
-    // session_id preserved from original
-    assert_eq!(session.session_id, Some("original-id".to_string()));
     assert_eq!(session.status, Status::Question);
 }
 
@@ -157,7 +148,7 @@ async fn test_get_or_create_session_multiple_unique() {
                 Status::Working,
             )
             .await;
-        assert_eq!(session.id, format!("session-{}", i));
+        assert_eq!(session.session_id, format!("session-{}", i));
     }
 
     let sessions = store.list_all().await;

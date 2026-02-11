@@ -389,7 +389,7 @@ pub(super) async fn handle_dump_command(state: &DaemonState) -> String {
     let snapshots: Vec<crate::DumpSession> = sessions
         .iter()
         .map(|s| crate::DumpSession {
-            id: s.id.clone(),
+            session_id: s.session_id.clone(),
             status: s.status.to_string(),
             working_dir: s.working_dir.display().to_string(),
             elapsed_seconds: s.since.elapsed().as_secs(),
@@ -633,7 +633,7 @@ mod tests {
         );
 
         // Add the backdated session to the store
-        state.store.set(session.id.clone(), session).await;
+        state.store.set(session.session_id.clone(), session).await;
 
         let cmd = IpcCommand {
             version: 1,

@@ -33,7 +33,7 @@ async fn test_store_set_and_get() {
 
     assert!(retrieved.is_some());
     let retrieved = retrieved.unwrap();
-    assert_eq!(retrieved.id, "session-1");
+    assert_eq!(retrieved.session_id, "session-1");
     assert_eq!(retrieved.agent_type, AgentType::ClaudeCode);
     assert_eq!(retrieved.working_dir, PathBuf::from("/home/user/session-1"));
 }
@@ -61,7 +61,7 @@ async fn test_store_remove_existing() {
     let removed = store.remove("session-1").await;
 
     assert!(removed.is_some());
-    assert_eq!(removed.unwrap().id, "session-1");
+    assert_eq!(removed.unwrap().session_id, "session-1");
 
     let retrieved = store.get("session-1").await;
     assert!(retrieved.is_none());
@@ -104,7 +104,7 @@ async fn test_store_list_all_single_session() {
     let sessions = store.list_all().await;
 
     assert_eq!(sessions.len(), 1);
-    assert_eq!(sessions[0].id, "session-1");
+    assert_eq!(sessions[0].session_id, "session-1");
 }
 
 #[tokio::test]
@@ -119,7 +119,7 @@ async fn test_store_list_all_multiple_sessions() {
     let sessions = store.list_all().await;
     assert_eq!(sessions.len(), 5);
 
-    let ids: Vec<String> = sessions.iter().map(|s| s.id.clone()).collect();
+    let ids: Vec<String> = sessions.iter().map(|s| s.session_id.clone()).collect();
     for i in 1..=5 {
         assert!(ids.contains(&format!("session-{}", i)));
     }
@@ -135,7 +135,7 @@ async fn test_store_clone_shares_state() {
 
     let retrieved = cloned.get("shared-session").await;
     assert!(retrieved.is_some());
-    assert_eq!(retrieved.unwrap().id, "shared-session");
+    assert_eq!(retrieved.unwrap().session_id, "shared-session");
 }
 
 #[tokio::test]
@@ -148,7 +148,7 @@ async fn test_store_get_returns_clone() {
     let retrieved1 = store.get("session-1").await.unwrap();
     let retrieved2 = store.get("session-1").await.unwrap();
 
-    assert_eq!(retrieved1.id, retrieved2.id);
+    assert_eq!(retrieved1.session_id, retrieved2.session_id);
     assert_eq!(retrieved1.working_dir, retrieved2.working_dir);
 }
 
@@ -161,7 +161,7 @@ async fn test_store_set_with_different_key_than_id() {
 
     let retrieved = store.get("different-key").await;
     assert!(retrieved.is_some());
-    assert_eq!(retrieved.unwrap().id, "actual-id");
+    assert_eq!(retrieved.unwrap().session_id, "actual-id");
 
     let not_found = store.get("actual-id").await;
     assert!(not_found.is_none());
@@ -181,7 +181,7 @@ async fn test_store_list_all_after_remove() {
     let sessions = store.list_all().await;
     assert_eq!(sessions.len(), 2);
 
-    let ids: Vec<String> = sessions.iter().map(|s| s.id.clone()).collect();
+    let ids: Vec<String> = sessions.iter().map(|s| s.session_id.clone()).collect();
     assert!(ids.contains(&"session-1".to_string()));
     assert!(ids.contains(&"session-3".to_string()));
     assert!(!ids.contains(&"session-2".to_string()));

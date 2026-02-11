@@ -58,18 +58,14 @@ impl ClosedSession {
         let started_at_elapsed = session.since.duration_since(daemon_start).as_secs();
         let closed_at_elapsed = now.duration_since(daemon_start).as_secs();
 
-        // A session is resumable if it has a Claude Code session_id
-        let (resumable, not_resumable_reason) = if session.session_id.is_some() {
-            (true, None)
-        } else {
-            (
-                false,
-                Some("no Claude Code session ID available".to_string()),
-            )
-        };
+        // Sessions are not resumable (Claude Code session ID tracking removed)
+        let (resumable, not_resumable_reason) = (
+            false,
+            Some("no Claude Code session ID available".to_string()),
+        );
 
         Self {
-            session_id: session.id.clone(),
+            session_id: session.session_id.clone(),
             working_dir: session.working_dir.clone(),
             started_at_elapsed,
             closed_at_elapsed,
@@ -86,26 +82,24 @@ mod tests {
     use super::*;
     use crate::AgentType;
 
-    fn make_session(id: &str, session_id: Option<&str>) -> Session {
-        let mut s = Session::new(
+    fn make_session(id: &str) -> Session {
+        Session::new(
             id.to_string(),
             AgentType::ClaudeCode,
             PathBuf::from("/tmp/test"),
-        );
-        s.session_id = session_id.map(|s| s.to_string());
-        s
+        )
     }
 
     #[test]
     fn from_session_captures_all_fields() {
         let daemon_start = Instant::now();
-        let session = make_session("s1", Some("claude-abc"));
+        let session = make_session("s1");
         let closed = ClosedSession::from_session(&session, daemon_start);
 
         assert_eq!(closed.session_id, "s1");
         assert_eq!(closed.working_dir, PathBuf::from("/tmp/test"));
-        assert!(closed.resumable);
-        assert!(closed.not_resumable_reason.is_none());
+        assert!(!closed.resumable);
+        assert!(closed.not_resumable_reason.is_some());
         assert_eq!(closed.last_status, Status::Working);
         assert!(closed.closed_at.is_some());
     }
@@ -113,7 +107,7 @@ mod tests {
     #[test]
     fn from_session_without_session_id_is_not_resumable() {
         let daemon_start = Instant::now();
-        let session = make_session("s2", None);
+        let session = make_session("s2");
         let closed = ClosedSession::from_session(&session, daemon_start);
 
         assert!(!closed.resumable);
@@ -129,7 +123,7 @@ mod tests {
     fn elapsed_seconds_are_computed() {
         let daemon_start = Instant::now();
         std::thread::sleep(std::time::Duration::from_millis(50));
-        let session = make_session("s3", None);
+        let session = make_session("s3");
         let closed = ClosedSession::from_session(&session, daemon_start);
 
         // closed_at_elapsed should be >= started_at_elapsed
@@ -139,14 +133,14 @@ mod tests {
     #[test]
     fn serialization_roundtrip() {
         let daemon_start = Instant::now();
-        let session = make_session("s4", Some("resume-id"));
+        let session = make_session("s4");
         let closed = ClosedSession::from_session(&session, daemon_start);
 
         let json = serde_json::to_string(&closed).expect("should serialize");
         let deserialized: ClosedSession = serde_json::from_str(&json).expect("should deserialize");
 
         assert_eq!(deserialized.session_id, "s4");
-        assert!(deserialized.resumable);
+        assert!(!deserialized.resumable);
         assert_eq!(deserialized.working_dir, PathBuf::from("/tmp/test"));
         // closed_at should be None after deserialization (skipped)
         assert!(deserialized.closed_at.is_none());
@@ -155,7 +149,7 @@ mod tests {
     #[test]
     fn clone_preserves_all_fields() {
         let daemon_start = Instant::now();
-        let session = make_session("s5", Some("clone-id"));
+        let session = make_session("s5");
         let closed = ClosedSession::from_session(&session, daemon_start);
         let cloned = closed.clone();
 
@@ -168,7 +162,7 @@ mod tests {
     #[test]
     fn debug_format_contains_session_id() {
         let daemon_start = Instant::now();
-        let session = make_session("debug-s", None);
+        let session = make_session("debug-s");
         let closed = ClosedSession::from_session(&session, daemon_start);
         let debug = format!("{:?}", closed);
         assert!(debug.contains("debug-s"));

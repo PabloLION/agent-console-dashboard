@@ -103,7 +103,7 @@ pub fn format_session_line<'a>(session: &Session, width: u16) -> Line<'a> {
         )
     };
     let elapsed = format_elapsed(session.since);
-    let name = session.id.clone();
+    let name = session.session_id.clone();
 
     if width < NARROW_THRESHOLD {
         // Narrow: symbol + session ID only (no column alignment)

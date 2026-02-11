@@ -29,8 +29,8 @@ async fn close_session_stores_closed_metadata() {
     let meta = &closed[0];
     assert_eq!(meta.session_id, "s1");
     assert_eq!(meta.working_dir, PathBuf::from("/tmp/project"));
-    assert!(meta.resumable);
-    assert!(meta.not_resumable_reason.is_none());
+    assert!(!meta.resumable);
+    assert!(meta.not_resumable_reason.is_some());
     assert_eq!(meta.last_status, Status::Closed);
 }
 
@@ -105,7 +105,7 @@ async fn get_closed_returns_correct_session() {
     assert!(result.is_some());
     let meta = result.expect("already checked is_some");
     assert_eq!(meta.session_id, "target");
-    assert!(meta.resumable);
+    assert!(!meta.resumable);
 }
 
 #[tokio::test]
@@ -271,8 +271,8 @@ async fn closed_metadata_includes_all_fields() {
 
     assert_eq!(meta.session_id, "full");
     assert_eq!(meta.working_dir, PathBuf::from("/home/user/project"));
-    assert!(meta.resumable);
-    assert!(meta.not_resumable_reason.is_none());
+    assert!(!meta.resumable);
+    assert!(meta.not_resumable_reason.is_some());
     assert_eq!(meta.last_status, Status::Closed);
     assert!(meta.closed_at.is_some());
     // Elapsed values should be non-negative (they are u64 so always >= 0)

@@ -59,7 +59,7 @@ async fn test_concurrent_writes_no_corruption() {
     for i in 0..num_writers {
         let session = store.get(&format!("writer-{}", i)).await;
         assert!(session.is_some(), "Session writer-{} missing", i);
-        assert_eq!(session.unwrap().id, format!("writer-{}", i));
+        assert_eq!(session.unwrap().session_id, format!("writer-{}", i));
     }
 }
 
@@ -151,7 +151,7 @@ async fn test_concurrent_high_contention() {
 
     let session = store.get("shared-key").await;
     assert!(session.is_some());
-    assert_eq!(session.unwrap().id, "shared-key");
+    assert_eq!(session.unwrap().session_id, "shared-key");
 }
 
 /// Test concurrent list_all operations return consistent snapshots.

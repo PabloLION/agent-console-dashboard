@@ -99,7 +99,7 @@ fn hook_creates_session_with_working_status() {
     assert_eq!(sessions.len(), 1, "should have exactly 1 session");
 
     let s = &sessions[0];
-    assert_eq!(s["id"], "sess-1");
+    assert_eq!(s["session_id"], "sess-1");
     assert_eq!(s["status"], "working");
 }
 
@@ -176,7 +176,7 @@ fn hook_multiple_sessions() {
 
     let ids: Vec<&str> = sessions
         .iter()
-        .map(|s| s["id"].as_str().expect("id"))
+        .map(|s| s["session_id"].as_str().expect("session_id"))
         .collect();
     assert!(ids.contains(&"multi-1"));
     assert!(ids.contains(&"multi-2"));
@@ -216,7 +216,7 @@ fn hook_unknown_fields_are_ignored() {
         .stdout(predicate::str::contains(r#""continue": true"#));
 
     let state = dump(&sock);
-    assert_eq!(state["sessions"][0]["id"], "sess-uf");
+    assert_eq!(state["sessions"][0]["session_id"], "sess-uf");
 }
 
 #[test]

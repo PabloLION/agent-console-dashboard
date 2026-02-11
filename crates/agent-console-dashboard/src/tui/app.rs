@@ -268,7 +268,11 @@ impl App {
             .map(PathBuf::from)
             .unwrap_or_default();
 
-        if let Some(session) = self.sessions.iter_mut().find(|s| s.id == info.session_id) {
+        if let Some(session) = self
+            .sessions
+            .iter_mut()
+            .find(|s| s.session_id == info.session_id)
+        {
             // Update working_dir from daemon if non-empty
             if !working_dir.as_os_str().is_empty() {
                 session.working_dir = working_dir;
@@ -455,12 +459,12 @@ fn restore_terminal() -> io::Result<()> {
 /// Substitutes placeholders in a hook command template with session values.
 ///
 /// Supported placeholders:
-/// - `{session_id}` — replaced with `session.id`
+/// - `{session_id}` — replaced with `session.session_id`
 /// - `{working_dir}` — replaced with `session.working_dir` display string
 /// - `{status}` — replaced with `session.status` display string
 pub fn substitute_hook_placeholders(template: &str, session: &Session) -> String {
     template
-        .replace("{session_id}", &session.id)
+        .replace("{session_id}", &session.session_id)
         .replace("{working_dir}", &session.working_dir.display().to_string())
         .replace("{status}", &session.status.to_string())
 }
@@ -616,7 +620,7 @@ mod tests {
         let session = app
             .selected_session()
             .expect("should have selected session");
-        assert_eq!(session.id, "session-0");
+        assert_eq!(session.session_id, "session-0");
     }
 
     #[test]
@@ -633,7 +637,7 @@ mod tests {
         let session = app
             .selected_session()
             .expect("should have selected session");
-        assert_eq!(session.id, "session-2");
+        assert_eq!(session.session_id, "session-2");
     }
 
     // --- integration: multiple nav steps ---

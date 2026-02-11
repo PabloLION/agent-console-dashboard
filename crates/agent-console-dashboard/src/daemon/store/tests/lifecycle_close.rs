@@ -25,7 +25,7 @@ async fn test_close_session() {
 
     assert!(closed.is_some());
     let session = closed.expect("already checked is_some");
-    assert_eq!(session.id, "close-test");
+    assert_eq!(session.session_id, "close-test");
     assert!(session.closed);
     assert_eq!(session.status, Status::Closed);
 }
@@ -100,10 +100,9 @@ async fn test_close_session_preserves_metadata() {
     assert!(closed.is_some());
     let session = closed.expect("already checked is_some");
 
-    assert_eq!(session.id, "preserve-close");
+    assert_eq!(session.session_id, "preserve-close");
     assert_eq!(session.agent_type, AgentType::ClaudeCode);
     assert_eq!(session.working_dir, PathBuf::from("/specific/path"));
-    assert_eq!(session.session_id, Some("claude-session-xyz".to_string()));
     assert!(session.closed);
     assert_eq!(session.status, Status::Closed);
 }
@@ -159,11 +158,11 @@ async fn test_close_session_list_all_includes_closed() {
     let sessions = store.list_all().await;
     assert_eq!(sessions.len(), 2);
 
-    let closed_session = sessions.iter().find(|s| s.id == "session-1");
+    let closed_session = sessions.iter().find(|s| s.session_id == "session-1");
     assert!(closed_session.is_some());
     assert!(closed_session.expect("already checked is_some").closed);
 
-    let active_session = sessions.iter().find(|s| s.id == "session-2");
+    let active_session = sessions.iter().find(|s| s.session_id == "session-2");
     assert!(active_session.is_some());
     assert!(!active_session.expect("already checked is_some").closed);
 }
@@ -208,24 +207,26 @@ async fn test_remove_session() {
     let removed = store.remove_session("session-to-remove").await;
     assert!(removed.is_some());
     assert_eq!(
-        removed.expect("already checked is_some").id,
+        removed.expect("already checked is_some").session_id,
         "session-to-remove"
     );
 
     let sessions = store.list_all().await;
     assert_eq!(sessions.len(), 2);
 
-    let closed_session = sessions.iter().find(|s| s.id == "session-to-close");
+    let closed_session = sessions.iter().find(|s| s.session_id == "session-to-close");
     assert!(closed_session.is_some());
     let closed_session = closed_session.expect("already checked is_some");
     assert!(closed_session.closed);
     assert_eq!(closed_session.status, Status::Closed);
 
-    let active_session = sessions.iter().find(|s| s.id == "session-active");
+    let active_session = sessions.iter().find(|s| s.session_id == "session-active");
     assert!(active_session.is_some());
     assert!(!active_session.expect("already checked is_some").closed);
 
-    let removed_session = sessions.iter().find(|s| s.id == "session-to-remove");
+    let removed_session = sessions
+        .iter()
+        .find(|s| s.session_id == "session-to-remove");
     assert!(removed_session.is_none());
 
     assert!(store.get("session-to-remove").await.is_none());
@@ -277,8 +278,7 @@ async fn test_remove_session_preserves_data() {
 
     assert!(removed.is_some());
     let session = removed.expect("already checked is_some");
-    assert_eq!(session.id, "data-session");
+    assert_eq!(session.session_id, "data-session");
     assert_eq!(session.agent_type, AgentType::ClaudeCode);
     assert_eq!(session.working_dir, PathBuf::from("/specific/path"));
-    assert_eq!(session.session_id, Some("claude-session-xyz".to_string()));
 }

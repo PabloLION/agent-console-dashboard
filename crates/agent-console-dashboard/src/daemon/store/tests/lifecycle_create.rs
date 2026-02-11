@@ -19,16 +19,15 @@ async fn test_create_session() {
 
     assert!(result.is_ok());
     let session = result.expect("already checked is_ok");
-    assert_eq!(session.id, "new-session");
+    assert_eq!(session.session_id, "new-session");
     assert_eq!(session.agent_type, AgentType::ClaudeCode);
     assert_eq!(session.working_dir, PathBuf::from("/home/user/project"));
-    assert_eq!(session.session_id, Some("claude-session-123".to_string()));
     assert!(!session.closed);
 
     let retrieved = store.get("new-session").await;
     assert!(retrieved.is_some());
     assert_eq!(
-        retrieved.expect("already checked is_some").id,
+        retrieved.expect("already checked is_some").session_id,
         "new-session"
     );
 }
@@ -48,8 +47,7 @@ async fn test_create_session_without_session_id() {
 
     assert!(result.is_ok());
     let session = result.expect("already checked is_ok");
-    assert_eq!(session.id, "no-session-id");
-    assert!(session.session_id.is_none());
+    assert_eq!(session.session_id, "no-session-id");
 }
 
 #[tokio::test]

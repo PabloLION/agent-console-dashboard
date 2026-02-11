@@ -21,7 +21,7 @@ async fn test_update_session() {
 
     assert!(updated.is_some());
     let session = updated.expect("already checked is_some");
-    assert_eq!(session.id, "update-test");
+    assert_eq!(session.session_id, "update-test");
     assert_eq!(session.status, Status::Attention);
     assert_eq!(session.history.len(), 1);
     assert_eq!(session.history[0].from, Status::Working);
@@ -135,9 +135,8 @@ async fn test_update_session_preserves_metadata() {
     assert!(updated.is_some());
     let session = updated.expect("already checked is_some");
 
-    assert_eq!(session.id, "preserve-meta");
+    assert_eq!(session.session_id, "preserve-meta");
     assert_eq!(session.agent_type, AgentType::ClaudeCode);
     assert_eq!(session.working_dir, PathBuf::from("/specific/path"));
-    assert_eq!(session.session_id, Some("claude-session-xyz".to_string()));
     assert_eq!(session.status, Status::Attention);
 }

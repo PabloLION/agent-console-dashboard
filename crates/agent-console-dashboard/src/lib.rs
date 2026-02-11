@@ -130,7 +130,7 @@ pub struct ApiUsage {
 #[derive(Debug, Clone)]
 pub struct Session {
     /// Unique session identifier.
-    pub id: String,
+    pub session_id: String,
     /// Type of agent (ClaudeCode, etc.).
     pub agent_type: AgentType,
     /// Current session status.
@@ -148,15 +148,13 @@ pub struct Session {
     pub api_usage: Option<ApiUsage>,
     /// Whether session has been closed (for resurrection).
     pub closed: bool,
-    /// Claude Code session ID for resume capability.
-    pub session_id: Option<String>,
 }
 
 impl Session {
     /// Creates a new Session with the specified parameters.
-    pub fn new(id: String, agent_type: AgentType, working_dir: PathBuf) -> Self {
+    pub fn new(session_id: String, agent_type: AgentType, working_dir: PathBuf) -> Self {
         Self {
-            id,
+            session_id,
             agent_type,
             status: Status::Working,
             working_dir,
@@ -165,7 +163,6 @@ impl Session {
             history: Vec::new(),
             api_usage: None,
             closed: false,
-            session_id: None,
         }
     }
 
@@ -322,7 +319,7 @@ pub struct DaemonDump {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct DumpSession {
     /// Unique session identifier.
-    pub id: String,
+    pub session_id: String,
     /// Current session status as string.
     pub status: String,
     /// Working directory for this session.
@@ -582,7 +579,7 @@ impl From<&Session> for SessionSnapshot {
             .collect();
 
         Self {
-            session_id: session.id.clone(),
+            session_id: session.session_id.clone(),
             agent_type: format!("{:?}", session.agent_type).to_lowercase(),
             status: session.status.to_string(),
             working_dir,
@@ -754,27 +751,25 @@ mod tests {
             AgentType::ClaudeCode,
             PathBuf::from("/home/user/project"),
         );
-        assert_eq!(session.id, "test-session-1");
+        assert_eq!(session.session_id, "test-session-1");
         assert_eq!(session.agent_type, AgentType::ClaudeCode);
         assert_eq!(session.status, Status::Working);
         assert_eq!(session.working_dir, PathBuf::from("/home/user/project"));
         assert!(session.history.is_empty());
         assert!(session.api_usage.is_none());
         assert!(!session.closed);
-        assert!(session.session_id.is_none());
     }
 
     #[test]
     fn test_session_default() {
         let session = Session::default();
-        assert_eq!(session.id, "");
+        assert_eq!(session.session_id, "");
         assert_eq!(session.agent_type, AgentType::ClaudeCode);
         assert_eq!(session.status, Status::Working);
         assert_eq!(session.working_dir, PathBuf::new());
         assert!(session.history.is_empty());
         assert!(session.api_usage.is_none());
         assert!(!session.closed);
-        assert!(session.session_id.is_none());
     }
 
     #[test]
@@ -785,7 +780,7 @@ mod tests {
             PathBuf::from("/tmp/test"),
         );
         let cloned = session.clone();
-        assert_eq!(cloned.id, session.id);
+        assert_eq!(cloned.session_id, session.session_id);
         assert_eq!(cloned.agent_type, session.agent_type);
         assert_eq!(cloned.status, session.status);
         assert_eq!(cloned.working_dir, session.working_dir);
@@ -804,7 +799,6 @@ mod tests {
             output_tokens: 500,
         });
         session.closed = true;
-        session.session_id = Some("claude-session-123".to_string());
         session.history.push(StateTransition {
             timestamp: Instant::now(),
             from: Status::Working,
@@ -812,10 +806,9 @@ mod tests {
             duration: Duration::from_secs(60),
         });
 
-        assert_eq!(session.id, "full-session");
+        assert_eq!(session.session_id, "full-session");
         assert_eq!(session.status, Status::Question);
         assert!(session.closed);
-        assert_eq!(session.session_id, Some("claude-session-123".to_string()));
         assert_eq!(session.api_usage.unwrap().input_tokens, 1000);
         assert_eq!(session.history.len(), 1);
     }
@@ -823,12 +816,12 @@ mod tests {
     #[test]
     fn test_session_field_mutability() {
         let mut session = Session::default();
-        session.id = "updated-id".to_string();
+        session.session_id = "updated-id".to_string();
         session.status = Status::Attention;
         session.working_dir = PathBuf::from("/new/path");
         session.closed = true;
 
-        assert_eq!(session.id, "updated-id");
+        assert_eq!(session.session_id, "updated-id");
         assert_eq!(session.status, Status::Attention);
         assert_eq!(session.working_dir, PathBuf::from("/new/path"));
         assert!(session.closed);
@@ -1442,7 +1435,7 @@ mod tests {
             uptime_seconds: 3600,
             socket_path: "/tmp/test.sock".to_string(),
             sessions: vec![DumpSession {
-                id: "session-1".to_string(),
+                session_id: "session-1".to_string(),
                 status: "working".to_string(),
                 working_dir: "/home/user/project".to_string(),
                 elapsed_seconds: 120,
@@ -1464,7 +1457,7 @@ mod tests {
     #[test]
     fn test_dump_session_serialization() {
         let entry = DumpSession {
-            id: "snap-1".to_string(),
+            session_id: "snap-1".to_string(),
             status: "attention".to_string(),
             working_dir: "/tmp/work".to_string(),
             elapsed_seconds: 45,
@@ -1504,21 +1497,21 @@ mod tests {
             socket_path: "/tmp/multi.sock".to_string(),
             sessions: vec![
                 DumpSession {
-                    id: "s1".to_string(),
+                    session_id: "s1".to_string(),
                     status: "working".to_string(),
                     working_dir: "/project-a".to_string(),
                     elapsed_seconds: 60,
                     closed: false,
                 },
                 DumpSession {
-                    id: "s2".to_string(),
+                    session_id: "s2".to_string(),
                     status: "closed".to_string(),
                     working_dir: "/project-b".to_string(),
                     elapsed_seconds: 300,
                     closed: true,
                 },
                 DumpSession {
-                    id: "s3".to_string(),
+                    session_id: "s3".to_string(),
                     status: "question".to_string(),
                     working_dir: "/project-c".to_string(),
                     elapsed_seconds: 10,
