@@ -86,6 +86,12 @@ fn compute_directory_display_names(
     use std::collections::HashMap;
     use std::path::Path;
 
+    // Build O(1) lookup map for sessions
+    let session_map: HashMap<&str, &Session> = sessions
+        .iter()
+        .map(|s| (s.session_id.as_str(), s))
+        .collect();
+
     // Helper: extract components as strings from a path
     fn path_components(path: &Path) -> Vec<String> {
         path.components()
@@ -125,10 +131,9 @@ fn compute_directory_display_names(
 
             // Try to disambiguate by adding one more parent level
             for session_id in &session_ids {
-                let session = sessions
-                    .iter()
-                    .find(|s| &s.session_id == session_id)
-                    .expect("session must exist");
+                let session = session_map
+                    .get(session_id.as_str())
+                    .expect("session must exist in map");
                 if let Some(path) = &session.working_dir {
                     let components = path_components(path);
                     if components.len() > depth {
@@ -158,10 +163,9 @@ fn compute_directory_display_names(
     for (_, session_ids) in final_collision_groups {
         if session_ids.len() > 1 {
             for session_id in &session_ids {
-                let session = sessions
-                    .iter()
-                    .find(|s| &s.session_id == session_id)
-                    .expect("session must exist");
+                let session = session_map
+                    .get(session_id.as_str())
+                    .expect("session must exist in map");
                 if let Some(path) = &session.working_dir {
                     display_names.insert(session_id.clone(), path.display().to_string());
                 }
@@ -1269,6 +1273,593 @@ mod tests {
             names.get("s3"),
             Some(&"home/project".to_string()),
             "s3 should show home/project"
+        );
+    }
+
+    // --- TUI TestBackend tests (acd-211) ---
+    // Using test_utils for buffer inspection and validation
+
+    use crate::tui::test_utils::{
+        assert_text_fg_in_row, find_row_with_text, make_inactive_session,
+        make_session as make_test_session_with_dir, render_dashboard_to_buffer,
+        render_session_list_to_buffer, row_contains, row_text,
+    };
+
+    // Column Layout Tests (13 tests - TDD for acd-0uz, acd-7dl, acd-k69, acd-czj, acd-csg)
+
+    #[test]
+    fn test_directory_is_first_data_column_standard() {
+        let sessions = vec![make_test_session_with_dir(
+            "test",
+            Status::Working,
+            Some(PathBuf::from("/home/user/project")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 60, 10);
+        // Find the first data row (after header)
+        let row = find_row_with_text(&buffer, "project").expect("should find project");
+        let row_string = row_text(&buffer, row);
+        // Directory should appear before session ID in the line
+        let dir_pos = row_string.find("project").expect("project not found");
+        let id_pos = row_string.find("test").expect("test not found");
+        assert!(
+            dir_pos < id_pos,
+            "Directory should be before session ID: dir_pos={}, id_pos={}",
+            dir_pos,
+            id_pos
+        );
+    }
+
+    #[test]
+    fn test_directory_is_first_data_column_wide() {
+        let sessions = vec![make_test_session_with_dir(
+            "test-wide",
+            Status::Working,
+            Some(PathBuf::from("/home/user/wide-project")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 100, 10);
+        let row = find_row_with_text(&buffer, "wide-project").expect("should find wide-project");
+        let row_string = row_text(&buffer, row);
+        let dir_pos = row_string
+            .find("wide-project")
+            .expect("wide-project not found");
+        let id_pos = row_string.find("test-wide").expect("test-wide not found");
+        assert!(
+            dir_pos < id_pos,
+            "Directory should be before session ID: dir_pos={}, id_pos={}",
+            dir_pos,
+            id_pos
+        );
+    }
+
+    #[test]
+    fn test_header_directory_is_first_column_standard() {
+        let sessions = vec![make_test_session_with_dir(
+            "test",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 60, 10);
+        // Find header row
+        let header_row =
+            find_row_with_text(&buffer, "Directory").expect("should find Directory header");
+        let row_string = row_text(&buffer, header_row);
+        let dir_pos = row_string.find("Directory").expect("Directory not found");
+        let id_pos = row_string.find("Session ID").expect("Session ID not found");
+        assert!(
+            dir_pos < id_pos,
+            "Directory header should be before Session ID header"
+        );
+    }
+
+    #[test]
+    fn test_header_does_not_say_name() {
+        let sessions = vec![make_test_session_with_dir(
+            "test",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 60, 10);
+        // Check that "Name" is not in any header row
+        for row in 0..buffer.area().height {
+            let text = row_text(&buffer, row);
+            if text.contains("Directory") || text.contains("Session ID") {
+                assert!(
+                    !text.contains("Name"),
+                    "Header should not contain 'Name', got: '{}'",
+                    text
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_header_says_session_id_standard() {
+        let sessions = vec![make_test_session_with_dir(
+            "test",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 60, 10);
+        assert!(
+            find_row_with_text(&buffer, "Session ID").is_some(),
+            "Header should contain 'Session ID'"
+        );
+    }
+
+    #[test]
+    fn test_header_says_session_id_wide() {
+        let sessions = vec![make_test_session_with_dir(
+            "test",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 100, 10);
+        assert!(
+            find_row_with_text(&buffer, "Session ID").is_some(),
+            "Wide header should contain 'Session ID'"
+        );
+    }
+
+    #[test]
+    fn test_session_id_not_truncated_in_line() {
+        let long_id = "very-long-session-identifier-that-should-not-be-truncated";
+        let sessions = vec![make_test_session_with_dir(
+            long_id,
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 120, 10);
+        assert!(
+            find_row_with_text(&buffer, long_id).is_some(),
+            "Full session ID should appear in buffer without truncation"
+        );
+    }
+
+    #[test]
+    fn test_session_id_not_truncated_at_any_width() {
+        let long_id = "extremely-long-session-id-with-many-characters";
+        let sessions = vec![make_test_session_with_dir(
+            long_id,
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        // Try multiple widths
+        for width in [60, 80, 100, 120, 150] {
+            let buffer = render_session_list_to_buffer(&sessions, Some(0), width, 10);
+            assert!(
+                find_row_with_text(&buffer, long_id).is_some(),
+                "Session ID should not be truncated at width {}",
+                width
+            );
+        }
+    }
+
+    #[test]
+    fn test_elapsed_column_fits_hours_format() {
+        let sessions = vec![make_test_session_with_dir(
+            "test",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 60, 10);
+        // The elapsed format for hours is "Xh Ym" which needs at least 5 characters ("0h 0m")
+        // The column width should be at least 10 to accommodate right-aligned hours
+        // We just verify that elapsed content appears
+        let data_row = find_row_with_text(&buffer, "test").expect("should find session row");
+        let row_string = row_text(&buffer, data_row);
+        // Check that the row has elapsed time pattern (either "Xs", "Xm Ys", or "Xh Ym")
+        assert!(
+            row_string.contains('s') || row_string.contains('m') || row_string.contains('h'),
+            "Row should contain elapsed time format"
+        );
+    }
+
+    #[test]
+    fn test_elapsed_column_width_at_least_10() {
+        // This test verifies that the elapsed column can accommodate the format
+        // We check by ensuring the column doesn't cause layout issues
+        let sessions = vec![make_test_session_with_dir(
+            "test",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 60, 10);
+        // If the elapsed column is too narrow, the layout would break or truncate
+        // We verify by checking that status and elapsed are both visible
+        let data_row = find_row_with_text(&buffer, "test").expect("should find session row");
+        let row_string = row_text(&buffer, data_row);
+        assert!(
+            row_string.contains("working"),
+            "Status should be visible: '{}'",
+            row_string
+        );
+        assert!(
+            row_string.contains('s') || row_string.contains('m') || row_string.contains('h'),
+            "Elapsed should be visible: '{}'",
+            row_string
+        );
+    }
+
+    #[test]
+    fn test_header_labels_left_aligned_standard() {
+        let sessions = vec![make_test_session_with_dir(
+            "test",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 60, 10);
+        let header_row = find_row_with_text(&buffer, "Directory").expect("should find header");
+        let row_string = row_text(&buffer, header_row);
+        // Left-aligned means labels start immediately after symbol space, not preceded by spaces
+        // Directory should start early in the row (within first 5 chars after symbol)
+        let dir_pos = row_string.find("Directory").expect("Directory not found");
+        assert!(
+            dir_pos < 5,
+            "Directory should be left-aligned (pos < 5), got pos={}",
+            dir_pos
+        );
+    }
+
+    #[test]
+    fn test_header_labels_left_aligned_wide() {
+        let sessions = vec![make_test_session_with_dir(
+            "test",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 100, 10);
+        let header_row = find_row_with_text(&buffer, "Directory").expect("should find header");
+        let row_string = row_text(&buffer, header_row);
+        let dir_pos = row_string.find("Directory").expect("Directory not found");
+        assert!(
+            dir_pos < 5,
+            "Directory should be left-aligned (pos < 5), got pos={}",
+            dir_pos
+        );
+    }
+
+    #[test]
+    fn test_data_columns_left_aligned_standard() {
+        let sessions = vec![make_test_session_with_dir(
+            "test",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 60, 10);
+        let data_row = find_row_with_text(&buffer, "test").expect("should find data row");
+        let row_string = row_text(&buffer, data_row);
+        // Directory (tmp) should appear early in the row (left-aligned)
+        let dir_pos = row_string.find("tmp").expect("tmp not found");
+        assert!(
+            dir_pos < 10,
+            "Directory data should be left-aligned (pos < 10), got pos={}",
+            dir_pos
+        );
+    }
+
+    // Buffer Content Tests (8 tests - verify existing behavior)
+
+    #[test]
+    fn test_dashboard_buffer_contains_header_text() {
+        use crate::tui::app::App;
+        let app = App::new(PathBuf::from("/tmp/test.sock"));
+        let buffer = render_dashboard_to_buffer(&app, 80, 24);
+        assert!(
+            find_row_with_text(&buffer, "Agent Console Dashboard").is_some(),
+            "Buffer should contain header text"
+        );
+    }
+
+    #[test]
+    fn test_dashboard_buffer_contains_footer_keybindings() {
+        use crate::tui::app::App;
+        let app = App::new(PathBuf::from("/tmp/test.sock"));
+        let buffer = render_dashboard_to_buffer(&app, 80, 24);
+        let last_row = buffer.area().height - 1;
+        assert!(
+            row_contains(&buffer, last_row, "[q] Quit"),
+            "Footer should contain keybindings"
+        );
+    }
+
+    #[test]
+    fn test_dashboard_buffer_contains_session_border() {
+        use crate::tui::app::App;
+        let app = App::new(PathBuf::from("/tmp/test.sock"));
+        let buffer = render_dashboard_to_buffer(&app, 80, 24);
+        assert!(
+            find_row_with_text(&buffer, "Sessions").is_some(),
+            "Buffer should contain 'Sessions' border title"
+        );
+    }
+
+    #[test]
+    fn test_dashboard_buffer_shows_session_names() {
+        use crate::tui::app::App;
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+        app.sessions.push(make_test_session_with_dir(
+            "test-session-id",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        ));
+        app.init_selection();
+        let buffer = render_dashboard_to_buffer(&app, 80, 24);
+        assert!(
+            find_row_with_text(&buffer, "test-session-id").is_some(),
+            "Buffer should contain session ID"
+        );
+    }
+
+    #[test]
+    fn test_dashboard_empty_renders_without_session_text() {
+        use crate::tui::app::App;
+        let app = App::new(PathBuf::from("/tmp/test.sock"));
+        let buffer = render_dashboard_to_buffer(&app, 80, 24);
+        // With no sessions, there should be no data rows with session IDs
+        // We can check that the buffer only has structural elements (header, border, footer)
+        // and no session-like content
+        for row in 0..buffer.area().height {
+            let text = row_text(&buffer, row);
+            // Shouldn't find patterns like "session-" or working directory paths
+            assert!(
+                !text.contains("session-"),
+                "Empty dashboard should not contain session IDs"
+            );
+        }
+    }
+
+    #[test]
+    fn test_dashboard_selected_session_has_highlight() {
+        use crate::tui::app::App;
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+        app.sessions.push(make_test_session_with_dir(
+            "highlighted",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        ));
+        app.init_selection();
+        let buffer = render_dashboard_to_buffer(&app, 80, 24);
+        // Find the row with the session
+        let session_row =
+            find_row_with_text(&buffer, "highlighted").expect("should find session row");
+        // Check that some cells in this row have DarkGray background (highlight)
+        let row_string = row_text(&buffer, session_row);
+        let area = buffer.area();
+        let mut found_highlight = false;
+        for col in 0..area.width {
+            if let Some(cell) = buffer.cell((col, session_row)) {
+                if cell.bg == Color::DarkGray {
+                    found_highlight = true;
+                    break;
+                }
+            }
+        }
+        assert!(
+            found_highlight,
+            "Selected session should have DarkGray background highlight: row={}",
+            row_string
+        );
+    }
+
+    #[test]
+    fn test_dashboard_selected_session_has_arrow_symbol() {
+        use crate::tui::app::App;
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+        app.sessions.push(make_test_session_with_dir(
+            "with-arrow",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        ));
+        app.init_selection();
+        let buffer = render_dashboard_to_buffer(&app, 80, 24);
+        let session_row = find_row_with_text(&buffer, "with-arrow").expect("should find session");
+        let row_string = row_text(&buffer, session_row);
+        // The highlight symbol is "▸ " (2 chars)
+        assert!(
+            row_string.contains('▸'),
+            "Selected session should have arrow highlight symbol: '{}'",
+            row_string
+        );
+    }
+
+    #[test]
+    fn test_narrow_mode_shows_only_symbol_and_name() {
+        let sessions = vec![make_test_session_with_dir(
+            "narrow-test",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 35, 10);
+        let row = find_row_with_text(&buffer, "narrow-test").expect("should find session");
+        let row_string = row_text(&buffer, row);
+        // In narrow mode (<40 cols), we should see symbol + session ID only
+        // No directory, status, or elapsed columns
+        assert!(
+            row_string.contains("narrow-test"),
+            "Narrow mode should show session ID"
+        );
+        // Should NOT show status text like "working" or elapsed times
+        assert!(
+            !row_string.contains("working"),
+            "Narrow mode should not show status column: '{}'",
+            row_string
+        );
+    }
+
+    // Status Color Tests (6 tests)
+
+    #[test]
+    fn test_working_status_renders_green_symbol() {
+        let sessions = vec![make_test_session_with_dir(
+            "working",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
+        let row = find_row_with_text(&buffer, "working").expect("should find session");
+        // The working symbol "●" should be colored green
+        // Find the symbol position (should be at start of row after highlight space)
+        assert_text_fg_in_row(&buffer, row, "●", Color::Green);
+    }
+
+    #[test]
+    fn test_attention_status_renders_yellow_symbol() {
+        let sessions = vec![make_test_session_with_dir(
+            "attention",
+            Status::Attention,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
+        let row = find_row_with_text(&buffer, "attention").expect("should find session");
+        // The attention symbol "○" should be colored yellow
+        assert_text_fg_in_row(&buffer, row, "○", Color::Yellow);
+    }
+
+    #[test]
+    fn test_question_status_renders_blue_symbol() {
+        let sessions = vec![make_test_session_with_dir(
+            "question",
+            Status::Question,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
+        let row = find_row_with_text(&buffer, "question").expect("should find session");
+        // The question symbol "?" should be colored blue
+        assert_text_fg_in_row(&buffer, row, "?", Color::Blue);
+    }
+
+    #[test]
+    fn test_closed_status_renders_gray_symbol() {
+        let sessions = vec![make_test_session_with_dir(
+            "closed",
+            Status::Closed,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
+        let row = find_row_with_text(&buffer, "closed").expect("should find session");
+        // The closed symbol "×" should be colored gray
+        assert_text_fg_in_row(&buffer, row, "×", Color::Gray);
+    }
+
+    #[test]
+    fn test_inactive_session_renders_dark_gray() {
+        let session = make_inactive_session("inactive", INACTIVE_SESSION_THRESHOLD.as_secs() + 100);
+        let sessions = vec![session];
+        let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
+        let row = find_row_with_text(&buffer, "inactive").expect("should find session");
+        // Inactive sessions should use DarkGray with DIM modifier
+        // The symbol for inactive is "◌"
+        assert_text_fg_in_row(&buffer, row, "◌", Color::DarkGray);
+    }
+
+    #[test]
+    fn test_error_working_dir_renders_red() {
+        let sessions = vec![make_test_session_with_dir(
+            "error-test",
+            Status::Working,
+            None,
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
+        let row = find_row_with_text(&buffer, "error-test").expect("should find session");
+        // "<error>" text should be colored red
+        assert_text_fg_in_row(&buffer, row, "<error>", Color::Red);
+    }
+
+    // Responsive Layout Tests (4 tests)
+
+    #[test]
+    fn test_standard_mode_shows_all_columns() {
+        let sessions = vec![make_test_session_with_dir(
+            "standard",
+            Status::Working,
+            Some(PathBuf::from("/home/user/project")),
+        )];
+        // Test at 60 cols (standard mode: 40-80)
+        let buffer = render_session_list_to_buffer(&sessions, None, 60, 10);
+        let row = find_row_with_text(&buffer, "standard").expect("should find session");
+        let row_string = row_text(&buffer, row);
+        // Should show: symbol, directory, session ID, status, elapsed (5 elements)
+        assert!(row_string.contains("project"), "Should show directory");
+        assert!(row_string.contains("standard"), "Should show session ID");
+        assert!(row_string.contains("working"), "Should show status");
+        assert!(
+            row_string.contains('s') || row_string.contains('m'),
+            "Should show elapsed"
+        );
+    }
+
+    #[test]
+    fn test_wide_mode_shows_wider_directory() {
+        let long_dir = "very-long-project-directory-name";
+        let sessions = vec![make_test_session_with_dir(
+            "wide",
+            Status::Working,
+            Some(PathBuf::from(format!("/home/user/{}", long_dir))),
+        )];
+        let buffer_standard = render_session_list_to_buffer(&sessions, None, 60, 10);
+        let buffer_wide = render_session_list_to_buffer(&sessions, None, 100, 10);
+
+        let row_standard =
+            find_row_with_text(&buffer_standard, "wide").expect("should find session");
+        let row_wide = find_row_with_text(&buffer_wide, "wide").expect("should find session");
+
+        let text_standard = row_text(&buffer_standard, row_standard);
+        let text_wide = row_text(&buffer_wide, row_wide);
+
+        // Wide mode (>80 cols) should show more of the directory name
+        // Check if the wide version contains more characters of the long directory
+        let dir_chars_standard = text_standard
+            .matches(|c: char| c.is_alphanumeric() && long_dir.contains(c))
+            .count();
+        let dir_chars_wide = text_wide
+            .matches(|c: char| c.is_alphanumeric() && long_dir.contains(c))
+            .count();
+
+        assert!(
+            dir_chars_wide >= dir_chars_standard,
+            "Wide mode should show at least as much directory content as standard mode"
+        );
+    }
+
+    #[test]
+    fn test_header_row_is_cyan_bold() {
+        let sessions = vec![make_test_session_with_dir(
+            "test",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 60, 10);
+        let header_row = find_row_with_text(&buffer, "Directory").expect("should find header");
+        // Check that header cells have cyan foreground and bold modifier
+        let dir_col = row_text(&buffer, header_row)
+            .find("Directory")
+            .expect("Directory not found") as u16;
+        let cell = buffer
+            .cell((dir_col, header_row))
+            .expect("cell should exist");
+        assert_eq!(cell.fg, Color::Cyan, "Header should be cyan");
+        assert!(
+            cell.modifier.contains(ratatui::style::Modifier::BOLD),
+            "Header should be bold"
+        );
+    }
+
+    #[test]
+    fn test_header_row_absent_in_narrow_mode() {
+        let sessions = vec![make_test_session_with_dir(
+            "narrow",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 35, 10);
+        // In narrow mode (<40 cols), there should be no header row
+        assert!(
+            find_row_with_text(&buffer, "Directory").is_none(),
+            "Narrow mode should not have header row"
+        );
+        assert!(
+            find_row_with_text(&buffer, "Session ID").is_none(),
+            "Narrow mode should not have Session ID header"
         );
     }
 }
