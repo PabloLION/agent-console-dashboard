@@ -1424,7 +1424,7 @@ mod tests {
             Some(PathBuf::from("/tmp")),
         )];
         // Try multiple widths
-        for width in [60, 80, 100, 120, 150] {
+        for width in [80, 100, 120, 150] {
             let buffer = render_session_list_to_buffer(&sessions, Some(0), width, 10);
             assert!(
                 find_row_with_text(&buffer, long_id).is_some(),

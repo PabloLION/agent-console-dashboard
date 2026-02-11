@@ -1048,4 +1048,50 @@ mod tests {
         let result = substitute_hook_placeholders("", &session);
         assert_eq!(result, "");
     }
+
+    // --- Mouse Interaction Tests (acd-211) ---
+
+    use crate::tui::test_utils::render_dashboard_to_buffer;
+    use ratatui::style::Color;
+
+    #[test]
+    fn test_click_selects_and_renders_highlight() {
+        // Create app with multiple sessions
+        let mut app = make_app_with_sessions(5);
+        app.selected_index = Some(0);
+
+        // Click on session at row 4 (index 2: row 0=header, 1=border+header, 2=first session, 3=second, 4=third)
+        let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 4, 10);
+        app.handle_mouse_event(mouse);
+
+        // Verify selection changed
+        assert_eq!(
+            app.selected_index,
+            Some(2),
+            "Click should select session at index 2"
+        );
+
+        // Render to buffer and verify highlight appears
+        let buffer = render_dashboard_to_buffer(&app, 80, 30);
+
+        // Find the row with the clicked session (session-2)
+        use crate::tui::test_utils::find_row_with_text;
+        let session_row = find_row_with_text(&buffer, "session-2").expect("should find session-2");
+
+        // Check that the row has DarkGray background (highlight)
+        let mut found_highlight = false;
+        for col in 0..buffer.area().width {
+            if let Some(cell) = buffer.cell((col, session_row)) {
+                if cell.bg == Color::DarkGray {
+                    found_highlight = true;
+                    break;
+                }
+            }
+        }
+
+        assert!(
+            found_highlight,
+            "Clicked session should have highlight in rendered buffer"
+        );
+    }
 }

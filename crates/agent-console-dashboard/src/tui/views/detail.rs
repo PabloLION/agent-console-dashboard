@@ -647,4 +647,310 @@ mod tests {
             })
             .expect("draw should not fail with unknown working_dir");
     }
+
+    // --- Detail Panel Tests (acd-211, acd-bbh, acd-4sq) ---
+    // Using test_utils for buffer inspection
+
+    use crate::tui::app::App;
+    use crate::tui::test_utils::{
+        find_row_with_text, make_session as make_test_session_with_dir, render_dashboard_to_buffer,
+    };
+
+    #[test]
+    fn test_detail_renders_below_session_list_not_centered() {
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+        app.sessions.push(make_test_session_with_dir(
+            "test-session",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        ));
+        app.init_selection();
+        app.open_detail(0);
+
+        let buffer = render_dashboard_to_buffer(&app, 80, 30);
+
+        // Check that detail content appears in lower part of buffer, not centered
+        // The detail section should appear after the session list (which starts around row 2-3)
+        // and before the footer (last row)
+
+        // Look for "Status:" which is in the detail panel
+        let status_row =
+            find_row_with_text(&buffer, "Status:").expect("should find Status: in detail");
+
+        // Detail should be in the bottom half of the screen (row > 15 for 30-line terminal)
+        assert!(
+            status_row > 10,
+            "Detail panel should be in bottom section, not centered: row={}",
+            status_row
+        );
+    }
+
+    #[test]
+    fn test_detail_section_shows_session_status() {
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+        let mut session = make_test_session_with_dir(
+            "status-test",
+            Status::Attention,
+            Some(PathBuf::from("/tmp")),
+        );
+        session.status = Status::Attention;
+        app.sessions.push(session);
+        app.init_selection();
+        app.open_detail(0);
+
+        let buffer = render_dashboard_to_buffer(&app, 80, 30);
+
+        // Should show "Status:" label
+        assert!(
+            find_row_with_text(&buffer, "Status:").is_some(),
+            "Detail should show 'Status:' label"
+        );
+
+        // Should show the status value
+        assert!(
+            find_row_with_text(&buffer, "attention").is_some(),
+            "Detail should show status value"
+        );
+    }
+
+    #[test]
+    fn test_detail_section_shows_working_directory() {
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+        app.sessions.push(make_test_session_with_dir(
+            "dir-test",
+            Status::Working,
+            Some(PathBuf::from("/home/user/my-project")),
+        ));
+        app.init_selection();
+        app.open_detail(0);
+
+        let buffer = render_dashboard_to_buffer(&app, 80, 30);
+
+        // Should show "Dir:" label
+        assert!(
+            find_row_with_text(&buffer, "Dir:").is_some(),
+            "Detail should show 'Dir:' label"
+        );
+
+        // Should show the path
+        assert!(
+            find_row_with_text(&buffer, "my-project").is_some(),
+            "Detail should show directory path"
+        );
+    }
+
+    #[test]
+    fn test_detail_section_shows_session_id() {
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+        app.sessions.push(make_test_session_with_dir(
+            "unique-session-id-12345",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        ));
+        app.init_selection();
+        app.open_detail(0);
+
+        let buffer = render_dashboard_to_buffer(&app, 80, 30);
+
+        // Should show "ID:" label
+        assert!(
+            find_row_with_text(&buffer, "ID:").is_some(),
+            "Detail should show 'ID:' label"
+        );
+
+        // Should show the session ID
+        assert!(
+            find_row_with_text(&buffer, "unique-session-id").is_some(),
+            "Detail should show session ID"
+        );
+    }
+
+    #[test]
+    fn test_detail_shows_action_hints() {
+        let mut session = make_session("hints-test");
+        session.status = Status::Working;
+
+        let lines = build_detail_lines(&session, 60, 0, Instant::now(), true);
+        let text: String = lines
+            .iter()
+            .flat_map(|line| line.spans.iter().map(|span| span.content.as_ref()))
+            .collect();
+
+        // Should show action hints when show_actions=true
+        assert!(
+            text.contains("[ESC] Back"),
+            "Detail should show ESC action hint: '{}'",
+            text
+        );
+
+        assert!(
+            text.contains("[C]lose"),
+            "Detail should show Close action hint: '{}'",
+            text
+        );
+    }
+
+    #[test]
+    fn test_detail_closed_session_shows_resurrect() {
+        let mut session = make_session("closed-test");
+        session.status = Status::Closed;
+        session.closed = true;
+
+        let lines = build_detail_lines(&session, 60, 0, Instant::now(), true);
+        let text: String = lines
+            .iter()
+            .flat_map(|line| line.spans.iter().map(|span| span.content.as_ref()))
+            .collect();
+
+        // Closed sessions should show "[R]esurrect" hint
+        assert!(
+            text.contains("[R]esurrect"),
+            "Closed session detail should show Resurrect hint: '{}'",
+            text
+        );
+    }
+
+    #[test]
+    fn test_detail_unknown_dir_shows_error_not_unknown() {
+        let session = Session::new("error-dir-test".to_string(), AgentType::ClaudeCode, None);
+
+        let lines = build_detail_lines(&session, 60, 0, Instant::now(), true);
+        let text: String = lines
+            .iter()
+            .flat_map(|line| line.spans.iter().map(|span| span.content.as_ref()))
+            .collect();
+
+        // Should show "<error>" not "unknown"
+        assert!(
+            text.contains("<error>"),
+            "Unknown dir should show '<error>': '{}'",
+            text
+        );
+
+        assert!(
+            !text.contains("unknown"),
+            "Unknown dir should not show 'unknown': '{}'",
+            text
+        );
+    }
+
+    #[test]
+    fn test_detail_normal_dir_shows_path() {
+        let session = make_session("normal-dir-test");
+
+        let lines = build_detail_lines(&session, 60, 0, Instant::now(), true);
+        let text: String = lines
+            .iter()
+            .flat_map(|line| line.spans.iter().map(|span| span.content.as_ref()))
+            .collect();
+
+        // Should show the actual path
+        assert!(
+            text.contains("project-a"),
+            "Normal dir should show path: '{}'",
+            text
+        );
+
+        // Should NOT show "<error>"
+        assert!(
+            !text.contains("<error>"),
+            "Normal dir should not show '<error>': '{}'",
+            text
+        );
+    }
+
+    #[test]
+    fn test_detail_no_history_shows_placeholder() {
+        let session = make_session("no-history-test");
+        // Session has no history by default
+
+        let lines = build_detail_lines(&session, 60, 0, Instant::now(), true);
+        let text: String = lines
+            .iter()
+            .flat_map(|line| line.spans.iter().map(|span| span.content.as_ref()))
+            .collect();
+
+        // Should show placeholder text
+        assert!(
+            text.contains("(no transitions)"),
+            "No history should show placeholder: '{}'",
+            text
+        );
+    }
+
+    #[test]
+    fn test_detail_history_shows_transitions() {
+        let mut session = make_session("history-test");
+        let now = Instant::now();
+
+        // Add a transition
+        session.history.push(StateTransition {
+            timestamp: now - Duration::from_secs(60),
+            from: Status::Working,
+            to: Status::Attention,
+            duration: Duration::from_secs(30),
+        });
+
+        let lines = build_detail_lines(&session, 60, 0, now, true);
+        let text: String = lines
+            .iter()
+            .flat_map(|line| line.spans.iter().map(|span| span.content.as_ref()))
+            .collect();
+
+        // Should show transition arrow
+        assert!(
+            text.contains("→"),
+            "History should show transition arrow: '{}'",
+            text
+        );
+
+        // Should show both statuses in the transition
+        assert!(
+            text.contains("working"),
+            "History should show from status: '{}'",
+            text
+        );
+
+        assert!(
+            text.contains("attention"),
+            "History should show to status: '{}'",
+            text
+        );
+    }
+
+    #[test]
+    fn test_detail_history_scroll_shows_entry_count() {
+        let mut session = make_session("scroll-test");
+        let now = Instant::now();
+
+        // Add more than 5 history entries (MAX_VISIBLE_HISTORY = 5)
+        for i in 0..10 {
+            session.history.push(StateTransition {
+                timestamp: now - Duration::from_secs(60 * (10 - i)),
+                from: Status::Working,
+                to: Status::Attention,
+                duration: Duration::from_secs(30),
+            });
+        }
+
+        let lines = build_detail_lines(&session, 60, 0, now, true);
+        let text: String = lines
+            .iter()
+            .flat_map(|line| line.spans.iter().map(|span| span.content.as_ref()))
+            .collect();
+
+        // Should show entry count indicator when there are more than MAX_VISIBLE_HISTORY
+        assert!(
+            text.contains("entries"),
+            "History scroll should show entry count: '{}'",
+            text
+        );
+
+        // Should show format like "[5/10 entries]"
+        assert!(
+            text.contains("[") && text.contains("/") && text.contains("]"),
+            "History scroll should show [X/Y entries] format: '{}'",
+            text
+        );
+    }
 }

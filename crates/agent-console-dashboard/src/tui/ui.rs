@@ -263,4 +263,164 @@ mod tests {
             .draw(|frame| render_dashboard(frame, &app))
             .expect("draw should not fail with out-of-bounds detail index");
     }
+
+    // --- Full Dashboard Integration Tests (acd-211) ---
+
+    use crate::tui::test_utils::{find_row_with_text, render_dashboard_to_buffer, row_contains};
+
+    #[test]
+    fn test_full_dashboard_render_with_mixed_statuses() {
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+
+        // Add 4 sessions with different statuses
+        let mut s1 = Session::new(
+            "working-session".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/work")),
+        );
+        s1.status = Status::Working;
+
+        let mut s2 = Session::new(
+            "attention-session".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/attention")),
+        );
+        s2.status = Status::Attention;
+
+        let mut s3 = Session::new(
+            "question-session".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/question")),
+        );
+        s3.status = Status::Question;
+
+        let mut s4 = Session::new(
+            "closed-session".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/closed")),
+        );
+        s4.status = Status::Closed;
+
+        app.sessions.extend([s1, s2, s3, s4]);
+        app.init_selection();
+
+        let buffer = render_dashboard_to_buffer(&app, 80, 30);
+
+        // Verify all sessions appear in the buffer
+        assert!(
+            find_row_with_text(&buffer, "working-session").is_some(),
+            "Dashboard should show working session"
+        );
+        assert!(
+            find_row_with_text(&buffer, "attention-session").is_some(),
+            "Dashboard should show attention session"
+        );
+        assert!(
+            find_row_with_text(&buffer, "question-session").is_some(),
+            "Dashboard should show question session"
+        );
+        assert!(
+            find_row_with_text(&buffer, "closed-session").is_some(),
+            "Dashboard should show closed session"
+        );
+
+        // Verify structural elements
+        assert!(
+            find_row_with_text(&buffer, "Agent Console Dashboard").is_some(),
+            "Should show header"
+        );
+        assert!(
+            row_contains(&buffer, buffer.area().height - 1, "[q] Quit"),
+            "Should show footer"
+        );
+    }
+
+    #[test]
+    fn test_full_dashboard_render_with_detail_panel() {
+        let mut app = make_app_with_sessions(3);
+        app.init_selection();
+        app.open_detail(1);
+
+        let buffer = render_dashboard_to_buffer(&app, 80, 35);
+
+        // Verify session list is visible
+        assert!(
+            find_row_with_text(&buffer, "session-1").is_some(),
+            "Session list should be visible"
+        );
+
+        // Verify detail panel is visible
+        assert!(
+            find_row_with_text(&buffer, "Status:").is_some(),
+            "Detail panel should be visible with Status label"
+        );
+
+        assert!(
+            find_row_with_text(&buffer, "Dir:").is_some(),
+            "Detail panel should be visible with Dir label"
+        );
+
+        assert!(
+            find_row_with_text(&buffer, "ID:").is_some(),
+            "Detail panel should be visible with ID label"
+        );
+
+        // Verify both header and footer are present
+        assert!(
+            find_row_with_text(&buffer, "Agent Console Dashboard").is_some(),
+            "Header should be visible"
+        );
+        assert!(
+            row_contains(&buffer, buffer.area().height - 1, "[q] Quit"),
+            "Footer should be visible"
+        );
+    }
+
+    #[test]
+    fn test_full_dashboard_render_many_sessions_scrolling() {
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+
+        // Add 50 sessions
+        for i in 0..50 {
+            let mut session = Session::new(
+                format!("session-{:02}", i),
+                AgentType::ClaudeCode,
+                Some(PathBuf::from(format!("/tmp/project-{}", i))),
+            );
+            if i % 4 == 1 {
+                session.status = Status::Attention;
+            } else if i % 4 == 2 {
+                session.status = Status::Question;
+            } else if i % 4 == 3 {
+                session.status = Status::Closed;
+            }
+            app.sessions.push(session);
+        }
+
+        // Select session #25
+        app.selected_index = Some(25);
+
+        let buffer = render_dashboard_to_buffer(&app, 100, 40);
+
+        // The selected session should appear in the buffer
+        // (ratatui's List widget handles scrolling automatically to show selection)
+        assert!(
+            find_row_with_text(&buffer, "session-25").is_some(),
+            "Selected session should be visible in scrolled view"
+        );
+
+        // Verify structural integrity with many sessions
+        assert!(
+            find_row_with_text(&buffer, "Agent Console Dashboard").is_some(),
+            "Header should be visible with many sessions"
+        );
+        assert!(
+            find_row_with_text(&buffer, "Sessions").is_some(),
+            "Session border should be visible"
+        );
+        assert!(
+            row_contains(&buffer, buffer.area().height - 1, "[q] Quit"),
+            "Footer should be visible with many sessions"
+        );
+    }
 }
