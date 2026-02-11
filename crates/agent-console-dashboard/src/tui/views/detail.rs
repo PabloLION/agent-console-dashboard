@@ -148,16 +148,26 @@ fn build_detail_lines<'a>(
     ]));
 
     // Working directory
-    let wd = session.working_dir.display().to_string();
+    let wd = if session.working_dir == std::path::PathBuf::from("unknown") {
+        "<error>".to_string()
+    } else {
+        session.working_dir.display().to_string()
+    };
     let max_wd_len = (panel_width as usize).saturating_sub(13);
     let wd_display = if wd.len() > max_wd_len {
         format!("…{}", &wd[wd.len().saturating_sub(max_wd_len - 1)..])
     } else {
         wd
     };
+    let is_error = session.working_dir == std::path::PathBuf::from("unknown");
+    let wd_style = if is_error {
+        Style::default().fg(Color::Red)
+    } else {
+        Style::default()
+    };
     lines.push(Line::from(vec![
         Span::styled("Dir: ", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(wd_display),
+        Span::styled(wd_display, wd_style),
     ]));
 
     // Session ID (truncated)
@@ -549,5 +559,95 @@ mod tests {
             lines_without.len() < lines_with.len(),
             "inline mode should have fewer lines than modal"
         );
+    }
+
+    // --- Story 5 (acd-4sq): Detail panel "unknown" → "<error>" tests ---
+
+    #[test]
+    fn test_build_detail_lines_unknown_working_dir_shows_error() {
+        let mut session = Session::new(
+            "test-unknown-dir".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("unknown"),
+        );
+        session.status = Status::Working;
+        let lines = build_detail_lines(&session, 60, 0, Instant::now(), true);
+
+        // Find the Dir line (should be line index 1)
+        let dir_line = &lines[1];
+        let full_text: String = dir_line.spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(
+            full_text.contains("<error>"),
+            "Dir line should contain '<error>' for unknown path, got: '{}'",
+            full_text
+        );
+
+        // Verify the working directory span (index 1) is styled with red
+        let wd_span = &dir_line.spans[1];
+        assert_eq!(
+            wd_span.style.fg,
+            Some(Color::Red),
+            "Unknown working dir should be styled with red"
+        );
+    }
+
+    #[test]
+    fn test_build_detail_lines_normal_working_dir() {
+        let session = make_session("test-normal-dir");
+        let lines = build_detail_lines(&session, 60, 0, Instant::now(), true);
+
+        // Find the Dir line (should be line index 1)
+        let dir_line = &lines[1];
+        let full_text: String = dir_line.spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(
+            !full_text.contains("<error>"),
+            "Dir line should not contain '<error>' for normal path, got: '{}'",
+            full_text
+        );
+        assert!(
+            full_text.contains("project-a"),
+            "Dir line should contain path component, got: '{}'",
+            full_text
+        );
+
+        // Verify the working directory span is NOT red
+        let wd_span = &dir_line.spans[1];
+        assert_ne!(
+            wd_span.style.fg,
+            Some(Color::Red),
+            "Normal working dir should not be red"
+        );
+    }
+
+    #[test]
+    fn test_render_detail_unknown_working_dir_no_panic() {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let session = Session::new(
+            "test-unknown-render".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("unknown"),
+        );
+        terminal
+            .draw(|frame| {
+                render_detail(frame, &session, frame.area(), 0, Instant::now());
+            })
+            .expect("draw should not fail with unknown working_dir");
+    }
+
+    #[test]
+    fn test_render_inline_detail_unknown_working_dir_no_panic() {
+        let backend = ratatui::backend::TestBackend::new(80, 24);
+        let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
+        let session = Session::new(
+            "test-unknown-inline".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("unknown"),
+        );
+        terminal
+            .draw(|frame| {
+                render_inline_detail(frame, &session, frame.area(), 0, Instant::now());
+            })
+            .expect("draw should not fail with unknown working_dir");
     }
 }

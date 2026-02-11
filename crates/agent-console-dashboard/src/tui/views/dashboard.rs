@@ -77,13 +77,74 @@ pub fn format_elapsed_seconds(total_seconds: u64) -> String {
 const NARROW_THRESHOLD: u16 = 40;
 const WIDE_THRESHOLD: u16 = 80;
 
+/// Computes display names for session directories with basename disambiguation.
+///
+/// Returns a map from session_id to display name. If multiple sessions share
+/// the same basename, includes parent folder for disambiguation.
+fn compute_directory_display_names(
+    sessions: &[Session],
+) -> std::collections::HashMap<String, String> {
+    use std::collections::HashMap;
+
+    // Count basename occurrences
+    let mut basename_counts: HashMap<String, usize> = HashMap::new();
+    for session in sessions {
+        if session.working_dir == PathBuf::from("unknown") {
+            continue;
+        }
+        if let Some(basename) = session.working_dir.file_name() {
+            if let Some(name) = basename.to_str() {
+                *basename_counts.entry(name.to_string()).or_insert(0) += 1;
+            }
+        }
+    }
+
+    // Build display names
+    let mut display_names = HashMap::new();
+    for session in sessions {
+        let display_name = if session.working_dir == PathBuf::from("unknown") {
+            "<error>".to_string()
+        } else if let Some(basename) = session.working_dir.file_name() {
+            if let Some(basename_str) = basename.to_str() {
+                let count = basename_counts.get(basename_str).copied().unwrap_or(0);
+                if count > 1 {
+                    // Duplicate basename - include parent
+                    if let Some(parent) = session.working_dir.parent() {
+                        if let Some(parent_name) = parent.file_name() {
+                            if let Some(parent_str) = parent_name.to_str() {
+                                format!("{}/{}", parent_str, basename_str)
+                            } else {
+                                basename_str.to_string()
+                            }
+                        } else {
+                            basename_str.to_string()
+                        }
+                    } else {
+                        basename_str.to_string()
+                    }
+                } else {
+                    // Unique basename
+                    basename_str.to_string()
+                }
+            } else {
+                "<error>".to_string()
+            }
+        } else {
+            "<error>".to_string()
+        };
+        display_names.insert(session.session_id.clone(), display_name);
+    }
+
+    display_names
+}
+
 /// Formats a single session line based on available terminal width.
 ///
 /// Responsive breakpoints:
 /// - `<40` cols: symbol + session ID only
 /// - `40-80` cols: symbol + working dir (20) + session ID (flex) + status + elapsed
 /// - `>80` cols: symbol + working dir (30) + session ID (flex) + status + elapsed
-pub fn format_session_line<'a>(session: &Session, width: u16) -> Line<'a> {
+pub fn format_session_line<'a>(session: &Session, width: u16, dir_display: &str) -> Line<'a> {
     let inactive = session.is_inactive(INACTIVE_SESSION_THRESHOLD);
     let (color, symbol, dim, status_text) = if inactive {
         (
@@ -117,13 +178,10 @@ pub fn format_session_line<'a>(session: &Session, width: u16) -> Line<'a> {
         let fixed_width = 2 + 20 + 10 + 10;
         let name_width = (width as usize).saturating_sub(fixed_width);
 
-        let work_dir_text = if session.working_dir == PathBuf::from("unknown") {
-            "<error>".to_string()
-        } else {
-            truncate_path(&session.working_dir, 20)
-        };
+        let work_dir_text = truncate_string(dir_display, 20);
+        let is_error = dir_display == "<error>";
 
-        let work_dir_span = if session.working_dir == PathBuf::from("unknown") {
+        let work_dir_span = if is_error {
             Span::styled(
                 format!("{:<20}", work_dir_text),
                 Style::default().fg(error_color()),
@@ -145,13 +203,10 @@ pub fn format_session_line<'a>(session: &Session, width: u16) -> Line<'a> {
         let fixed_width = 2 + 30 + 10 + 10;
         let name_width = (width as usize).saturating_sub(fixed_width);
 
-        let work_dir_text = if session.working_dir == PathBuf::from("unknown") {
-            "<error>".to_string()
-        } else {
-            truncate_path(&session.working_dir, 30)
-        };
+        let work_dir_text = truncate_string(dir_display, 30);
+        let is_error = dir_display == "<error>";
 
-        let work_dir_span = if session.working_dir == PathBuf::from("unknown") {
+        let work_dir_span = if is_error {
             Span::styled(
                 format!("{:<30}", work_dir_text),
                 Style::default().fg(error_color()),
@@ -240,10 +295,19 @@ pub fn render_session_list(
         frame.render_widget(header, header_rect);
     }
 
+    // Compute directory display names with disambiguation
+    let dir_display_names = compute_directory_display_names(sessions);
+
     // Render session list
     let items: Vec<ListItem> = sessions
         .iter()
-        .map(|session| ListItem::new(format_session_line(session, width)))
+        .map(|session| {
+            let dir_display = dir_display_names
+                .get(&session.session_id)
+                .map(|s| s.as_str())
+                .unwrap_or("<error>");
+            ListItem::new(format_session_line(session, width, dir_display))
+        })
         .collect();
 
     let list = List::new(items)
@@ -270,12 +334,6 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     } else {
         format!("{}...", &s[..max_len - 3])
     }
-}
-
-/// Truncates a path display to the given max length.
-fn truncate_path(path: &std::path::Path, max_len: usize) -> String {
-    let display = path.display().to_string();
-    truncate_string(&display, max_len)
 }
 
 #[cfg(test)]
@@ -402,28 +460,12 @@ mod tests {
         assert_eq!(truncate_string("", 10), "");
     }
 
-    // --- truncate_path tests ---
-
-    #[test]
-    fn test_truncate_path_short() {
-        let path = PathBuf::from("/tmp");
-        assert_eq!(truncate_path(&path, 20), "/tmp");
-    }
-
-    #[test]
-    fn test_truncate_path_long() {
-        let path = PathBuf::from("/very/long/path/to/some/directory");
-        let result = truncate_path(&path, 15);
-        assert_eq!(result.len(), 15);
-        assert!(result.ends_with("..."));
-    }
-
     // --- format_session_line tests ---
 
     #[test]
     fn test_format_session_line_narrow() {
         let session = make_session("my-session", Status::Working);
-        let line = format_session_line(&session, 30);
+        let line = format_session_line(&session, 30, "project");
         // Should have exactly 2 spans (symbol + session ID)
         assert_eq!(line.spans.len(), 2);
     }
@@ -431,7 +473,7 @@ mod tests {
     #[test]
     fn test_format_session_line_standard() {
         let session = make_session("my-session", Status::Attention);
-        let line = format_session_line(&session, 60);
+        let line = format_session_line(&session, 60, "project");
         // Should have 5 spans (symbol, workdir, session ID, status, elapsed)
         assert_eq!(line.spans.len(), 5);
     }
@@ -439,7 +481,7 @@ mod tests {
     #[test]
     fn test_format_session_line_wide() {
         let session = make_session("my-session", Status::Question);
-        let line = format_session_line(&session, 100);
+        let line = format_session_line(&session, 100, "project");
         // Wide has same 5 spans as standard (symbol, workdir, session ID, status, elapsed)
         assert_eq!(line.spans.len(), 5);
     }
@@ -451,8 +493,9 @@ mod tests {
             AgentType::ClaudeCode,
             PathBuf::from("/home/user/a-long-project-name"),
         );
-        let standard_line = format_session_line(&session, 60);
-        let wide_line = format_session_line(&session, 100);
+        let long_name = "a-long-project-name";
+        let standard_line = format_session_line(&session, 60, long_name);
+        let wide_line = format_session_line(&session, 100, long_name);
 
         // work_dir span is index 1 in both modes
         let standard_dir = &standard_line.spans[1];
@@ -471,7 +514,7 @@ mod tests {
     fn test_format_session_line_shows_full_session_id() {
         let long_id = "very-long-session-identifier-name";
         let session = make_session(long_id, Status::Working);
-        let line = format_session_line(&session, 80);
+        let line = format_session_line(&session, 80, "project");
 
         // Session ID span is index 2; should contain full ID without truncation
         let name_span = &line.spans[2];
@@ -492,9 +535,9 @@ mod tests {
         ] {
             let session = make_session("test", status);
             // Should not panic at any width
-            let _ = format_session_line(&session, 20);
-            let _ = format_session_line(&session, 50);
-            let _ = format_session_line(&session, 120);
+            let _ = format_session_line(&session, 20, "project");
+            let _ = format_session_line(&session, 50, "project");
+            let _ = format_session_line(&session, 120, "project");
         }
     }
 
@@ -593,7 +636,7 @@ mod tests {
             PathBuf::from("unknown"),
         );
         session.status = Status::Working;
-        let line = format_session_line(&session, 60);
+        let line = format_session_line(&session, 60, "<error>");
 
         // Should have 5 spans: symbol, work_dir (error), session ID, status, elapsed
         assert_eq!(line.spans.len(), 5);
@@ -620,7 +663,7 @@ mod tests {
             PathBuf::from("unknown"),
         );
         session.status = Status::Attention;
-        let line = format_session_line(&session, 100);
+        let line = format_session_line(&session, 100, "<error>");
 
         // Should have 5 spans: symbol, work_dir (error), session ID, status, elapsed
         assert_eq!(line.spans.len(), 5);
@@ -646,7 +689,7 @@ mod tests {
             AgentType::ClaudeCode,
             PathBuf::from("/home/user/project"),
         );
-        let line = format_session_line(&session, 60);
+        let line = format_session_line(&session, 60, "project");
 
         // Should have 5 spans
         assert_eq!(line.spans.len(), 5);
@@ -659,8 +702,8 @@ mod tests {
             work_dir_span.content
         );
         assert!(
-            work_dir_span.content.contains("/home/user/project"),
-            "Expected path to contain '/home/user/project', got: '{}'",
+            work_dir_span.content.contains("project"),
+            "Expected path to contain 'project', got: '{}'",
             work_dir_span.content
         );
         // Should not be red
@@ -680,7 +723,7 @@ mod tests {
             AgentType::ClaudeCode,
             PathBuf::from("/home/user/project"),
         );
-        let line = format_session_line(&session, 60);
+        let line = format_session_line(&session, 60, "project");
 
         // Should have 5 spans: symbol, workdir, session ID, status, elapsed
         assert_eq!(line.spans.len(), 5);
@@ -717,7 +760,7 @@ mod tests {
             AgentType::ClaudeCode,
             PathBuf::from("/home/user/project"),
         );
-        let line = format_session_line(&session, 120);
+        let line = format_session_line(&session, 120, "project");
 
         // Should have 5 spans: symbol, workdir, session ID, status, elapsed
         assert_eq!(line.spans.len(), 5);
@@ -756,11 +799,11 @@ mod tests {
         );
 
         // Test at standard width (60 cols)
-        let line_60 = format_session_line(&session, 60);
+        let line_60 = format_session_line(&session, 60, "tmp");
         let name_span_60 = &line_60.spans[2];
 
         // Test at wider width (80 cols)
-        let line_80 = format_session_line(&session, 80);
+        let line_80 = format_session_line(&session, 80, "tmp");
         let name_span_80 = &line_80.spans[2];
 
         // Session ID column at 80 should be wider than at 60
@@ -917,7 +960,7 @@ mod tests {
             AgentType::ClaudeCode,
             PathBuf::from("/tmp/test"),
         );
-        let data_line = format_session_line(&session, 60);
+        let data_line = format_session_line(&session, 60, "test");
 
         // Both should have same span count
         assert_eq!(
@@ -945,5 +988,132 @@ mod tests {
                 );
             }
         }
+    }
+
+    // --- Story 4 (acd-9ul): Basename disambiguation tests ---
+
+    #[test]
+    fn test_compute_directory_display_names_unique_basenames() {
+        let sessions = vec![
+            Session::new(
+                "s1".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/home/user/project-a"),
+            ),
+            Session::new(
+                "s2".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/home/user/project-b"),
+            ),
+        ];
+        let display_names = compute_directory_display_names(&sessions);
+        assert_eq!(display_names.get("s1"), Some(&"project-a".to_string()));
+        assert_eq!(display_names.get("s2"), Some(&"project-b".to_string()));
+    }
+
+    #[test]
+    fn test_compute_directory_display_names_duplicate_basenames() {
+        let sessions = vec![
+            Session::new(
+                "s1".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/home/user/project"),
+            ),
+            Session::new(
+                "s2".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/work/client/project"),
+            ),
+        ];
+        let display_names = compute_directory_display_names(&sessions);
+        // Both should have parent/basename format since basename "project" is duplicated
+        assert_eq!(display_names.get("s1"), Some(&"user/project".to_string()));
+        assert_eq!(display_names.get("s2"), Some(&"client/project".to_string()));
+    }
+
+    #[test]
+    fn test_compute_directory_display_names_mixed() {
+        let sessions = vec![
+            Session::new(
+                "s1".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/home/user/project"),
+            ),
+            Session::new(
+                "s2".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/work/client/project"),
+            ),
+            Session::new(
+                "s3".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/tmp/unique-name"),
+            ),
+        ];
+        let display_names = compute_directory_display_names(&sessions);
+        // s1 and s2 have duplicate basename, need disambiguation
+        assert_eq!(display_names.get("s1"), Some(&"user/project".to_string()));
+        assert_eq!(display_names.get("s2"), Some(&"client/project".to_string()));
+        // s3 is unique
+        assert_eq!(display_names.get("s3"), Some(&"unique-name".to_string()));
+    }
+
+    #[test]
+    fn test_compute_directory_display_names_unknown_paths() {
+        let sessions = vec![
+            Session::new(
+                "s1".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("unknown"),
+            ),
+            Session::new(
+                "s2".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/home/user/project"),
+            ),
+        ];
+        let display_names = compute_directory_display_names(&sessions);
+        // Unknown path should map to <error>
+        assert_eq!(display_names.get("s1"), Some(&"<error>".to_string()));
+        // Normal path should show basename
+        assert_eq!(display_names.get("s2"), Some(&"project".to_string()));
+    }
+
+    #[test]
+    fn test_compute_directory_display_names_root_path() {
+        let sessions = vec![Session::new(
+            "s1".to_string(),
+            AgentType::ClaudeCode,
+            PathBuf::from("/"),
+        )];
+        let display_names = compute_directory_display_names(&sessions);
+        // Root path has no file_name(), should fall back to <error>
+        assert_eq!(display_names.get("s1"), Some(&"<error>".to_string()));
+    }
+
+    #[test]
+    fn test_compute_directory_display_names_three_duplicate_basenames() {
+        let sessions = vec![
+            Session::new(
+                "s1".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/home/user/project"),
+            ),
+            Session::new(
+                "s2".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/work/client/project"),
+            ),
+            Session::new(
+                "s3".to_string(),
+                AgentType::ClaudeCode,
+                PathBuf::from("/opt/build/project"),
+            ),
+        ];
+        let display_names = compute_directory_display_names(&sessions);
+        // All three should show parent/basename since "project" appears 3 times
+        assert_eq!(display_names.get("s1"), Some(&"user/project".to_string()));
+        assert_eq!(display_names.get("s2"), Some(&"client/project".to_string()));
+        assert_eq!(display_names.get("s3"), Some(&"build/project".to_string()));
     }
 }
