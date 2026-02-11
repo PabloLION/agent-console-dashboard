@@ -435,16 +435,28 @@ pub(super) async fn handle_stop_command(cmd: &IpcCommand, state: &DaemonState) -
             .filter(|s| !s.closed && !s.is_inactive(INACTIVE_SESSION_THRESHOLD))
             .count();
 
-        return IpcResponse::confirm_required(active_count).to_json_line();
+        return IpcResponse::success(Some(serde_json::json!({
+            "stop_status": "confirm_required",
+            "active_count": active_count
+        })))
+        .to_json_line();
     }
 
     // Either no active sessions or user confirmed — trigger shutdown
-    if let Some(ref shutdown_tx) = state.shutdown_tx {
-        let _ = shutdown_tx.send(());
-        tracing::info!("Shutdown signal sent via STOP command");
+    match state.shutdown_tx.as_ref() {
+        Some(shutdown_tx) => {
+            let _ = shutdown_tx.send(());
+            tracing::info!("Shutdown signal sent via STOP command");
+        }
+        None => {
+            return IpcResponse::error("daemon shutdown not configured").to_json_line();
+        }
     }
 
-    IpcResponse::stop_ok().to_json_line()
+    IpcResponse::success(Some(serde_json::json!({
+        "stop_status": "ok"
+    })))
+    .to_json_line()
 }
 
 #[cfg(test)]
@@ -482,7 +494,10 @@ mod tests {
             serde_json::from_str(&response).expect("failed to parse response");
 
         assert!(parsed.ok);
-        assert_eq!(parsed.status, Some("ok".to_string()));
+        assert_eq!(
+            parsed.data.as_ref().unwrap()["stop_status"].as_str(),
+            Some("ok")
+        );
     }
 
     #[tokio::test]
@@ -515,8 +530,9 @@ mod tests {
             serde_json::from_str(&response).expect("failed to parse response");
 
         assert!(parsed.ok);
-        assert_eq!(parsed.status, Some("confirm_required".to_string()));
-        assert_eq!(parsed.active_count, Some(1));
+        let data = parsed.data.as_ref().unwrap();
+        assert_eq!(data["stop_status"].as_str(), Some("confirm_required"));
+        assert_eq!(data["active_count"].as_u64(), Some(1));
     }
 
     #[tokio::test]
@@ -549,7 +565,10 @@ mod tests {
             serde_json::from_str(&response).expect("failed to parse response");
 
         assert!(parsed.ok);
-        assert_eq!(parsed.status, Some("ok".to_string()));
+        assert_eq!(
+            parsed.data.as_ref().unwrap()["stop_status"].as_str(),
+            Some("ok")
+        );
     }
 
     #[tokio::test]
@@ -582,6 +601,58 @@ mod tests {
             serde_json::from_str(&response).expect("failed to parse response");
 
         assert!(parsed.ok);
-        assert_eq!(parsed.status, Some("ok".to_string()));
+        assert_eq!(
+            parsed.data.as_ref().unwrap()["stop_status"].as_str(),
+            Some("ok")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_stop_with_inactive_session_returns_ok_without_confirmation() {
+        use std::time::Duration;
+
+        let state = create_test_state();
+
+        // Create a session and backdate its last_activity to make it inactive
+        let mut session = crate::Session::new(
+            "inactive-session".to_string(),
+            AgentType::ClaudeCode,
+            std::path::PathBuf::from("/tmp"),
+        );
+
+        // Backdate last_activity by more than INACTIVE_SESSION_THRESHOLD (3600s)
+        session.last_activity = session
+            .last_activity
+            .checked_sub(INACTIVE_SESSION_THRESHOLD + Duration::from_secs(1))
+            .expect("backdate should succeed");
+
+        // Verify the session is inactive before adding to store
+        assert!(
+            session.is_inactive(INACTIVE_SESSION_THRESHOLD),
+            "session should be inactive after backdating"
+        );
+
+        // Add the backdated session to the store
+        state.store.set(session.id.clone(), session).await;
+
+        let cmd = IpcCommand {
+            version: 1,
+            cmd: "STOP".to_string(),
+            session_id: None,
+            status: None,
+            working_dir: None,
+            confirmed: None,
+        };
+
+        let response = handle_stop_command(&cmd, &state).await;
+        let parsed: IpcResponse =
+            serde_json::from_str(&response).expect("failed to parse response");
+
+        assert!(parsed.ok);
+        assert_eq!(
+            parsed.data.as_ref().unwrap()["stop_status"].as_str(),
+            Some("ok"),
+            "inactive sessions should not require confirmation"
+        );
     }
 }

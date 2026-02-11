@@ -215,12 +215,12 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
                         d
                     }
                     Err(e) => {
-                        warn!(
+                        error!(
                             interval = %interval_str,
                             error = %e,
-                            "invalid usage_fetch_interval, falling back to 180s"
+                            "invalid usage_fetch_interval in config — fix with 'acd config validate'"
                         );
-                        Duration::from_secs(180)
+                        std::process::exit(1);
                     }
                 }
             }
@@ -263,13 +263,12 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
                         d
                     }
                     Err(e) => {
-                        warn!(
+                        error!(
                             timeout = %timeout_str,
                             error = %e,
-                            "invalid idle_timeout, falling back to {}s",
-                            AUTO_STOP_IDLE_SECS
+                            "invalid idle_timeout in config — fix with 'acd config validate'"
                         );
-                        Duration::from_secs(AUTO_STOP_IDLE_SECS)
+                        std::process::exit(1);
                     }
                 }
             }

@@ -317,69 +317,85 @@ fn run_daemon_stop_command(socket: &std::path::Path) -> ExitCode {
     }
 
     match serde_json::from_str::<IpcResponse>(response.trim()) {
-        Ok(resp) if resp.ok && resp.status.as_deref() == Some("confirm_required") => {
-            let count = resp.active_count.unwrap_or(0);
-            println!("Warning: {} active session(s) will be lost.", count);
-            print!("Stop daemon anyway? (y/N): ");
-            io::stdout().flush().expect("failed to flush stdout");
+        Ok(resp) if resp.ok => {
+            // Check if this is a confirm_required response
+            if let Some(data) = &resp.data {
+                if let Some(stop_status) = data.get("stop_status").and_then(|v| v.as_str()) {
+                    if stop_status == "confirm_required" {
+                        let count = data
+                            .get("active_count")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as usize;
+                        println!("Warning: {} active session(s) are running.", count);
+                        println!("Stopping the daemon will disconnect the TUI but Claude Code sessions will continue.");
+                        print!("Stop daemon anyway? (y/N): ");
+                        io::stdout().flush().expect("failed to flush stdout");
 
-            let mut input = String::new();
-            if io::stdin().read_line(&mut input).is_err() {
-                eprintln!("Error: failed to read user input");
-                return ExitCode::FAILURE;
-            }
+                        let mut input = String::new();
+                        if io::stdin().read_line(&mut input).is_err() {
+                            eprintln!("Error: failed to read user input");
+                            return ExitCode::FAILURE;
+                        }
 
-            let confirmed = input.trim().eq_ignore_ascii_case("y");
-            if !confirmed {
-                println!("Cancelled.");
-                return ExitCode::SUCCESS;
-            }
+                        let confirmed = input.trim().eq_ignore_ascii_case("y");
+                        if !confirmed {
+                            println!("Cancelled.");
+                            return ExitCode::SUCCESS;
+                        }
 
-            // Send STOP with confirmation
-            let cmd_confirmed = IpcCommand {
-                version: IPC_VERSION,
-                cmd: "STOP".to_string(),
-                session_id: None,
-                status: None,
-                working_dir: None,
-                confirmed: Some(true),
-            };
-            let json_confirmed =
-                serde_json::to_string(&cmd_confirmed).expect("failed to serialize STOP command");
-            let line_confirmed = format!("{}\n", json_confirmed);
+                        // Send STOP with confirmation
+                        let cmd_confirmed = IpcCommand {
+                            version: IPC_VERSION,
+                            cmd: "STOP".to_string(),
+                            session_id: None,
+                            status: None,
+                            working_dir: None,
+                            confirmed: Some(true),
+                        };
+                        let json_confirmed = serde_json::to_string(&cmd_confirmed)
+                            .expect("failed to serialize STOP command");
+                        let line_confirmed = format!("{}\n", json_confirmed);
 
-            if writer.write_all(line_confirmed.as_bytes()).is_err() || writer.flush().is_err() {
-                eprintln!("Error: failed to send confirmed STOP command");
-                return ExitCode::FAILURE;
-            }
+                        if writer.write_all(line_confirmed.as_bytes()).is_err()
+                            || writer.flush().is_err()
+                        {
+                            eprintln!("Error: failed to send confirmed STOP command");
+                            return ExitCode::FAILURE;
+                        }
 
-            let mut response_confirmed = String::new();
-            if reader.read_line(&mut response_confirmed).is_err() {
-                eprintln!("Error: failed to read daemon response");
-                return ExitCode::FAILURE;
-            }
+                        let mut response_confirmed = String::new();
+                        if reader.read_line(&mut response_confirmed).is_err() {
+                            eprintln!("Error: failed to read daemon response");
+                            return ExitCode::FAILURE;
+                        }
 
-            match serde_json::from_str::<IpcResponse>(response_confirmed.trim()) {
-                Ok(resp_confirmed) if resp_confirmed.ok => {
-                    println!("Daemon stopped.");
-                    ExitCode::SUCCESS
+                        return match serde_json::from_str::<IpcResponse>(response_confirmed.trim())
+                        {
+                            Ok(resp_confirmed) if resp_confirmed.ok => {
+                                println!("Daemon stopped.");
+                                ExitCode::SUCCESS
+                            }
+                            Ok(resp_confirmed) => {
+                                eprintln!(
+                                    "Error: {}",
+                                    resp_confirmed
+                                        .error
+                                        .unwrap_or_else(|| "unknown error".to_string())
+                                );
+                                ExitCode::FAILURE
+                            }
+                            Err(e) => {
+                                eprintln!("Error: failed to parse daemon response: {}", e);
+                                ExitCode::FAILURE
+                            }
+                        };
+                    } else if stop_status == "ok" {
+                        println!("Daemon stopped.");
+                        return ExitCode::SUCCESS;
+                    }
                 }
-                Ok(resp_confirmed) => {
-                    eprintln!(
-                        "Error: {}",
-                        resp_confirmed
-                            .error
-                            .unwrap_or_else(|| "unknown error".to_string())
-                    );
-                    ExitCode::FAILURE
-                }
-                Err(e) => {
-                    eprintln!("Error: failed to parse daemon response: {}", e);
-                    ExitCode::FAILURE
-                }
             }
-        }
-        Ok(resp) if resp.ok && resp.status.as_deref() == Some("ok") => {
+            // If we get here, response is ok but not a STOP response
             println!("Daemon stopped.");
             ExitCode::SUCCESS
         }
