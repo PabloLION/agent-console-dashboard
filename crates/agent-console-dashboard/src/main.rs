@@ -90,6 +90,13 @@ enum Commands {
         socket: PathBuf,
     },
 
+    /// Stop the daemon process
+    DaemonStop {
+        /// Socket path for IPC communication
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
+        socket: PathBuf,
+    },
+
     /// Handle Claude Code hook events (reads JSON from stdin)
     ClaudeHook {
         /// Status to set: working, attention, question, closed
@@ -119,6 +126,8 @@ enum ConfigAction {
     Path,
     /// Validate configuration file
     Validate,
+    /// Display current effective configuration
+    Show,
 }
 
 fn main() -> ExitCode {
@@ -188,6 +197,31 @@ fn main() -> ExitCode {
                     }
                     Err(e) => Err(e),
                 },
+                ConfigAction::Show => match ConfigLoader::load_default() {
+                    Ok(config) => {
+                        let config_path = xdg::config_path();
+                        if config_path.exists() {
+                            println!("# Configuration loaded from: {}", config_path.display());
+                        } else {
+                            println!("# No config file found (showing built-in defaults)");
+                            println!(
+                                "# Run 'acd config init' to create: {}",
+                                config_path.display()
+                            );
+                        }
+                        println!();
+                        match toml::to_string_pretty(&config) {
+                            Ok(toml_str) => {
+                                println!("{}", toml_str);
+                                Ok(())
+                            }
+                            Err(e) => Err(agent_console_dashboard::config::error::ConfigError::SerializeError {
+                                message: format!("failed to serialize config: {}", e),
+                            }),
+                        }
+                    }
+                    Err(e) => Err(e),
+                },
             };
             if let Err(e) = result {
                 eprintln!("Config error: {e}");
@@ -215,6 +249,9 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
+        Commands::DaemonStop { socket } => {
+            return run_daemon_stop_command(&socket);
+        }
         Commands::ClaudeHook { status, socket } => {
             // Parse stdin synchronously before creating async runtime
             let input: HookInput = match serde_json::from_reader(std::io::stdin()) {
@@ -238,6 +275,126 @@ fn main() -> ExitCode {
     }
 
     ExitCode::SUCCESS
+}
+
+/// Connects to daemon, sends STOP command, handles confirmation, and triggers shutdown.
+fn run_daemon_stop_command(socket: &std::path::Path) -> ExitCode {
+    use std::io::{self, BufRead, BufReader, Write};
+    use std::os::unix::net::UnixStream;
+
+    let stream = match UnixStream::connect(socket) {
+        Ok(s) => s,
+        Err(_) => {
+            eprintln!("Error: daemon not running (cannot connect to {:?})", socket);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut writer = stream.try_clone().expect("failed to clone unix stream");
+    let mut reader = BufReader::new(stream);
+
+    // Send initial STOP command (without confirmation)
+    let cmd = IpcCommand {
+        version: IPC_VERSION,
+        cmd: "STOP".to_string(),
+        session_id: None,
+        status: None,
+        working_dir: None,
+        confirmed: None,
+    };
+    let json = serde_json::to_string(&cmd).expect("failed to serialize STOP command");
+    let line = format!("{}\n", json);
+
+    if writer.write_all(line.as_bytes()).is_err() || writer.flush().is_err() {
+        eprintln!("Error: failed to send STOP command");
+        return ExitCode::FAILURE;
+    }
+
+    let mut response = String::new();
+    if reader.read_line(&mut response).is_err() {
+        eprintln!("Error: failed to read daemon response");
+        return ExitCode::FAILURE;
+    }
+
+    match serde_json::from_str::<IpcResponse>(response.trim()) {
+        Ok(resp) if resp.ok && resp.status.as_deref() == Some("confirm_required") => {
+            let count = resp.active_count.unwrap_or(0);
+            println!("Warning: {} active session(s) will be lost.", count);
+            print!("Stop daemon anyway? (y/N): ");
+            io::stdout().flush().expect("failed to flush stdout");
+
+            let mut input = String::new();
+            if io::stdin().read_line(&mut input).is_err() {
+                eprintln!("Error: failed to read user input");
+                return ExitCode::FAILURE;
+            }
+
+            let confirmed = input.trim().eq_ignore_ascii_case("y");
+            if !confirmed {
+                println!("Cancelled.");
+                return ExitCode::SUCCESS;
+            }
+
+            // Send STOP with confirmation
+            let cmd_confirmed = IpcCommand {
+                version: IPC_VERSION,
+                cmd: "STOP".to_string(),
+                session_id: None,
+                status: None,
+                working_dir: None,
+                confirmed: Some(true),
+            };
+            let json_confirmed =
+                serde_json::to_string(&cmd_confirmed).expect("failed to serialize STOP command");
+            let line_confirmed = format!("{}\n", json_confirmed);
+
+            if writer.write_all(line_confirmed.as_bytes()).is_err() || writer.flush().is_err() {
+                eprintln!("Error: failed to send confirmed STOP command");
+                return ExitCode::FAILURE;
+            }
+
+            let mut response_confirmed = String::new();
+            if reader.read_line(&mut response_confirmed).is_err() {
+                eprintln!("Error: failed to read daemon response");
+                return ExitCode::FAILURE;
+            }
+
+            match serde_json::from_str::<IpcResponse>(response_confirmed.trim()) {
+                Ok(resp_confirmed) if resp_confirmed.ok => {
+                    println!("Daemon stopped.");
+                    ExitCode::SUCCESS
+                }
+                Ok(resp_confirmed) => {
+                    eprintln!(
+                        "Error: {}",
+                        resp_confirmed
+                            .error
+                            .unwrap_or_else(|| "unknown error".to_string())
+                    );
+                    ExitCode::FAILURE
+                }
+                Err(e) => {
+                    eprintln!("Error: failed to parse daemon response: {}", e);
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        Ok(resp) if resp.ok && resp.status.as_deref() == Some("ok") => {
+            println!("Daemon stopped.");
+            ExitCode::SUCCESS
+        }
+        Ok(resp) => {
+            eprintln!(
+                "Error: {}",
+                resp.error.unwrap_or_else(|| "unknown error".to_string())
+            );
+            ExitCode::FAILURE
+        }
+        Err(e) => {
+            eprintln!("Error: failed to parse daemon response: {}", e);
+            ExitCode::FAILURE
+        }
+    }
 }
 
 /// Connects to daemon, sends SET command as JSON to create/update a session.
@@ -275,6 +432,7 @@ fn run_set_command(
         session_id: Some(session_id.to_string()),
         status: Some(status.to_string()),
         working_dir: Some(wd),
+        confirmed: None,
     };
     let json = serde_json::to_string(&cmd).expect("failed to serialize SET command");
     let line = format!("{}\n", json);
@@ -356,6 +514,7 @@ async fn run_claude_hook_async(
         session_id: Some(input.session_id.clone()),
         status: Some(status.to_string()),
         working_dir: Some(input.cwd.clone()),
+        confirmed: None,
     };
     let cmd_json = serde_json::to_string(&cmd).expect("failed to serialize SET command");
     let cmd_line = format!("{}\n", cmd_json);
@@ -439,6 +598,7 @@ fn run_status_command(socket: &PathBuf) -> ExitCode {
         session_id: None,
         status: None,
         working_dir: None,
+        confirmed: None,
     };
     let json = serde_json::to_string(&cmd).expect("failed to serialize STATUS command");
     let line = format!("{}\n", json);
@@ -524,6 +684,7 @@ fn run_dump_command(socket: &PathBuf) -> ExitCode {
         session_id: None,
         status: None,
         working_dir: None,
+        confirmed: None,
     };
     let json = serde_json::to_string(&cmd).expect("failed to serialize DUMP command");
     let line = format!("{}\n", json);
@@ -596,6 +757,7 @@ fn run_resurrect_command(socket: &PathBuf, session_id: &str, quiet: bool) -> Exi
         session_id: Some(session_id.to_string()),
         status: None,
         working_dir: None,
+        confirmed: None,
     };
     let json = serde_json::to_string(&cmd).expect("failed to serialize RESURRECT command");
     let line = format!("{}\n", json);
@@ -1226,6 +1388,19 @@ mod tests {
         let cmd = Cli::command();
         let config_cmd = cmd.get_subcommands().find(|sc| sc.get_name() == "config");
         assert!(config_cmd.is_some(), "config subcommand should exist");
+    }
+
+    #[test]
+    fn test_config_show_parses() {
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "config", "show"])
+            .expect("config show should parse");
+        match cli.command {
+            Commands::Config { action } => match action {
+                ConfigAction::Show => {}
+                _ => panic!("expected Show action"),
+            },
+            _ => panic!("expected Config command"),
+        }
     }
 
     // -- Install/Uninstall subcommands ----------------------------------------

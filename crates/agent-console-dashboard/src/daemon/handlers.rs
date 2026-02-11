@@ -16,7 +16,7 @@ use crate::daemon::store::SessionStore;
 use crate::daemon::usage::UsageFetcher;
 use crate::{
     get_memory_usage_mb, AgentType, DaemonDump, HealthStatus, IpcCommand, IpcNotification,
-    IpcResponse, SessionCounts, SessionSnapshot, Status,
+    IpcResponse, SessionCounts, SessionSnapshot, Status, INACTIVE_SESSION_THRESHOLD,
 };
 
 /// Shared daemon state passed to each client handler.
@@ -27,6 +27,7 @@ pub(super) struct DaemonState {
     pub(super) active_connections: Arc<AtomicUsize>,
     pub(super) socket_path: String,
     pub(super) usage_fetcher: Option<Arc<UsageFetcher>>,
+    pub(super) shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
 /// Handles the SET command.
@@ -411,4 +412,176 @@ pub(super) async fn handle_dump_command(state: &DaemonState) -> String {
         serde_json::to_value(&dump).expect("failed to serialize DaemonDump"),
     ))
     .to_json_line()
+}
+
+/// Handles the STOP command.
+///
+/// Checks for active sessions and requests confirmation if needed.
+/// If confirmed or no active sessions exist, triggers graceful shutdown.
+pub(super) async fn handle_stop_command(cmd: &IpcCommand, state: &DaemonState) -> String {
+    let confirmed = cmd.confirmed.unwrap_or(false);
+
+    // Check if there are any active (non-closed, non-inactive) sessions
+    let has_active = state
+        .store
+        .has_active_sessions(INACTIVE_SESSION_THRESHOLD)
+        .await;
+
+    if has_active && !confirmed {
+        // Count active sessions for the confirmation message
+        let sessions = state.store.list_all().await;
+        let active_count = sessions
+            .iter()
+            .filter(|s| !s.closed && !s.is_inactive(INACTIVE_SESSION_THRESHOLD))
+            .count();
+
+        return IpcResponse::confirm_required(active_count).to_json_line();
+    }
+
+    // Either no active sessions or user confirmed — trigger shutdown
+    if let Some(ref shutdown_tx) = state.shutdown_tx {
+        let _ = shutdown_tx.send(());
+        tracing::info!("Shutdown signal sent via STOP command");
+    }
+
+    IpcResponse::stop_ok().to_json_line()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::daemon::store::SessionStore;
+    use tokio::sync::broadcast;
+
+    fn create_test_state() -> DaemonState {
+        let (shutdown_tx, _rx) = broadcast::channel(1);
+        DaemonState {
+            store: SessionStore::new(),
+            start_time: Instant::now(),
+            active_connections: Arc::new(AtomicUsize::new(0)),
+            socket_path: "/tmp/test.sock".to_string(),
+            usage_fetcher: None,
+            shutdown_tx: Some(shutdown_tx),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_stop_no_active_sessions_returns_ok() {
+        let state = create_test_state();
+        let cmd = IpcCommand {
+            version: 1,
+            cmd: "STOP".to_string(),
+            session_id: None,
+            status: None,
+            working_dir: None,
+            confirmed: None,
+        };
+
+        let response = handle_stop_command(&cmd, &state).await;
+        let parsed: IpcResponse =
+            serde_json::from_str(&response).expect("failed to parse response");
+
+        assert!(parsed.ok);
+        assert_eq!(parsed.status, Some("ok".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_stop_with_active_sessions_requires_confirmation() {
+        let state = create_test_state();
+
+        // Add an active session
+        state
+            .store
+            .get_or_create_session(
+                "test-session".to_string(),
+                AgentType::ClaudeCode,
+                std::path::PathBuf::from("/tmp"),
+                None,
+                Status::Working,
+            )
+            .await;
+
+        let cmd = IpcCommand {
+            version: 1,
+            cmd: "STOP".to_string(),
+            session_id: None,
+            status: None,
+            working_dir: None,
+            confirmed: None,
+        };
+
+        let response = handle_stop_command(&cmd, &state).await;
+        let parsed: IpcResponse =
+            serde_json::from_str(&response).expect("failed to parse response");
+
+        assert!(parsed.ok);
+        assert_eq!(parsed.status, Some("confirm_required".to_string()));
+        assert_eq!(parsed.active_count, Some(1));
+    }
+
+    #[tokio::test]
+    async fn test_stop_with_confirmation_returns_ok() {
+        let state = create_test_state();
+
+        // Add an active session
+        state
+            .store
+            .get_or_create_session(
+                "test-session".to_string(),
+                AgentType::ClaudeCode,
+                std::path::PathBuf::from("/tmp"),
+                None,
+                Status::Working,
+            )
+            .await;
+
+        let cmd = IpcCommand {
+            version: 1,
+            cmd: "STOP".to_string(),
+            session_id: None,
+            status: None,
+            working_dir: None,
+            confirmed: Some(true),
+        };
+
+        let response = handle_stop_command(&cmd, &state).await;
+        let parsed: IpcResponse =
+            serde_json::from_str(&response).expect("failed to parse response");
+
+        assert!(parsed.ok);
+        assert_eq!(parsed.status, Some("ok".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_stop_with_closed_sessions_returns_ok() {
+        let state = create_test_state();
+
+        // Add a closed session (should not require confirmation)
+        state
+            .store
+            .get_or_create_session(
+                "closed-session".to_string(),
+                AgentType::ClaudeCode,
+                std::path::PathBuf::from("/tmp"),
+                None,
+                Status::Closed,
+            )
+            .await;
+
+        let cmd = IpcCommand {
+            version: 1,
+            cmd: "STOP".to_string(),
+            session_id: None,
+            status: None,
+            working_dir: None,
+            confirmed: None,
+        };
+
+        let response = handle_stop_command(&cmd, &state).await;
+        let parsed: IpcResponse =
+            serde_json::from_str(&response).expect("failed to parse response");
+
+        assert!(parsed.ok);
+        assert_eq!(parsed.status, Some("ok".to_string()));
+    }
 }

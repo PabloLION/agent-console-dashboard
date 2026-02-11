@@ -38,7 +38,8 @@ use crate::daemon::usage::UsageFetcher;
 
 use super::handlers::{
     handle_dump_command, handle_get_command, handle_list_command, handle_resurrect_command,
-    handle_rm_command, handle_set_command, handle_status_command, handle_sub_command, DaemonState,
+    handle_rm_command, handle_set_command, handle_status_command, handle_stop_command,
+    handle_sub_command, DaemonState,
 };
 
 /// Unix socket server for daemon IPC.
@@ -62,6 +63,8 @@ pub struct SocketServer {
     active_connections: Arc<AtomicUsize>,
     /// Periodic usage data fetcher, shared with client handlers.
     usage_fetcher: Option<Arc<UsageFetcher>>,
+    /// Shutdown broadcast sender (passed from daemon mod).
+    shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
 impl SocketServer {
@@ -90,6 +93,7 @@ impl SocketServer {
             start_time: Instant::now(),
             active_connections: Arc::new(AtomicUsize::new(0)),
             usage_fetcher: None,
+            shutdown_tx: None,
         }
     }
 
@@ -98,6 +102,13 @@ impl SocketServer {
     /// When set, SUB clients receive USAGE messages alongside session UPDATEs.
     pub fn set_usage_fetcher(&mut self, fetcher: Arc<UsageFetcher>) {
         self.usage_fetcher = Some(fetcher);
+    }
+
+    /// Sets the shutdown broadcast sender for this server.
+    ///
+    /// When set, STOP command can trigger graceful shutdown.
+    pub fn set_shutdown_tx(&mut self, tx: broadcast::Sender<()>) {
+        self.shutdown_tx = Some(tx);
     }
 
     /// Returns the configured socket path.
@@ -209,6 +220,7 @@ impl SocketServer {
             active_connections: Arc::clone(&self.active_connections),
             socket_path: self.socket_path.clone(),
             usage_fetcher: self.usage_fetcher.clone(),
+            shutdown_tx: self.shutdown_tx.clone(),
         };
 
         loop {
@@ -275,6 +287,7 @@ impl SocketServer {
             active_connections: Arc::clone(&self.active_connections),
             socket_path: self.socket_path.clone(),
             usage_fetcher: self.usage_fetcher.clone(),
+            shutdown_tx: self.shutdown_tx.clone(),
         };
 
         loop {
@@ -390,6 +403,7 @@ async fn handle_client(
             "RESURRECT" => handle_resurrect_command(&cmd, &state.store).await,
             "STATUS" => handle_status_command(state).await,
             "DUMP" => handle_dump_command(state).await,
+            "STOP" => handle_stop_command(&cmd, state).await,
             "SUB" => {
                 handle_sub_command(&state.store, state.usage_fetcher.as_ref(), &mut writer).await?;
                 break;

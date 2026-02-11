@@ -38,6 +38,7 @@ pub async fn subscribe_to_daemon(
         session_id: None,
         status: None,
         working_dir: None,
+        confirmed: None,
     };
     let list_json = serde_json::to_string(&list_cmd).expect("failed to serialize LIST command");
     writer.write_all(list_json.as_bytes()).await?;
@@ -73,6 +74,7 @@ pub async fn subscribe_to_daemon(
         session_id: None,
         status: None,
         working_dir: None,
+        confirmed: None,
     };
     let sub_json = serde_json::to_string(&sub_cmd).expect("failed to serialize SUB command");
     writer.write_all(sub_json.as_bytes()).await?;

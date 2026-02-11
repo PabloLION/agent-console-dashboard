@@ -234,6 +234,9 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
         let usage_fetcher = Arc::new(usage::UsageFetcher::with_interval(fetch_interval));
         server.set_usage_fetcher(Arc::clone(&usage_fetcher));
 
+        // Wire shutdown channel so STOP command can trigger graceful shutdown
+        server.set_shutdown_tx(shutdown_tx.clone());
+
         // Clone the store for the idle check loop before moving server
         let store = server.store().clone();
 
@@ -250,12 +253,37 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
             }
         });
 
+        // Load idle timeout from config or fall back to hardcoded default
+        let idle_timeout = match crate::config::loader::ConfigLoader::load_default() {
+            Ok(toml_config) => {
+                let timeout_str = &toml_config.daemon.idle_timeout;
+                match humantime::parse_duration(timeout_str) {
+                    Ok(d) => {
+                        info!(timeout = %timeout_str, "idle timeout from config");
+                        d
+                    }
+                    Err(e) => {
+                        warn!(
+                            timeout = %timeout_str,
+                            error = %e,
+                            "invalid idle_timeout, falling back to {}s",
+                            AUTO_STOP_IDLE_SECS
+                        );
+                        Duration::from_secs(AUTO_STOP_IDLE_SECS)
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(error = %e, "failed to load config, using default idle timeout ({}s)", AUTO_STOP_IDLE_SECS);
+                Duration::from_secs(AUTO_STOP_IDLE_SECS)
+            }
+        };
+
         // Wait for shutdown signal or idle timeout
-        let idle_timeout = Duration::from_secs(AUTO_STOP_IDLE_SECS);
         tokio::select! {
             _ = wait_for_shutdown() => {}
             _ = idle_check_loop(&store, idle_timeout) => {
-                info!("no active sessions for {} seconds, auto-stopping", AUTO_STOP_IDLE_SECS);
+                info!("no active sessions for {} seconds, auto-stopping", idle_timeout.as_secs());
             }
         }
 

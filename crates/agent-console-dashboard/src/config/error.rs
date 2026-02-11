@@ -52,6 +52,13 @@ pub enum ConfigError {
         #[source]
         source: std::io::Error,
     },
+
+    /// Failed to serialize configuration to TOML.
+    #[error("Failed to serialize configuration: {message}")]
+    SerializeError {
+        /// Description of the serialization failure.
+        message: String,
+    },
 }
 
 #[cfg(test)]
@@ -145,5 +152,21 @@ mod tests {
         // thiserror #[source] makes std::error::Error::source() return Some
         let source = std::error::Error::source(&err);
         assert!(source.is_some(), "ReadError should chain the I/O source");
+    }
+
+    #[test]
+    fn display_serialize_error() {
+        let err = ConfigError::SerializeError {
+            message: "invalid TOML structure".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Failed to serialize"),
+            "SerializeError display should describe the failure"
+        );
+        assert!(
+            msg.contains("invalid TOML structure"),
+            "SerializeError display should include the message"
+        );
     }
 }

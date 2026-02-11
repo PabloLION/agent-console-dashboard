@@ -449,7 +449,7 @@ pub const IPC_VERSION: u32 = 1;
 pub struct IpcCommand {
     /// Protocol version (must be [`IPC_VERSION`]).
     pub version: u32,
-    /// Command name (SET, LIST, GET, RM, SUB, STATUS, DUMP, RESURRECT).
+    /// Command name (SET, LIST, GET, RM, SUB, STATUS, DUMP, RESURRECT, STOP).
     pub cmd: String,
     /// Session identifier (for SET, GET, RM, RESURRECT).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -460,6 +460,9 @@ pub struct IpcCommand {
     /// Working directory (for SET). None if unknown.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub working_dir: Option<String>,
+    /// Confirmation flag (for STOP).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub confirmed: Option<bool>,
 }
 
 /// Response envelope from daemon to client.
@@ -477,6 +480,12 @@ pub struct IpcResponse {
     /// Command-specific payload (varies by command).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<serde_json::Value>,
+    /// Status indicator (for STOP command: "confirm_required" or "ok").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// Count of active sessions (for STOP command confirmation).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_count: Option<usize>,
 }
 
 impl IpcResponse {
@@ -487,6 +496,8 @@ impl IpcResponse {
             ok: true,
             error: None,
             data,
+            status: None,
+            active_count: None,
         }
     }
 
@@ -497,6 +508,32 @@ impl IpcResponse {
             ok: false,
             error: Some(message.into()),
             data: None,
+            status: None,
+            active_count: None,
+        }
+    }
+
+    /// Creates a STOP confirmation required response.
+    pub fn confirm_required(active_count: usize) -> Self {
+        Self {
+            version: IPC_VERSION,
+            ok: true,
+            error: None,
+            data: None,
+            status: Some("confirm_required".to_string()),
+            active_count: Some(active_count),
+        }
+    }
+
+    /// Creates a STOP ok response (daemon will shutdown).
+    pub fn stop_ok() -> Self {
+        Self {
+            version: IPC_VERSION,
+            ok: true,
+            error: None,
+            data: None,
+            status: Some("ok".to_string()),
+            active_count: None,
         }
     }
 
