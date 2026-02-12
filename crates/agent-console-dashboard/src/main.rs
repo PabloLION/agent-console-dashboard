@@ -919,11 +919,13 @@ fn acd_hook_definitions() -> Vec<(claude_hooks::HookEvent, &'static str, Option<
             "acd claude-hook attention",
             Some("permission_prompt".to_string()),
         ),
-        // PreToolUse + PostToolUse bridge the gap when Claude resumes after
-        // permission_prompt or elicitation_dialog. Without these, status stays
-        // "attention" while Claude is actively working.
+        // PreToolUse bridges the gap when Claude resumes after permission_prompt
+        // or elicitation_dialog. Without it, status stays "attention" while
+        // Claude is actively working.
         (HookEvent::PreToolUse, "acd claude-hook working", None),
-        (HookEvent::PostToolUse, "acd claude-hook working", None),
+        // Experiment (acd-ws6): PostToolUse removed to test if PreToolUse alone
+        // provides accurate status transitions. Restore when experiment concludes.
+        // (HookEvent::PostToolUse, "acd claude-hook working", None),
     ]
 }
 
@@ -1544,9 +1546,14 @@ mod tests {
     }
 
     #[test]
-    fn test_acd_hook_definitions_has_eight_entries() {
+    fn test_acd_hook_definitions_has_seven_entries() {
         let defs = acd_hook_definitions();
-        assert_eq!(defs.len(), 8, "should define 8 hooks");
+        // 7 hooks: PostToolUse removed for experiment (acd-ws6)
+        assert_eq!(
+            defs.len(),
+            7,
+            "should define 7 hooks (PostToolUse removed for experiment)"
+        );
     }
 
     #[test]
@@ -1579,16 +1586,20 @@ mod tests {
     }
 
     #[test]
-    fn test_acd_hook_definitions_includes_pre_and_post_tool_use() {
+    fn test_acd_hook_definitions_includes_pre_tool_use() {
         let defs = acd_hook_definitions();
         let has_pre_tool_use = defs
             .iter()
             .any(|(event, _, _)| *event == claude_hooks::HookEvent::PreToolUse);
+        assert!(has_pre_tool_use, "should have PreToolUse hook");
+        // PostToolUse removed for experiment (acd-ws6)
         let has_post_tool_use = defs
             .iter()
             .any(|(event, _, _)| *event == claude_hooks::HookEvent::PostToolUse);
-        assert!(has_pre_tool_use, "should have PreToolUse hook");
-        assert!(has_post_tool_use, "should have PostToolUse hook");
+        assert!(
+            !has_post_tool_use,
+            "PostToolUse should be absent (acd-ws6 experiment)"
+        );
     }
 
     #[test]

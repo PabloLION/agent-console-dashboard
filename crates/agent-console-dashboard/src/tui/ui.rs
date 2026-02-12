@@ -233,8 +233,8 @@ mod tests {
 
     #[test]
     fn test_version_text_content() {
-        assert!(VERSION_TEXT.starts_with("v"));
-        assert!(VERSION_TEXT.contains("0.1.2"));
+        // Both sides use compile-time values — no hardcoded version to maintain
+        assert_eq!(VERSION_TEXT, concat!("v", env!("CARGO_PKG_VERSION")));
     }
 
     #[test]
