@@ -39,8 +39,9 @@ STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM | grep '\.rs$' || tr
 if [ -n "$STAGED_RS" ]; then
     echo "Checking Rust files..."
 
-    echo "  Running cargo fmt --check..."
-    cargo fmt --all -- --check
+    echo "  Running cargo fmt (auto-fix)..."
+    cargo fmt --all
+    git add -u
 
     echo "  Running cargo clippy..."
     cargo clippy --workspace -- -D warnings
