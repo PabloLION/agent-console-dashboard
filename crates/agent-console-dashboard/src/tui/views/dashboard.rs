@@ -174,14 +174,28 @@ fn compute_directory_display_names(
 /// - `<40` cols: symbol + session ID only
 /// - `40-80` cols: symbol + directory (flex) + session ID (40) + status (14) + elapsed (16)
 /// - `>80` cols: symbol + directory (flex) + session ID (40) + status (14) + elapsed (16)
-pub fn format_session_line<'a>(session: &Session, width: u16, dir_display: &str) -> Line<'a> {
+///
+/// If `is_highlighted` is true and the session is inactive, uses black text for readability
+/// against the dark gray highlight background.
+pub fn format_session_line<'a>(
+    session: &Session,
+    width: u16,
+    dir_display: &str,
+    is_highlighted: bool,
+) -> Line<'a> {
     let inactive = session.is_inactive(INACTIVE_SESSION_THRESHOLD);
     let (color, symbol, dim, status_text) = if inactive {
+        // Use black text when highlighted for readability against dark gray background
+        let text_color = if is_highlighted {
+            Color::Black
+        } else {
+            Color::DarkGray
+        };
         (
             Color::DarkGray,
             "◌",
             Style::default()
-                .fg(Color::DarkGray)
+                .fg(text_color)
                 .add_modifier(Modifier::DIM),
             "inactive".to_string(),
         )
@@ -350,12 +364,14 @@ pub fn render_session_list(
     // Render session list
     let items: Vec<ListItem> = sessions
         .iter()
-        .map(|session| {
+        .enumerate()
+        .map(|(index, session)| {
             let dir_display = dir_display_names
                 .get(&session.session_id)
                 .map(|s| s.as_str())
                 .unwrap_or("<error>");
-            ListItem::new(format_session_line(session, width, dir_display))
+            let is_highlighted = selected_index == Some(index);
+            ListItem::new(format_session_line(session, width, dir_display, is_highlighted))
         })
         .collect();
 
@@ -519,7 +535,7 @@ mod tests {
     #[test]
     fn test_format_session_line_narrow() {
         let session = make_session("my-session", Status::Working);
-        let line = format_session_line(&session, 30, "project");
+        let line = format_session_line(&session, 30, "project", false);
         // Should have exactly 2 spans (symbol + session ID)
         assert_eq!(line.spans.len(), 2);
     }
@@ -527,7 +543,7 @@ mod tests {
     #[test]
     fn test_format_session_line_standard() {
         let session = make_session("my-session", Status::Attention);
-        let line = format_session_line(&session, 60, "project");
+        let line = format_session_line(&session, 60, "project", false);
         // Should have 4 spans (workdir, session ID, status, elapsed) — highlight handled by List widget
         assert_eq!(line.spans.len(), 4);
     }
@@ -535,7 +551,7 @@ mod tests {
     #[test]
     fn test_format_session_line_wide() {
         let session = make_session("my-session", Status::Question);
-        let line = format_session_line(&session, 100, "project");
+        let line = format_session_line(&session, 100, "project", false);
         // Wide has same 4 spans as standard (workdir, session ID, status, elapsed)
         assert_eq!(line.spans.len(), 4);
     }
@@ -548,8 +564,8 @@ mod tests {
             Some(PathBuf::from("/home/user/a-long-project-name")),
         );
         let long_name = "a-long-project-name";
-        let standard_line = format_session_line(&session, 60, long_name);
-        let wide_line = format_session_line(&session, 100, long_name);
+        let standard_line = format_session_line(&session, 60, long_name, false);
+        let wide_line = format_session_line(&session, 100, long_name, false);
 
         // work_dir span is index 0 in both modes (highlight handled by List widget)
         let standard_dir = &standard_line.spans[0];
@@ -568,7 +584,7 @@ mod tests {
     fn test_format_session_line_shows_full_session_id() {
         let long_id = "very-long-session-identifier-name";
         let session = make_session(long_id, Status::Working);
-        let line = format_session_line(&session, 80, "project");
+        let line = format_session_line(&session, 80, "project", false);
 
         // Session ID span is index 1 (highlight handled by List widget)
         let name_span = &line.spans[1];
@@ -589,9 +605,9 @@ mod tests {
         ] {
             let session = make_session("test", status);
             // Should not panic at any width
-            let _ = format_session_line(&session, 20, "project");
-            let _ = format_session_line(&session, 50, "project");
-            let _ = format_session_line(&session, 120, "project");
+            let _ = format_session_line(&session, 20, "project", false);
+            let _ = format_session_line(&session, 50, "project", false);
+            let _ = format_session_line(&session, 120, "project", false);
         }
     }
 
@@ -690,7 +706,7 @@ mod tests {
             Some(PathBuf::from("unknown")),
         );
         session.status = Status::Working;
-        let line = format_session_line(&session, 100, "<error>");
+        let line = format_session_line(&session, 100, "<error>", false);
 
         // Should have 4 spans: work_dir (error), session ID, status, elapsed
         assert_eq!(line.spans.len(), 4);
@@ -717,7 +733,7 @@ mod tests {
             Some(PathBuf::from("unknown")),
         );
         session.status = Status::Attention;
-        let line = format_session_line(&session, 100, "<error>");
+        let line = format_session_line(&session, 100, "<error>", false);
 
         // Should have 4 spans: work_dir (error), session ID, status, elapsed
         assert_eq!(line.spans.len(), 4);
@@ -743,7 +759,7 @@ mod tests {
             AgentType::ClaudeCode,
             Some(PathBuf::from("/home/user/project")),
         );
-        let line = format_session_line(&session, 100, "project");
+        let line = format_session_line(&session, 100, "project", false);
 
         // Should have 4 spans
         assert_eq!(line.spans.len(), 4);
@@ -777,7 +793,7 @@ mod tests {
             AgentType::ClaudeCode,
             Some(PathBuf::from("/home/user/project")),
         );
-        let line = format_session_line(&session, 100, "project");
+        let line = format_session_line(&session, 100, "project", false);
 
         // Should have 4 spans: workdir, session ID, status, elapsed
         assert_eq!(line.spans.len(), 4);
@@ -827,7 +843,7 @@ mod tests {
             AgentType::ClaudeCode,
             Some(PathBuf::from("/home/user/project")),
         );
-        let line = format_session_line(&session, 120, "project");
+        let line = format_session_line(&session, 120, "project", false);
 
         // Should have 4 spans: workdir, session ID, status, elapsed
         assert_eq!(line.spans.len(), 4);
@@ -854,11 +870,11 @@ mod tests {
         );
 
         // Test at standard width (100 cols)
-        let line_100 = format_session_line(&session, 100, "tmp");
+        let line_100 = format_session_line(&session, 100, "tmp", false);
         let dir_span_100 = &line_100.spans[0];
 
         // Test at wider width (150 cols)
-        let line_150 = format_session_line(&session, 150, "tmp");
+        let line_150 = format_session_line(&session, 150, "tmp", false);
         let dir_span_150 = &line_150.spans[0];
 
         // Directory column at 150 should be wider than at 100
@@ -1015,7 +1031,7 @@ mod tests {
             AgentType::ClaudeCode,
             Some(PathBuf::from("/tmp/test")),
         );
-        let data_line = format_session_line(&session, 100, "test");
+        let data_line = format_session_line(&session, 100, "test", false);
 
         // Header has 5 spans (padding + 4 columns), data has 4 spans (columns only).
         // The header "  " padding aligns with ratatui's highlight symbol space.
@@ -1759,6 +1775,18 @@ mod tests {
         let row = find_row_with_text(&buffer, "test-sess").expect("should find session");
         // The "inactive" status text should be colored DarkGray
         assert_text_fg_in_row(&buffer, row, "inactive", Color::DarkGray);
+    }
+
+    #[test]
+    fn test_inactive_session_highlighted_uses_black_text() {
+        let session =
+            make_inactive_session("test-inactive", INACTIVE_SESSION_THRESHOLD.as_secs() + 100);
+        let sessions = vec![session];
+        // Render with selection (Some(0) = first item selected)
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 80, 10);
+        let row = find_row_with_text(&buffer, "test-inactive").expect("should find session");
+        // The session ID text should be colored Black for readability against dark gray background
+        assert_text_fg_in_row(&buffer, row, "test-inactive", Color::Black);
     }
 
     #[test]
