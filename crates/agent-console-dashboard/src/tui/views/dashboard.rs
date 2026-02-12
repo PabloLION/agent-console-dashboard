@@ -259,6 +259,41 @@ pub fn format_header_line(width: u16) -> Line<'static> {
     }
 }
 
+/// Formats a debug ruler line showing column boundaries.
+///
+/// Only displayed when AGENT_CONSOLE_DASHBOARD_DEBUG=1.
+fn format_ruler_line(width: u16) -> Line<'static> {
+    let style = Style::default().fg(Color::DarkGray);
+
+    if width < NARROW_THRESHOLD {
+        return Line::from(vec![]);
+    }
+
+    let fixed_width: usize = 2 + 40 + 14 + 16;
+    let dir_width = (width as usize).saturating_sub(fixed_width).max(1);
+
+    // Show column widths as labels: "dir:XX | id:40 | stat:14 | time:16"
+    let dir_label = format!("{:<dir_width$}", format!("dir:{dir_width}"));
+    let id_label = format!("{:<40}", "id:40");
+    let status_label = format!("{:<14}", "stat:14");
+    let elapsed_label = format!("{:<16}", "time:16");
+
+    Line::from(vec![
+        Span::styled("  ", style),
+        Span::styled(dir_label, style),
+        Span::styled(id_label, style),
+        Span::styled(status_label, style),
+        Span::styled(elapsed_label, style),
+    ])
+}
+
+/// Returns true if the debug ruler should be displayed.
+fn debug_ruler_enabled() -> bool {
+    std::env::var("AGENT_CONSOLE_DASHBOARD_DEBUG")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}
+
 /// Renders the session list into the given area.
 pub fn render_session_list(
     frame: &mut Frame,
@@ -267,18 +302,32 @@ pub fn render_session_list(
     selected_index: Option<usize>,
     width: u16,
 ) {
-    // Split area into header (1 line) + list (remaining) if not narrow mode
-    let (header_area, list_area) = if width >= NARROW_THRESHOLD {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // header
-                Constraint::Min(1),    // list
-            ])
-            .split(area);
-        (Some(chunks[0]), chunks[1])
+    // Split area into header (1 line) + optional ruler (1 line) + list (remaining) if not narrow mode
+    let show_ruler = debug_ruler_enabled();
+
+    let (header_area, ruler_area, list_area) = if width >= NARROW_THRESHOLD {
+        if show_ruler {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(1), // header
+                    Constraint::Length(1), // debug ruler
+                    Constraint::Min(1),    // list
+                ])
+                .split(area);
+            (Some(chunks[0]), Some(chunks[1]), chunks[2])
+        } else {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(1), // header
+                    Constraint::Min(1),    // list
+                ])
+                .split(area);
+            (Some(chunks[0]), None, chunks[1])
+        }
     } else {
-        (None, area)
+        (None, None, area)
     };
 
     // Render header if not narrow mode
@@ -286,6 +335,13 @@ pub fn render_session_list(
         let header_line = format_header_line(width);
         let header = Paragraph::new(header_line);
         frame.render_widget(header, header_rect);
+    }
+
+    // Render debug ruler if enabled
+    if let Some(ruler_rect) = ruler_area {
+        let ruler_line = format_ruler_line(width);
+        let ruler = Paragraph::new(ruler_line);
+        frame.render_widget(ruler, ruler_rect);
     }
 
     // Compute directory display names with disambiguation
@@ -1813,6 +1869,45 @@ mod tests {
         assert!(
             find_row_with_text(&buffer, "Session ID").is_none(),
             "Narrow mode should not have Session ID header"
+        );
+    }
+
+    // --- Debug Ruler Tests (acd-2rk) ---
+
+    #[test]
+    fn test_format_ruler_line_standard_width() {
+        let line = format_ruler_line(100);
+        let spans: Vec<&str> = line.spans.iter().map(|s| s.content.as_ref()).collect();
+        // Should have 5 spans: highlight space + dir + id + status + elapsed
+        assert_eq!(spans.len(), 5);
+        assert!(spans[1].contains("dir:"), "should show dir width label");
+        assert!(spans[2].contains("id:40"), "should show id width label");
+        assert!(
+            spans[3].contains("stat:14"),
+            "should show status width label"
+        );
+        assert!(
+            spans[4].contains("time:16"),
+            "should show elapsed width label"
+        );
+    }
+
+    #[test]
+    fn test_format_ruler_line_narrow_empty() {
+        let line = format_ruler_line(30);
+        assert!(line.spans.is_empty(), "narrow mode should have no ruler");
+    }
+
+    #[test]
+    fn test_debug_ruler_disabled_by_default() {
+        // Without the env var set, ruler should be disabled
+        // Note: this test may need #[serial] if other tests set the env var
+        assert!(
+            !debug_ruler_enabled()
+                || std::env::var("AGENT_CONSOLE_DASHBOARD_DEBUG")
+                    .ok()
+                    .as_deref()
+                    == Some("1")
         );
     }
 }

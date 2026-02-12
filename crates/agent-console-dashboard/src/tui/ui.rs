@@ -16,7 +16,7 @@ use ratatui::{
 use std::time::Instant;
 
 /// Header text displayed at the top of the dashboard.
-const HEADER_TEXT: &str = "Agent Console Dashboard";
+const HEADER_TEXT: &str = concat!("Agent Console Dashboard v", env!("CARGO_PKG_VERSION"));
 
 /// Footer text showing available keybindings.
 const FOOTER_TEXT: &str = "[j/k] Navigate  [Enter] Details  [r] Resurrect  [q] Quit";
@@ -89,12 +89,27 @@ pub fn render_dashboard(frame: &mut Frame, app: &App) {
         }
     }
 
-    // Footer
+    // Footer (with optional status message overlay)
     let footer_idx = if detail_active { 3 } else { 2 };
-    let footer = Paragraph::new(Line::from(vec![Span::styled(
-        FOOTER_TEXT,
-        Style::default().fg(Color::DarkGray),
-    )]));
+    let footer_text = if let Some((ref msg, expiry)) = app.status_message {
+        if Instant::now() < expiry {
+            Line::from(vec![Span::styled(
+                msg.clone(),
+                Style::default().fg(Color::Yellow),
+            )])
+        } else {
+            Line::from(vec![Span::styled(
+                FOOTER_TEXT,
+                Style::default().fg(Color::DarkGray),
+            )])
+        }
+    } else {
+        Line::from(vec![Span::styled(
+            FOOTER_TEXT,
+            Style::default().fg(Color::DarkGray),
+        )])
+    };
+    let footer = Paragraph::new(footer_text);
     frame.render_widget(footer, chunks[footer_idx]);
 }
 
@@ -202,7 +217,8 @@ mod tests {
 
     #[test]
     fn test_header_text_content() {
-        assert_eq!(HEADER_TEXT, "Agent Console Dashboard");
+        assert!(HEADER_TEXT.starts_with("Agent Console Dashboard v"));
+        assert!(HEADER_TEXT.contains("0.1.2"));
     }
 
     #[test]

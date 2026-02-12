@@ -59,6 +59,8 @@ pub struct App {
     /// Loaded from `tui.double_click_hook` in config. `None` means no hook
     /// configured (empty string in config is treated as no hook).
     pub double_click_hook: Option<String>,
+    /// Temporary status message shown in footer, with expiry time.
+    pub status_message: Option<(String, Instant)>,
 }
 
 impl App {
@@ -75,6 +77,7 @@ impl App {
             usage: None,
             last_click: None,
             double_click_hook: None,
+            status_message: None,
         }
     }
 
@@ -214,10 +217,23 @@ impl App {
                     self.selected_index = Some(idx);
                     if is_double_click {
                         self.last_click = None;
-                        // Double-click: fire hook if configured, otherwise no-op
-                        if let Some(session) = self.sessions.get(idx) {
-                            let session_clone = session.clone();
-                            self.execute_double_click_hook(&session_clone);
+                        if self.double_click_hook.is_some() {
+                            // Fire the hook and show confirmation
+                            if let Some(session) = self.sessions.get(idx) {
+                                let session_clone = session.clone();
+                                self.execute_double_click_hook(&session_clone);
+                            }
+                            self.status_message = Some((
+                                "Hook executed".to_string(),
+                                Instant::now() + Duration::from_secs(2),
+                            ));
+                        } else {
+                            // No hook configured — tell the user where to set it
+                            self.status_message = Some((
+                                "Set tui.double_click_hook in config to enable double-click action"
+                                    .to_string(),
+                                Instant::now() + Duration::from_secs(3),
+                            ));
                         }
                         return Action::None;
                     }
@@ -249,6 +265,15 @@ impl App {
                 Action::None
             }
             _ => Action::None,
+        }
+    }
+
+    /// Clears the status message if its expiry time has passed.
+    pub fn expire_status_message(&mut self) {
+        if let Some((_, expiry)) = &self.status_message {
+            if Instant::now() >= *expiry {
+                self.status_message = None;
+            }
         }
     }
 
@@ -436,6 +461,7 @@ impl App {
                 }
                 Event::Tick => {
                     self.tick_count += 1;
+                    self.expire_status_message();
                 }
                 Event::Resize(_, _) => {
                     // Terminal auto-handles resize on next draw
@@ -1038,6 +1064,75 @@ mod tests {
     fn test_double_click_hook_default_none() {
         let app = App::new(PathBuf::from("/tmp/test.sock"));
         assert!(app.double_click_hook.is_none());
+    }
+
+    #[test]
+    fn test_status_message_default_none() {
+        let app = App::new(PathBuf::from("/tmp/test.sock"));
+        assert!(app.status_message.is_none());
+    }
+
+    #[test]
+    fn test_double_click_no_hook_sets_config_message() {
+        let mut app = make_app_with_sessions(3);
+        app.double_click_hook = None;
+
+        // First click to set last_click
+        let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+        app.handle_mouse_event(first_click);
+
+        // Second click immediately (within 500ms) at same position
+        let second_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+        app.handle_mouse_event(second_click);
+
+        assert!(app.status_message.is_some(), "should set status message");
+        let (msg, _) = app.status_message.as_ref().expect("msg");
+        assert!(
+            msg.contains("double_click_hook"),
+            "message should mention config key"
+        );
+    }
+
+    #[test]
+    fn test_double_click_with_hook_sets_confirmation() {
+        let mut app = make_app_with_sessions(3);
+        app.double_click_hook = Some("echo test".to_string());
+
+        let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+        app.handle_mouse_event(first_click);
+
+        let second_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+        app.handle_mouse_event(second_click);
+
+        assert!(app.status_message.is_some(), "should set status message");
+        let (msg, _) = app.status_message.as_ref().expect("msg");
+        assert_eq!(msg, "Hook executed");
+    }
+
+    #[test]
+    fn test_expire_status_message_clears_expired() {
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+        // Set an already-expired message
+        app.status_message = Some((
+            "old message".to_string(),
+            Instant::now() - Duration::from_secs(1),
+        ));
+        app.expire_status_message();
+        assert!(
+            app.status_message.is_none(),
+            "expired message should be cleared"
+        );
+    }
+
+    #[test]
+    fn test_expire_status_message_keeps_fresh() {
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+        app.status_message = Some((
+            "fresh message".to_string(),
+            Instant::now() + Duration::from_secs(10),
+        ));
+        app.expire_status_message();
+        assert!(app.status_message.is_some(), "fresh message should be kept");
     }
 
     // --- substitute_hook_placeholders tests ---
