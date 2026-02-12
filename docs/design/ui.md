@@ -189,6 +189,20 @@ as last resort (`base/p/w/my-app`). See
 [Q41](../archive/planning/6-open-questions.md),
 [Q42](../archive/planning/6-open-questions.md).
 
+## Session Sort Order
+
+Sessions are sorted using a lexicographic key with three components:
+
+1. **Status group** (descending priority) — attention > working > inactive >
+   closed. Actionable sessions surface first.
+2. **User priority** (`u64`, descending) — higher value = ranked higher within
+   the same status group. Default: 0.
+3. **Time elapsed** — within each (status, priority) group.
+
+Rationale: status comes first because a working session with high priority is
+not actionable — the user can only interact with sessions needing attention.
+Priority differentiates within the same status group.
+
 ## Design Decisions
 
 | Decision                  | Choice                                      | See                                             |
@@ -200,6 +214,7 @@ as last resort (`base/p/w/my-app`). See
 | Input model               | Vim-style + arrows + mouse                  | [Q79](../archive/planning/6-open-questions.md)  |
 | Session overflow          | Pagination with hidden count                | [Q76](../archive/planning/6-open-questions.md)  |
 | Pagination order          | Stable in v0, dynamic reorder in v1+        | [Q91](../archive/planning/6-open-questions.md)  |
+| Session sort order        | Status → priority (u64 desc) → time elapsed | [Session Sort Order](#session-sort-order)       |
 | Enter on focused session  | Switch to session terminal tab              | [Q104](../archive/planning/6-open-questions.md) |
 | Startup (no sessions)     | "No active sessions. See README."           | [Q28](../archive/planning/6-open-questions.md)  |
 | Usage periods             | 5h and 7d, percentage of quota vs time      | [Q84](../archive/planning/6-open-questions.md)  |
