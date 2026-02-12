@@ -69,11 +69,11 @@ Use `#[ignore = "reason"]` to mark tests that need external resources.
 ```rust
 #[test]
 #[ignore = "requires network"]
-fn net__fetch_usage_data() { /* ... */ }
+fn net_fetch_usage_data() { /* ... */ }
 
 #[test]
 #[ignore = "requires credentials"]
-fn env__get_token_macos() { /* ... */ }
+fn env_get_token_macos() { /* ... */ }
 ```
 
 ### Filtering: name/module only
@@ -86,7 +86,7 @@ Filtering options:
 | Method           | Command                            | Filters by            |
 | ---------------- | ---------------------------------- | --------------------- |
 | Run all ignored  | `cargo test -- --ignored`          | All `#[ignore]` tests |
-| Filter by prefix | `cargo test -- --ignored env__`    | Test name substring   |
+| Filter by prefix | `cargo test -- --ignored env_`    | Test name substring   |
 | Filter by module | `cargo test client:: -- --ignored` | Module path           |
 
 The reason string appears in `cargo test` output as
@@ -94,18 +94,16 @@ The reason string appears in `cargo test` output as
 
 ### Naming convention
 
-Prefix ignored test names with a category, separated by double underscore
-(`__`). The `__` delimiter makes it unambiguous where the prefix ends and the
-descriptive name begins — `env__get_token` is clearly prefixed, while
-`env_get_token` could read as a single name.
+Prefix ignored test names with a category, separated by single underscore
+(`_`). The prefix clearly indicates the test's external dependency type.
 
 | Prefix  | Meaning                         | Example                 |
 | ------- | ------------------------------- | ----------------------- |
-| `net__` | Requires network                | `net__fetch_usage_data` |
-| `env__` | Requires env vars / credentials | `env__get_token_macos`  |
-| `svc__` | Requires running service        | `svc__daemon_responds`  |
+| `net_` | Requires network                | `net_fetch_usage_data` |
+| `env_` | Requires env vars / credentials | `env_get_token_macos`  |
+| `svc_` | Requires running service        | `svc_daemon_responds`  |
 
-Run by category: `cargo test -- --ignored env__`
+Run by category: `cargo test -- --ignored env_`
 
 ### Alternatives considered
 
