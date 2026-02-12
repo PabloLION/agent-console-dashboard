@@ -1,0 +1,2 @@
+# Agent definition files have YAML frontmatter that confuses markdownlint
+.claude/agents/
