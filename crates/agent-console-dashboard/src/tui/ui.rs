@@ -7,7 +7,7 @@ use crate::tui::app::{App, View};
 use crate::tui::views::dashboard::render_session_list;
 use crate::tui::views::detail::{render_detail_placeholder, render_inline_detail};
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Style},
     text::{Line, Span},
     widgets::Paragraph,
@@ -16,10 +16,13 @@ use ratatui::{
 use std::time::Instant;
 
 /// Header text displayed at the top of the dashboard.
-const HEADER_TEXT: &str = concat!("Agent Console Dashboard v", env!("CARGO_PKG_VERSION"));
+const HEADER_TEXT: &str = "Agent Console Dashboard";
 
 /// Footer text showing available keybindings.
 const FOOTER_TEXT: &str = "[j/k] Navigate  [Enter] Details  [r] Resurrect  [q] Quit";
+
+/// Version string shown in the bottom-right corner.
+const VERSION_TEXT: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 
 /// Renders the full dashboard layout: header, session list, optional detail, and footer.
 ///
@@ -111,6 +114,14 @@ pub fn render_dashboard(frame: &mut Frame, app: &App) {
     };
     let footer = Paragraph::new(footer_text);
     frame.render_widget(footer, chunks[footer_idx]);
+
+    // Version string in the bottom-right corner (overlays footer area)
+    let version = Paragraph::new(Line::from(vec![Span::styled(
+        VERSION_TEXT,
+        Style::default().fg(Color::DarkGray),
+    )]))
+    .alignment(Alignment::Right);
+    frame.render_widget(version, chunks[footer_idx]);
 }
 
 #[cfg(test)]
@@ -217,8 +228,24 @@ mod tests {
 
     #[test]
     fn test_header_text_content() {
-        assert!(HEADER_TEXT.starts_with("Agent Console Dashboard v"));
-        assert!(HEADER_TEXT.contains("0.1.2"));
+        assert_eq!(HEADER_TEXT, "Agent Console Dashboard");
+    }
+
+    #[test]
+    fn test_version_text_content() {
+        assert!(VERSION_TEXT.starts_with("v"));
+        assert!(VERSION_TEXT.contains("0.1.2"));
+    }
+
+    #[test]
+    fn test_version_shown_in_footer_row() {
+        let app = make_app_with_sessions(3);
+        let buffer = render_dashboard_to_buffer(&app, 80, 24);
+        let footer_row = buffer.area().height - 1;
+        assert!(
+            row_contains(&buffer, footer_row, VERSION_TEXT),
+            "Footer row should contain version string"
+        );
     }
 
     #[test]
