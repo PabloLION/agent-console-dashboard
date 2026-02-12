@@ -80,7 +80,7 @@ mod tests {
     // Integration test - only runs manually when credentials exist
     #[test]
     #[ignore = "requires real Keychain credentials"]
-    fn env__get_token_macos() {
+    fn env_get_token_macos() {
         let result = get_token_macos();
         // If credentials exist, we should get a token
         // If not, we should get NotFound

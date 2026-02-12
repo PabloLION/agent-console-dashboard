@@ -88,7 +88,7 @@ mod tests {
     #[test]
     #[ignore = "requires real API credentials"]
     #[cfg(feature = "blocking")]
-    fn env__fetch_usage_raw() {
+    fn env_fetch_usage_raw() {
         // This test requires CLAUDE_CODE_OAUTH_TOKEN env var or real credentials
         let token = std::env::var("CLAUDE_CODE_OAUTH_TOKEN")
             .expect("CLAUDE_CODE_OAUTH_TOKEN must be set for integration test");
