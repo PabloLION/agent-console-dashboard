@@ -102,11 +102,16 @@ See [Q94](../archive/planning/6-open-questions.md),
 
 ### Column layout
 
-Full TUI columns: directory (flex), session_id (40), status (14), elapsed (16).
-Directory fills remaining width after fixed columns. Status width is 14 (even
-number: max label "attention" is 9 chars + 5 padding). Session ID is 40 (UUID 36
-chars + 4 padding). Elapsed is 16 (HH:MM:SS 8 + 8 padding). Narrow mode (< 40
-cols) shows only symbol + session ID, no columnar layout.
+Full TUI columns: directory (flex), session_id (40), status (14), time elapsed
+(16). Directory fills remaining width after fixed columns and highlight marker
+(2 chars). Status width is 14 (even number: max label "attention" is 9 chars + 5
+padding). Session ID is 40 (UUID 36 chars + 4 padding). Time Elapsed is 16
+(HH:MM:SS 8 + 8 padding). Narrow mode (< 40 cols) shows only symbol + session
+ID, no columnar layout.
+
+Cell content alignment: all columns left-aligned, trailing padding. Highlight
+marker (▶ + space, 2 chars) always reserved via `HighlightSpacing::Always`, even
+when no item is selected.
 
 ### Responsive behavior
 
@@ -186,22 +191,24 @@ as last resort (`base/p/w/my-app`). See
 
 ## Design Decisions
 
-| Decision                  | Choice                                    | See                                             |
-| ------------------------- | ----------------------------------------- | ----------------------------------------------- |
-| Default layout            | 3-line                                    | [Q94](../archive/planning/6-open-questions.md)  |
-| Color scheme              | Semantic (blue=working, yellow=attention) | [Q75](../archive/planning/6-open-questions.md)  |
-| Status indicators         | Color only, no icons                      | [Q77](../archive/planning/6-open-questions.md)  |
-| Animations                | None (static display)                     | [Q81](../archive/planning/6-open-questions.md)  |
-| Input model               | Vim-style + arrows + mouse                | [Q79](../archive/planning/6-open-questions.md)  |
-| Session overflow          | Pagination with hidden count              | [Q76](../archive/planning/6-open-questions.md)  |
-| Pagination order          | Stable in v0, dynamic reorder in v1+      | [Q91](../archive/planning/6-open-questions.md)  |
-| Enter on focused session  | Switch to session terminal tab            | [Q104](../archive/planning/6-open-questions.md) |
-| Startup (no sessions)     | "No active sessions. See README."         | [Q28](../archive/planning/6-open-questions.md)  |
-| Usage periods             | 5h and 7d, percentage of quota vs time    | [Q84](../archive/planning/6-open-questions.md)  |
-| Usage refresh rate        | 180s default (configurable)               | [Q86](../archive/planning/6-open-questions.md)  |
-| Line 2 selectability      | Selectable, no action on Enter            | [Q95](../archive/planning/6-open-questions.md)  |
-| 2-line history display    | Replaces usage when session selected      | [Q96](../archive/planning/6-open-questions.md)  |
-| Focus on terminal refocus | Restore previous selection                | [Q102](../archive/planning/6-open-questions.md) |
-| Name conflicts            | Parent folder or session ID suffix        | [Q41](../archive/planning/6-open-questions.md)  |
-| Long name truncation      | Abbreviate parents, truncate middle       | [Q42](../archive/planning/6-open-questions.md)  |
-| Column widths (Full TUI)  | dir=flex, id=40, status=14, elapsed=16    | —                                               |
+| Decision                  | Choice                                      | See                                             |
+| ------------------------- | ------------------------------------------- | ----------------------------------------------- |
+| Default layout            | 3-line                                      | [Q94](../archive/planning/6-open-questions.md)  |
+| Color scheme              | Semantic (blue=working, yellow=attention)   | [Q75](../archive/planning/6-open-questions.md)  |
+| Status indicators         | Color only, no icons                        | [Q77](../archive/planning/6-open-questions.md)  |
+| Animations                | None (static display)                       | [Q81](../archive/planning/6-open-questions.md)  |
+| Input model               | Vim-style + arrows + mouse                  | [Q79](../archive/planning/6-open-questions.md)  |
+| Session overflow          | Pagination with hidden count                | [Q76](../archive/planning/6-open-questions.md)  |
+| Pagination order          | Stable in v0, dynamic reorder in v1+        | [Q91](../archive/planning/6-open-questions.md)  |
+| Enter on focused session  | Switch to session terminal tab              | [Q104](../archive/planning/6-open-questions.md) |
+| Startup (no sessions)     | "No active sessions. See README."           | [Q28](../archive/planning/6-open-questions.md)  |
+| Usage periods             | 5h and 7d, percentage of quota vs time      | [Q84](../archive/planning/6-open-questions.md)  |
+| Usage refresh rate        | 180s default (configurable)                 | [Q86](../archive/planning/6-open-questions.md)  |
+| Line 2 selectability      | Selectable, no action on Enter              | [Q95](../archive/planning/6-open-questions.md)  |
+| 2-line history display    | Replaces usage when session selected        | [Q96](../archive/planning/6-open-questions.md)  |
+| Focus on terminal refocus | Restore previous selection                  | [Q102](../archive/planning/6-open-questions.md) |
+| Name conflicts            | Parent folder or session ID suffix          | [Q41](../archive/planning/6-open-questions.md)  |
+| Long name truncation      | Abbreviate parents, truncate middle         | [Q42](../archive/planning/6-open-questions.md)  |
+| Column widths (Full TUI)  | dir=flex, id=40, status=14, time elapsed=16 | —                                               |
+| Cell content alignment    | Left-aligned, trailing padding              | —                                               |
+| Highlight marker          | ▶ (filled triangle), always show spacing    | —                                               |
