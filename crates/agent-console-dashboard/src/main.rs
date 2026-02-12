@@ -251,7 +251,10 @@ fn main() -> ExitCode {
             DaemonCommands::Start { socket, detach } => {
                 // Check if daemon is already running
                 if is_daemon_running(&socket) {
-                    println!("Daemon already running on {}", socket.display());
+                    println!(
+                        "Reusing existing daemon on {} (no new daemon started)",
+                        socket.display()
+                    );
                     return ExitCode::SUCCESS;
                 }
 
