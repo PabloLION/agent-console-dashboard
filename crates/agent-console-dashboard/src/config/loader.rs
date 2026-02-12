@@ -76,15 +76,11 @@ impl ConfigLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::path::PathBuf;
-    use std::sync::Mutex;
-
-    /// Serialize tests that mutate environment variables.
-    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     /// Run a closure with `XDG_CONFIG_HOME` temporarily set, then restore.
     fn with_xdg_config<F: FnOnce()>(value: Option<&str>, f: F) {
-        let _lock = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let original = std::env::var("XDG_CONFIG_HOME").ok();
         match value {
             Some(v) => unsafe { std::env::set_var("XDG_CONFIG_HOME", v) },
@@ -219,6 +215,7 @@ log_level = "debug"
     // -----------------------------------------------------------------------
 
     #[test]
+    #[serial]
     fn load_default_with_no_file_returns_defaults() {
         let dir = tempfile::tempdir().expect("failed to create temp dir");
         with_xdg_config(Some(dir.path().to_str().expect("non-utf8 path")), || {
@@ -228,6 +225,7 @@ log_level = "debug"
     }
 
     #[test]
+    #[serial]
     fn load_default_with_existing_file_parses_it() {
         let dir = tempfile::tempdir().expect("failed to create temp dir");
         let config_dir = dir.path().join("agent-console-dashboard");

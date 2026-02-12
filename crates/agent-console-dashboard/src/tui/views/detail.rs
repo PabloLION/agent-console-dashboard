@@ -139,7 +139,7 @@ fn build_detail_lines<'a>(
     // Status line
     let elapsed = now.duration_since(session.since);
     let status_color = status_color(session.status);
-    let elapsed_str = format_duration(elapsed.as_secs());
+    let elapsed_str = super::dashboard::format_duration_secs(elapsed.as_secs());
     lines.push(Line::from(vec![
         Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
         Span::styled(
@@ -273,30 +273,13 @@ fn status_color_for(status: Status) -> Color {
     }
 }
 
-/// Formats elapsed seconds as a human-readable duration string.
-fn format_duration(secs: u64) -> String {
-    if secs < 60 {
-        format!("{}s", secs)
-    } else if secs < 3600 {
-        format!("{}m{}s", secs / 60, secs % 60)
-    } else {
-        format!("{}h{}m", secs / 3600, (secs % 3600) / 60)
-    }
-}
-
-/// Formats a transition timestamp relative to now as HH:MM:SS ago.
+/// Formats a transition timestamp relative to now as a human-readable "ago" string.
 ///
-/// Since `Instant` doesn't map to wall-clock time, we display "Xm ago"
+/// Since `Instant` doesn't map to wall-clock time, we display "Xm Ys ago"
 /// as a relative offset from now.
 fn format_transition_time(timestamp: Instant, now: Instant) -> String {
     let ago = now.duration_since(timestamp).as_secs();
-    if ago < 60 {
-        format!("{:>3}s ago", ago)
-    } else if ago < 3600 {
-        format!("{:>2}m{:02}s ago", ago / 60, ago % 60)
-    } else {
-        format!("{:>2}h{:02}m ago", ago / 3600, (ago % 3600) / 60)
-    }
+    format!("{} ago", super::dashboard::format_duration_secs(ago))
 }
 
 #[cfg(test)]
@@ -315,31 +298,11 @@ mod tests {
     }
 
     #[test]
-    fn test_format_duration_seconds() {
-        assert_eq!(format_duration(0), "0s");
-        assert_eq!(format_duration(45), "45s");
-        assert_eq!(format_duration(59), "59s");
-    }
-
-    #[test]
-    fn test_format_duration_minutes() {
-        assert_eq!(format_duration(60), "1m0s");
-        assert_eq!(format_duration(90), "1m30s");
-        assert_eq!(format_duration(3599), "59m59s");
-    }
-
-    #[test]
-    fn test_format_duration_hours() {
-        assert_eq!(format_duration(3600), "1h0m");
-        assert_eq!(format_duration(7260), "2h1m");
-    }
-
-    #[test]
     fn test_format_transition_time_seconds() {
         let now = Instant::now();
         let ts = now - Duration::from_secs(30);
         let result = format_transition_time(ts, now);
-        assert!(result.contains("30s ago"));
+        assert_eq!(result, "30s ago");
     }
 
     #[test]
@@ -347,7 +310,15 @@ mod tests {
         let now = Instant::now();
         let ts = now - Duration::from_secs(150);
         let result = format_transition_time(ts, now);
-        assert!(result.contains("2m30s ago"));
+        assert_eq!(result, "2m 30s ago");
+    }
+
+    #[test]
+    fn test_format_transition_time_hours() {
+        let now = Instant::now();
+        let ts = now - Duration::from_secs(3661);
+        let result = format_transition_time(ts, now);
+        assert_eq!(result, "1h 1m 1s ago");
     }
 
     #[test]

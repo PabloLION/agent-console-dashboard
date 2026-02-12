@@ -124,14 +124,10 @@ pub fn ensure_config_dir() -> std::io::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
-
-    // Mutex to serialize tests that manipulate environment variables.
-    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+    use serial_test::serial;
 
     /// Helper: run a closure with env vars temporarily set, then restore.
     fn with_env<F: FnOnce()>(vars: &[(&str, Option<&str>)], f: F) {
-        let _lock = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let originals: Vec<_> = vars
             .iter()
             .map(|(k, _)| (*k, std::env::var(k).ok()))
@@ -155,6 +151,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_config_path_with_xdg_override() {
         with_env(&[("XDG_CONFIG_HOME", Some("/custom/config"))], || {
             let path = config_path();
@@ -166,6 +163,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_config_path_without_xdg_uses_platform_default() {
         with_env(&[("XDG_CONFIG_HOME", None)], || {
             let path = config_path();
@@ -176,6 +174,7 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
+    #[serial]
     fn test_macos_config_default_is_library() {
         with_env(&[("XDG_CONFIG_HOME", None)], || {
             let dir = config_dir();
@@ -189,6 +188,7 @@ mod tests {
 
     #[cfg(not(target_os = "macos"))]
     #[test]
+    #[serial]
     fn test_linux_config_default_is_dot_config() {
         with_env(&[("XDG_CONFIG_HOME", None)], || {
             let dir = config_dir();
@@ -198,6 +198,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_runtime_dir_with_xdg_override() {
         with_env(&[("XDG_RUNTIME_DIR", Some("/run/user/1000"))], || {
             let dir = runtime_dir();
@@ -206,6 +207,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_runtime_dir_without_xdg_uses_platform_default() {
         with_env(&[("XDG_RUNTIME_DIR", None)], || {
             let dir = runtime_dir();
@@ -215,6 +217,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_socket_path_with_xdg_override() {
         with_env(&[("XDG_RUNTIME_DIR", Some("/run/user/1000"))], || {
             let path = socket_path();
@@ -226,6 +229,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_config_dir_with_xdg_override() {
         with_env(&[("XDG_CONFIG_HOME", Some("/custom/config"))], || {
             let dir = config_dir();
@@ -284,6 +288,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_ensure_config_dir_creates_at_xdg_path() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         with_env(

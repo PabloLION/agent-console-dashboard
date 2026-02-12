@@ -8,7 +8,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, HighlightSpacing, List, ListItem, ListState, Paragraph},
     Frame,
 };
 use std::time::Instant;
@@ -38,43 +38,35 @@ pub fn error_color() -> Color {
     Color::Red
 }
 
-/// Formats the elapsed time since the given instant as a human-readable string.
+/// Formats a duration in seconds as a human-readable string.
 ///
-/// Returns "Xh Ym" for durations >= 1 hour, "Xm Ys" otherwise, or "Xs" for < 1 minute.
-pub fn format_elapsed(since: Instant) -> String {
-    let elapsed = since.elapsed();
-    let total_seconds = elapsed.as_secs();
+/// Returns "Xh Ym Zs" for durations >= 1 hour, "Xm Ys" for >= 1 minute, or "Xs" for < 1 minute.
+pub fn format_duration_secs(total_seconds: u64) -> String {
     let hours = total_seconds / 3600;
     let minutes = (total_seconds % 3600) / 60;
     let seconds = total_seconds % 60;
 
     if hours > 0 {
-        format!("{}h {}m", hours, minutes)
+        format!("{}h {}m {}s", hours, minutes, seconds)
     } else if minutes > 0 {
         format!("{}m {}s", minutes, seconds)
     } else {
         format!("{}s", seconds)
     }
+}
+
+/// Formats the elapsed time since the given instant as a human-readable string.
+pub fn format_elapsed(since: Instant) -> String {
+    format_duration_secs(since.elapsed().as_secs())
 }
 
 /// Formats the elapsed time from a raw seconds value (for testing without Instant).
 pub fn format_elapsed_seconds(total_seconds: u64) -> String {
-    let hours = total_seconds / 3600;
-    let minutes = (total_seconds % 3600) / 60;
-    let seconds = total_seconds % 60;
-
-    if hours > 0 {
-        format!("{}h {}m", hours, minutes)
-    } else if minutes > 0 {
-        format!("{}m {}s", minutes, seconds)
-    } else {
-        format!("{}s", seconds)
-    }
+    format_duration_secs(total_seconds)
 }
 
-/// Responsive layout breakpoint thresholds.
+/// Responsive layout breakpoint threshold.
 const NARROW_THRESHOLD: u16 = 40;
-const WIDE_THRESHOLD: u16 = 80;
 
 /// Computes display names for session directories with basename disambiguation.
 ///
@@ -210,40 +202,10 @@ pub fn format_session_line<'a>(session: &Session, width: u16, dir_display: &str)
             Span::styled(format!("{} ", symbol), Style::default().fg(color)),
             Span::styled(name, dim),
         ])
-    } else if width <= WIDE_THRESHOLD {
-        // TODO: Standard and wide modes now share the same column layout.
-        // Mode consolidation deferred — keeping both for now.
-
-        // Standard: symbol + directory (flex) + session ID (40) + status (14) + elapsed (16)
-        // Fixed column widths: symbol (2) + session_id (40) + status (14) + elapsed (16) = 72
-        let fixed_width = 2 + 40 + 14 + 16;
-        let dir_width = (width as usize).saturating_sub(fixed_width).max(1);
-
-        let work_dir_text = truncate_string(dir_display, dir_width);
-        let is_error = dir_display == "<error>";
-
-        let work_dir_span = if is_error {
-            Span::styled(
-                format!("{:<dir_width$}", work_dir_text),
-                Style::default().fg(error_color()),
-            )
-        } else {
-            Span::styled(format!("{:<dir_width$}", work_dir_text), dim)
-        };
-
-        Line::from(vec![
-            Span::styled(format!("{} ", symbol), Style::default().fg(color)),
-            work_dir_span,
-            Span::styled(format!("{:<40}", name), dim),
-            Span::styled(format!("{:>14}", status_text), Style::default().fg(color)),
-            Span::styled(format!("{:>16}", elapsed), dim),
-        ])
     } else {
-        // TODO: Standard and wide modes now share the same column layout.
-        // Mode consolidation deferred — keeping both for now.
-
-        // Wide: symbol + directory (flex) + session ID (40) + status (14) + elapsed (16)
-        // Fixed column widths: symbol (2) + session_id (40) + status (14) + elapsed (16) = 72
+        // Standard/Wide: directory (flex) + session ID (40) + status (14) + time elapsed (16)
+        // Highlight marker (▶ + space, 2 chars) is reserved by HighlightSpacing::Always.
+        // Fixed = highlight (2) + session_id (40) + status (14) + time_elapsed (16) = 72
         let fixed_width = 2 + 40 + 14 + 16;
         let dir_width = (width as usize).saturating_sub(fixed_width).max(1);
 
@@ -260,11 +222,10 @@ pub fn format_session_line<'a>(session: &Session, width: u16, dir_display: &str)
         };
 
         Line::from(vec![
-            Span::styled(format!("{} ", symbol), Style::default().fg(color)),
             work_dir_span,
             Span::styled(format!("{:<40}", name), dim),
-            Span::styled(format!("{:>14}", status_text), Style::default().fg(color)),
-            Span::styled(format!("{:>16}", elapsed), dim),
+            Span::styled(format!("{:<14}", status_text), Style::default().fg(color)),
+            Span::styled(format!("{:<16}", elapsed), dim),
         ])
     }
 }
@@ -283,29 +244,17 @@ pub fn format_header_line(width: u16) -> Line<'static> {
     if width < NARROW_THRESHOLD {
         // Narrow: no headers
         Line::from(vec![])
-    } else if width <= WIDE_THRESHOLD {
-        // Standard: Directory (flex) + Session ID (40) + Status (14) + Elapsed (16)
-        let fixed_width = 2 + 40 + 14 + 16; // symbol + session_id + status + elapsed
-        let dir_width = (width as usize).saturating_sub(fixed_width).max(1);
-
-        Line::from(vec![
-            Span::styled("  ", header_style), // Symbol space
-            Span::styled(format!("{:<dir_width$}", "Directory"), header_style),
-            Span::styled(format!("{:<40}", "Session ID"), header_style),
-            Span::styled(format!("{:<14}", "Status"), header_style),
-            Span::styled(format!("{:<16}", "Elapsed"), header_style),
-        ])
     } else {
-        // Wide: Directory (flex) + Session ID (40) + Status (14) + Elapsed (16)
-        let fixed_width = 2 + 40 + 14 + 16; // symbol + session_id + status + elapsed
+        // Standard/Wide: 2 (highlight space) + Directory (flex) + Session ID (40) + Status (14) + Time Elapsed (16)
+        let fixed_width = 2 + 40 + 14 + 16;
         let dir_width = (width as usize).saturating_sub(fixed_width).max(1);
 
         Line::from(vec![
-            Span::styled("  ", header_style), // Symbol space
+            Span::styled("  ", header_style), // Aligns with highlight marker space
             Span::styled(format!("{:<dir_width$}", "Directory"), header_style),
             Span::styled(format!("{:<40}", "Session ID"), header_style),
             Span::styled(format!("{:<14}", "Status"), header_style),
-            Span::styled(format!("{:<16}", "Elapsed"), header_style),
+            Span::styled(format!("{:<16}", "Time Elapsed"), header_style),
         ])
     }
 }
@@ -361,7 +310,8 @@ pub fn render_session_list(
                 .title(" Sessions "),
         )
         .highlight_style(Style::default().bg(Color::DarkGray))
-        .highlight_symbol("▸ ");
+        .highlight_symbol("▶ ")
+        .highlight_spacing(HighlightSpacing::Always);
 
     let mut state = ListState::default();
     state.select(selected_index);
@@ -468,12 +418,12 @@ mod tests {
 
     #[test]
     fn test_format_elapsed_seconds_hours() {
-        assert_eq!(format_elapsed_seconds(3661), "1h 1m");
+        assert_eq!(format_elapsed_seconds(3661), "1h 1m 1s");
     }
 
     #[test]
     fn test_format_elapsed_seconds_exact_hour() {
-        assert_eq!(format_elapsed_seconds(3600), "1h 0m");
+        assert_eq!(format_elapsed_seconds(3600), "1h 0m 0s");
     }
 
     #[test]
@@ -522,16 +472,16 @@ mod tests {
     fn test_format_session_line_standard() {
         let session = make_session("my-session", Status::Attention);
         let line = format_session_line(&session, 60, "project");
-        // Should have 5 spans (symbol, workdir, session ID, status, elapsed)
-        assert_eq!(line.spans.len(), 5);
+        // Should have 4 spans (workdir, session ID, status, elapsed) — highlight handled by List widget
+        assert_eq!(line.spans.len(), 4);
     }
 
     #[test]
     fn test_format_session_line_wide() {
         let session = make_session("my-session", Status::Question);
         let line = format_session_line(&session, 100, "project");
-        // Wide has same 5 spans as standard (symbol, workdir, session ID, status, elapsed)
-        assert_eq!(line.spans.len(), 5);
+        // Wide has same 4 spans as standard (workdir, session ID, status, elapsed)
+        assert_eq!(line.spans.len(), 4);
     }
 
     #[test]
@@ -545,9 +495,9 @@ mod tests {
         let standard_line = format_session_line(&session, 60, long_name);
         let wide_line = format_session_line(&session, 100, long_name);
 
-        // work_dir span is index 1 in both modes
-        let standard_dir = &standard_line.spans[1];
-        let wide_dir = &wide_line.spans[1];
+        // work_dir span is index 0 in both modes (highlight handled by List widget)
+        let standard_dir = &standard_line.spans[0];
+        let wide_dir = &wide_line.spans[0];
 
         // Wide directory column (30 chars) is wider than standard (20 chars)
         assert!(
@@ -564,8 +514,8 @@ mod tests {
         let session = make_session(long_id, Status::Working);
         let line = format_session_line(&session, 80, "project");
 
-        // Session ID span is index 2; should contain full ID without truncation
-        let name_span = &line.spans[2];
+        // Session ID span is index 1 (highlight handled by List widget)
+        let name_span = &line.spans[1];
         assert!(
             name_span.content.contains(long_id),
             "Session ID should not be truncated, got: '{}'",
@@ -686,11 +636,11 @@ mod tests {
         session.status = Status::Working;
         let line = format_session_line(&session, 100, "<error>");
 
-        // Should have 5 spans: symbol, work_dir (error), session ID, status, elapsed
-        assert_eq!(line.spans.len(), 5);
+        // Should have 4 spans: work_dir (error), session ID, status, elapsed
+        assert_eq!(line.spans.len(), 4);
 
-        // The work_dir span (index 1) should contain "<error>" and be styled with red
-        let work_dir_span = &line.spans[1];
+        // The work_dir span (index 0) should contain "<error>" and be styled with red
+        let work_dir_span = &line.spans[0];
         assert!(
             work_dir_span.content.contains("<error>"),
             "Expected '<error>' in work_dir span, got: '{}'",
@@ -713,11 +663,11 @@ mod tests {
         session.status = Status::Attention;
         let line = format_session_line(&session, 100, "<error>");
 
-        // Should have 5 spans: symbol, work_dir (error), session ID, status, elapsed
-        assert_eq!(line.spans.len(), 5);
+        // Should have 4 spans: work_dir (error), session ID, status, elapsed
+        assert_eq!(line.spans.len(), 4);
 
-        // The work_dir span (index 1) should contain "<error>" and be styled with red
-        let work_dir_span = &line.spans[1];
+        // The work_dir span (index 0) should contain "<error>" and be styled with red
+        let work_dir_span = &line.spans[0];
         assert!(
             work_dir_span.content.contains("<error>"),
             "Expected '<error>' in work_dir span, got: '{}'",
@@ -739,11 +689,11 @@ mod tests {
         );
         let line = format_session_line(&session, 100, "project");
 
-        // Should have 5 spans
-        assert_eq!(line.spans.len(), 5);
+        // Should have 4 spans
+        assert_eq!(line.spans.len(), 4);
 
-        // The work_dir span (index 1) should contain the path, not "<error>"
-        let work_dir_span = &line.spans[1];
+        // The work_dir span (index 0) should contain the path, not "<error>"
+        let work_dir_span = &line.spans[0];
         assert!(
             !work_dir_span.content.contains("<error>"),
             "Normal path should not display <error>, got: '{}'",
@@ -771,33 +721,45 @@ mod tests {
             AgentType::ClaudeCode,
             Some(PathBuf::from("/home/user/project")),
         );
-        // Use wider terminal to avoid truncation (72+ for new layout)
         let line = format_session_line(&session, 100, "project");
 
-        // Should have 5 spans: symbol, workdir, session ID, status, elapsed
-        assert_eq!(line.spans.len(), 5);
+        // Should have 4 spans: workdir, session ID, status, elapsed
+        assert_eq!(line.spans.len(), 4);
 
-        // Session ID (index 2) should be left-aligned with width 40
-        let session_id_span = &line.spans[2];
-        assert!(
-            session_id_span.content.len() >= 40,
-            "Session ID should have width >= 40, got: '{}'",
+        // Session ID (index 1) should be left-aligned with width 40
+        let session_id_span = &line.spans[1];
+        assert_eq!(
+            session_id_span.content.len(),
+            40,
+            "Session ID should have width 40, got: '{}'",
             session_id_span.content
         );
 
-        // Status (index 3) should be right-aligned (check for leading spaces)
-        let status_span = &line.spans[3];
+        // Status (index 2) should be left-aligned with width 14
+        let status_span = &line.spans[2];
+        assert_eq!(
+            status_span.content.len(),
+            14,
+            "Status should have width 14, got: '{}'",
+            status_span.content
+        );
         assert!(
-            status_span.content.starts_with(' ') || status_span.content.len() >= 14,
-            "Status should be right-aligned with width 14, got: '{}'",
+            !status_span.content.starts_with(' '),
+            "Status should be left-aligned, got: '{}'",
             status_span.content
         );
 
-        // Elapsed (index 4) should be right-aligned with width 16
-        let elapsed_span = &line.spans[4];
+        // Elapsed (index 3) should be left-aligned with width 16
+        let elapsed_span = &line.spans[3];
+        assert_eq!(
+            elapsed_span.content.len(),
+            16,
+            "Elapsed should have width 16, got: '{}'",
+            elapsed_span.content
+        );
         assert!(
-            elapsed_span.content.starts_with(' ') || elapsed_span.content.len() >= 16,
-            "Elapsed should be right-aligned with width 16, got: '{}'",
+            !elapsed_span.content.starts_with(' '),
+            "Elapsed should be left-aligned, got: '{}'",
             elapsed_span.content
         );
     }
@@ -811,32 +773,20 @@ mod tests {
         );
         let line = format_session_line(&session, 120, "project");
 
-        // Should have 5 spans: symbol, workdir, session ID, status, elapsed
-        assert_eq!(line.spans.len(), 5);
+        // Should have 4 spans: workdir, session ID, status, elapsed
+        assert_eq!(line.spans.len(), 4);
 
-        // Session ID (index 2) should be left-aligned with width 40
-        let session_id_span = &line.spans[2];
-        assert!(
-            session_id_span.content.len() >= 40,
-            "Session ID should have width >= 40, got: '{}'",
-            session_id_span.content
-        );
+        // Session ID (index 1) should be left-aligned with width 40
+        let session_id_span = &line.spans[1];
+        assert_eq!(session_id_span.content.len(), 40);
 
-        // Status (index 3) should be right-aligned
-        let status_span = &line.spans[3];
-        assert!(
-            status_span.content.starts_with(' ') || status_span.content.len() >= 14,
-            "Status should be right-aligned with width 14, got: '{}'",
-            status_span.content
-        );
+        // Status (index 2) should be left-aligned with width 14
+        let status_span = &line.spans[2];
+        assert_eq!(status_span.content.len(), 14);
 
-        // Elapsed (index 4) should be right-aligned with width 16
-        let elapsed_span = &line.spans[4];
-        assert!(
-            elapsed_span.content.starts_with(' ') || elapsed_span.content.len() >= 16,
-            "Elapsed should be right-aligned with width 16, got: '{}'",
-            elapsed_span.content
-        );
+        // Elapsed (index 3) should be left-aligned with width 16
+        let elapsed_span = &line.spans[3];
+        assert_eq!(elapsed_span.content.len(), 16);
     }
 
     #[test]
@@ -849,11 +799,11 @@ mod tests {
 
         // Test at standard width (100 cols)
         let line_100 = format_session_line(&session, 100, "tmp");
-        let dir_span_100 = &line_100.spans[1];
+        let dir_span_100 = &line_100.spans[0];
 
         // Test at wider width (150 cols)
         let line_150 = format_session_line(&session, 150, "tmp");
-        let dir_span_150 = &line_150.spans[1];
+        let dir_span_150 = &line_150.spans[0];
 
         // Directory column at 150 should be wider than at 100
         assert!(
@@ -903,8 +853,8 @@ mod tests {
             "Header should contain 'Directory'"
         );
         assert!(
-            full_text.contains("Elapsed"),
-            "Header should contain 'Elapsed'"
+            full_text.contains("Time Elapsed"),
+            "Header should contain 'Time Elapsed'"
         );
 
         // Verify all spans use header style (cyan + bold)
@@ -947,8 +897,8 @@ mod tests {
             "Header should contain 'Directory'"
         );
         assert!(
-            full_text.contains("Elapsed"),
-            "Header should contain 'Elapsed'"
+            full_text.contains("Time Elapsed"),
+            "Header should contain 'Time Elapsed'"
         );
 
         // Wide directory header should be wider than standard
@@ -991,11 +941,11 @@ mod tests {
             status_span.content
         );
 
-        // Elapsed (index 4): check left-aligned (starts with "E", not space)
+        // Time Elapsed (index 4): check left-aligned (starts with "T", not space)
         let elapsed_span = &line.spans[4];
         assert!(
-            elapsed_span.content.starts_with('E'),
-            "Elapsed header should be left-aligned, got: '{}'",
+            elapsed_span.content.starts_with('T'),
+            "Time Elapsed header should be left-aligned, got: '{}'",
             elapsed_span.content
         );
     }
@@ -1011,34 +961,29 @@ mod tests {
         );
         let data_line = format_session_line(&session, 100, "test");
 
-        // Both should have same span count
-        assert_eq!(
-            header.spans.len(),
-            data_line.spans.len(),
-            "Header and data should have same span count"
-        );
+        // Header has 5 spans (padding + 4 columns), data has 4 spans (columns only).
+        // The header "  " padding aligns with ratatui's highlight symbol space.
+        assert_eq!(header.spans.len(), 5, "Header should have 5 spans");
+        assert_eq!(data_line.spans.len(), 4, "Data should have 4 spans");
 
-        // Verify column widths match for fixed-width columns
-        // Symbol (index 0) - skip byte length check because Unicode symbols have different
-        // byte vs display widths. Both header and data use 2-char wide symbols.
-
-        // Directory (index 1) - flex width, should match
+        // Verify column widths match (header offset +1 for padding span)
+        // Directory: header[1] == data[0]
         assert_eq!(
             header.spans[1].content.len(),
-            data_line.spans[1].content.len()
+            data_line.spans[0].content.len()
         );
 
-        // Session ID (index 2) - fixed 40
+        // Session ID: header[2] == data[1], both fixed 40
         assert_eq!(header.spans[2].content.len(), 40);
-        assert_eq!(data_line.spans[2].content.len(), 40);
+        assert_eq!(data_line.spans[1].content.len(), 40);
 
-        // Status (index 3) - fixed 14
+        // Status: header[3] == data[2], both fixed 14
         assert_eq!(header.spans[3].content.len(), 14);
-        assert_eq!(data_line.spans[3].content.len(), 14);
+        assert_eq!(data_line.spans[2].content.len(), 14);
 
-        // Elapsed (index 4) - fixed 16
+        // Time Elapsed: header[4] == data[3], both fixed 16
         assert_eq!(header.spans[4].content.len(), 16);
-        assert_eq!(data_line.spans[4].content.len(), 16);
+        assert_eq!(data_line.spans[3].content.len(), 16);
     }
 
     // --- Story 4 (acd-9ul): Basename disambiguation tests ---
@@ -1663,9 +1608,9 @@ mod tests {
         let buffer = render_dashboard_to_buffer(&app, 80, 24);
         let session_row = find_row_with_text(&buffer, "with-arrow").expect("should find session");
         let row_string = row_text(&buffer, session_row);
-        // The highlight symbol is "▸ " (2 chars)
+        // The highlight symbol is "▶ " (2 chars, filled triangle)
         assert!(
-            row_string.contains('▸'),
+            row_string.contains('▶'),
             "Selected session should have arrow highlight symbol: '{}'",
             row_string
         );
@@ -1698,67 +1643,66 @@ mod tests {
     // Status Color Tests (6 tests)
 
     #[test]
-    fn test_working_status_renders_green_symbol() {
+    fn test_working_status_renders_green() {
         let sessions = vec![make_test_session_with_dir(
-            "working",
+            "test-sess",
             Status::Working,
             Some(PathBuf::from("/tmp")),
         )];
         let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
-        let row = find_row_with_text(&buffer, "working").expect("should find session");
-        // The working symbol "●" should be colored green
-        // Find the symbol position (should be at start of row after highlight space)
-        assert_text_fg_in_row(&buffer, row, "●", Color::Green);
+        let row = find_row_with_text(&buffer, "test-sess").expect("should find session");
+        // The "working" status text should be colored green
+        assert_text_fg_in_row(&buffer, row, "working", Color::Green);
     }
 
     #[test]
-    fn test_attention_status_renders_yellow_symbol() {
+    fn test_attention_status_renders_yellow() {
         let sessions = vec![make_test_session_with_dir(
-            "attention",
+            "test-sess",
             Status::Attention,
             Some(PathBuf::from("/tmp")),
         )];
         let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
-        let row = find_row_with_text(&buffer, "attention").expect("should find session");
-        // The attention symbol "○" should be colored yellow
-        assert_text_fg_in_row(&buffer, row, "○", Color::Yellow);
+        let row = find_row_with_text(&buffer, "test-sess").expect("should find session");
+        // The "attention" status text should be colored yellow
+        assert_text_fg_in_row(&buffer, row, "attention", Color::Yellow);
     }
 
     #[test]
-    fn test_question_status_renders_blue_symbol() {
+    fn test_question_status_renders_blue() {
         let sessions = vec![make_test_session_with_dir(
-            "question",
+            "test-sess",
             Status::Question,
             Some(PathBuf::from("/tmp")),
         )];
         let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
-        let row = find_row_with_text(&buffer, "question").expect("should find session");
-        // The question symbol "?" should be colored blue
-        assert_text_fg_in_row(&buffer, row, "?", Color::Blue);
+        let row = find_row_with_text(&buffer, "test-sess").expect("should find session");
+        // The "question" status text should be colored blue
+        assert_text_fg_in_row(&buffer, row, "question", Color::Blue);
     }
 
     #[test]
-    fn test_closed_status_renders_gray_symbol() {
+    fn test_closed_status_renders_gray() {
         let sessions = vec![make_test_session_with_dir(
-            "closed",
+            "test-sess",
             Status::Closed,
             Some(PathBuf::from("/tmp")),
         )];
         let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
-        let row = find_row_with_text(&buffer, "closed").expect("should find session");
-        // The closed symbol "×" should be colored gray
-        assert_text_fg_in_row(&buffer, row, "×", Color::Gray);
+        let row = find_row_with_text(&buffer, "test-sess").expect("should find session");
+        // The "closed" status text should be colored gray
+        assert_text_fg_in_row(&buffer, row, "closed", Color::Gray);
     }
 
     #[test]
     fn test_inactive_session_renders_dark_gray() {
-        let session = make_inactive_session("inactive", INACTIVE_SESSION_THRESHOLD.as_secs() + 100);
+        let session =
+            make_inactive_session("test-sess", INACTIVE_SESSION_THRESHOLD.as_secs() + 100);
         let sessions = vec![session];
         let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
-        let row = find_row_with_text(&buffer, "inactive").expect("should find session");
-        // Inactive sessions should use DarkGray with DIM modifier
-        // The symbol for inactive is "◌"
-        assert_text_fg_in_row(&buffer, row, "◌", Color::DarkGray);
+        let row = find_row_with_text(&buffer, "test-sess").expect("should find session");
+        // The "inactive" status text should be colored DarkGray
+        assert_text_fg_in_row(&buffer, row, "inactive", Color::DarkGray);
     }
 
     #[test]

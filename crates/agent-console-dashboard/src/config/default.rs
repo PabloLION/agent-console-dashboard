@@ -195,13 +195,10 @@ fn write_default_config(path: &PathBuf) -> Result<(), ConfigError> {
 mod tests {
     use super::*;
     use crate::config::schema::Config;
-    use std::sync::Mutex;
-
-    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+    use serial_test::serial;
 
     /// Run closure with `XDG_CONFIG_HOME` temporarily pointed at `dir`.
     fn with_xdg_config<F: FnOnce()>(dir: &str, f: F) {
-        let _lock = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
         let original = std::env::var("XDG_CONFIG_HOME").ok();
         unsafe { std::env::set_var("XDG_CONFIG_HOME", dir) };
         f();
@@ -265,6 +262,7 @@ mod tests {
     // -- create_default_config_if_missing -----------------------------------
 
     #[test]
+    #[serial]
     fn if_missing_creates_file() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         let expected_path = tmp.path().join("agent-console-dashboard/config.toml");
@@ -278,6 +276,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn if_missing_returns_false_when_exists() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         // Pre-create the file so we don't depend on two sequential calls
@@ -296,6 +295,7 @@ mod tests {
     // -- create_default_config ----------------------------------------------
 
     #[test]
+    #[serial]
     fn create_without_force_returns_already_exists() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
@@ -311,6 +311,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn create_with_force_creates_backup() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
@@ -335,6 +336,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn create_returns_correct_path() {
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
         let expected = tmp.path().join("agent-console-dashboard/config.toml");
@@ -348,6 +350,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    #[serial]
     fn file_permissions_are_0600() {
         use std::os::unix::fs::PermissionsExt;
         let tmp = tempfile::tempdir().expect("failed to create temp dir");
