@@ -1306,7 +1306,7 @@ mod tests {
     // Using test_utils for buffer inspection and validation
 
     use crate::tui::test_utils::{
-        assert_text_fg_in_row, find_row_with_text, make_inactive_session,
+        assert_text_bg_in_row, assert_text_fg_in_row, find_row_with_text, make_inactive_session,
         make_session as make_test_session_with_dir, render_dashboard_to_buffer,
         render_session_list_to_buffer, row_contains, row_text,
     };
@@ -1648,23 +1648,8 @@ mod tests {
         // Find the row with the session
         let session_row =
             find_row_with_text(&buffer, "highlighted").expect("should find session row");
-        // Check that some cells in this row have DarkGray background (highlight)
-        let row_string = row_text(&buffer, session_row);
-        let area = buffer.area();
-        let mut found_highlight = false;
-        for col in 0..area.width {
-            if let Some(cell) = buffer.cell((col, session_row)) {
-                if cell.bg == Color::DarkGray {
-                    found_highlight = true;
-                    break;
-                }
-            }
-        }
-        assert!(
-            found_highlight,
-            "Selected session should have DarkGray background highlight: row={}",
-            row_string
-        );
+        // Check that the session ID has DarkGray background (highlight)
+        assert_text_bg_in_row(&buffer, session_row, "highlighted", Color::DarkGray);
     }
 
     #[test]
@@ -1787,6 +1772,8 @@ mod tests {
         let row = find_row_with_text(&buffer, "test-inactive").expect("should find session");
         // The session ID text should be colored Black for readability against dark gray background
         assert_text_fg_in_row(&buffer, row, "test-inactive", Color::Black);
+        // The background should be DarkGray (highlight color)
+        assert_text_bg_in_row(&buffer, row, "test-inactive", Color::DarkGray);
     }
 
     #[test]
