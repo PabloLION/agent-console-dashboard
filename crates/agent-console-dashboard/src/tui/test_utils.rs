@@ -82,6 +82,16 @@ pub fn assert_text_fg_in_row(buffer: &Buffer, row: u16, text: &str, color: Color
     assert_fg_color(buffer, col as u16, row, color);
 }
 
+/// Finds the first occurrence of `text` in the specified row and checks
+/// if the first character of that text has the specified background color.
+pub fn assert_text_bg_in_row(buffer: &Buffer, row: u16, text: &str, color: Color) {
+    let row_string = row_text(buffer, row);
+    let col = row_string
+        .find(text)
+        .unwrap_or_else(|| panic!("text '{}' not found in row {}: '{}'", text, row, row_string));
+    assert_bg_color(buffer, col as u16, row, color);
+}
+
 /// Creates a Session with the given id, status, and working directory.
 pub fn make_session(id: &str, status: Status, working_dir: Option<PathBuf>) -> Session {
     let mut session = Session::new(id.to_string(), AgentType::ClaudeCode, working_dir);
