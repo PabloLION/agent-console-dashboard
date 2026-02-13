@@ -23,6 +23,7 @@ impl ConfigLoader {
             if e.kind() == std::io::ErrorKind::NotFound {
                 ConfigError::NotFound {
                     path: path.to_path_buf(),
+                    message: "Configuration file not found".to_string(),
                 }
             } else {
                 ConfigError::ReadError {
@@ -191,7 +192,7 @@ log_level = "debug"
         let path = PathBuf::from("/tmp/nonexistent_acd_test_config.toml");
         let err = ConfigLoader::load_from_path(&path).expect_err("should fail");
         match err {
-            ConfigError::NotFound { path: p } => {
+            ConfigError::NotFound { path: p, .. } => {
                 assert_eq!(p, path);
             }
             other => panic!("expected NotFound, got: {other:?}"),

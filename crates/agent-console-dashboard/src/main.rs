@@ -139,6 +139,8 @@ enum ConfigAction {
     Validate,
     /// Display current effective configuration
     Show,
+    /// Open configuration file in editor
+    Edit,
 }
 
 fn main() -> ExitCode {
@@ -233,6 +235,7 @@ fn main() -> ExitCode {
                     }
                     Err(e) => Err(e),
                 },
+                ConfigAction::Edit => run_config_edit_command(),
             };
             if let Err(e) = result {
                 eprintln!("Config error: {e}");
@@ -1077,6 +1080,63 @@ fn run_uninstall_command() -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Opens the config file in the user's editor ($VISUAL or $EDITOR).
+///
+/// Backs up the config before opening the editor. Returns error if config does not exist.
+fn run_config_edit_command() -> Result<(), agent_console_dashboard::config::error::ConfigError> {
+    use agent_console_dashboard::config::{default, xdg};
+    use std::fs;
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    let config_path = xdg::config_path();
+
+    // Check if config exists
+    if !config_path.exists() {
+        return Err(agent_console_dashboard::config::error::ConfigError::NotFound {
+            path: config_path,
+            message: "No config found. Run 'acd config init' first.".to_string(),
+        });
+    }
+
+    // Determine editor from environment
+    let editor = std::env::var("VISUAL")
+        .or_else(|_| std::env::var("EDITOR"))
+        .map_err(|_| agent_console_dashboard::config::error::ConfigError::EditorNotSet)?;
+
+    // Back up config with tinydate format
+    let tinydate = default::generate_tinydate();
+    let backup_path = PathBuf::from(format!("{}.bak.{}", config_path.display(), tinydate));
+
+    fs::copy(&config_path, &backup_path).map_err(|e| {
+        agent_console_dashboard::config::error::ConfigError::WriteError {
+            path: backup_path.clone(),
+            source: e,
+        }
+    })?;
+
+    println!("Config backed up to: {}", backup_path.display());
+    println!("Opening {} in editor...", config_path.display());
+
+    // Open editor
+    let status = Command::new(&editor)
+        .arg(&config_path)
+        .status()
+        .map_err(|e| agent_console_dashboard::config::error::ConfigError::EditorError {
+            editor: editor.clone(),
+            source: e,
+        })?;
+
+    if !status.success() {
+        return Err(agent_console_dashboard::config::error::ConfigError::EditorFailed {
+            editor,
+            code: status.code(),
+        });
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1527,6 +1587,19 @@ mod tests {
             Commands::Config { action } => match action {
                 ConfigAction::Show => {}
                 _ => panic!("expected Show action"),
+            },
+            _ => panic!("expected Config command"),
+        }
+    }
+
+    #[test]
+    fn test_config_edit_parses() {
+        let cli = Cli::try_parse_from(["agent-console-dashboard", "config", "edit"])
+            .expect("config edit should parse");
+        match cli.command {
+            Commands::Config { action } => match action {
+                ConfigAction::Edit => {}
+                _ => panic!("expected Edit action"),
             },
             _ => panic!("expected Config command"),
         }

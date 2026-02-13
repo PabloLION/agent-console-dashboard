@@ -30,10 +30,12 @@ pub enum ConfigError {
     },
 
     /// An explicitly requested configuration file does not exist.
-    #[error("Configuration file not found: {path}")]
+    #[error("{message}\nPath: {path}")]
     NotFound {
         /// Path that was requested but does not exist.
         path: PathBuf,
+        /// Custom error message.
+        message: String,
     },
 
     /// A configuration file already exists at the target path.
@@ -58,6 +60,29 @@ pub enum ConfigError {
     SerializeError {
         /// Description of the serialization failure.
         message: String,
+    },
+
+    /// No editor is configured ($VISUAL or $EDITOR not set).
+    #[error("No editor configured. Set $EDITOR environment variable.")]
+    EditorNotSet,
+
+    /// Failed to launch the editor.
+    #[error("Failed to launch editor '{editor}'")]
+    EditorError {
+        /// Editor command that failed to launch.
+        editor: String,
+        /// Underlying I/O error.
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// Editor exited with non-zero status.
+    #[error("Editor '{editor}' exited with status {}", code.map(|c| c.to_string()).unwrap_or_else(|| "unknown".to_string()))]
+    EditorFailed {
+        /// Editor command that failed.
+        editor: String,
+        /// Exit code (None if terminated by signal).
+        code: Option<i32>,
     },
 }
 
@@ -105,6 +130,7 @@ mod tests {
     fn display_not_found_error() {
         let err = ConfigError::NotFound {
             path: PathBuf::from("/missing/config.toml"),
+            message: "Configuration file not found".to_string(),
         };
         let msg = err.to_string();
         assert!(
