@@ -1093,10 +1093,12 @@ fn run_config_edit_command() -> Result<(), agent_console_dashboard::config::erro
 
     // Check if config exists
     if !config_path.exists() {
-        return Err(agent_console_dashboard::config::error::ConfigError::NotFound {
-            path: config_path,
-            message: "No config found. Run 'acd config init' first.".to_string(),
-        });
+        return Err(
+            agent_console_dashboard::config::error::ConfigError::NotFound {
+                path: config_path,
+                message: "No config found. Run 'acd config init' first.".to_string(),
+            },
+        );
     }
 
     // Determine editor from environment
@@ -1122,16 +1124,20 @@ fn run_config_edit_command() -> Result<(), agent_console_dashboard::config::erro
     let status = Command::new(&editor)
         .arg(&config_path)
         .status()
-        .map_err(|e| agent_console_dashboard::config::error::ConfigError::EditorError {
-            editor: editor.clone(),
-            source: e,
-        })?;
+        .map_err(
+            |e| agent_console_dashboard::config::error::ConfigError::EditorError {
+                editor: editor.clone(),
+                source: e,
+            },
+        )?;
 
     if !status.success() {
-        return Err(agent_console_dashboard::config::error::ConfigError::EditorFailed {
-            editor,
-            code: status.code(),
-        });
+        return Err(
+            agent_console_dashboard::config::error::ConfigError::EditorFailed {
+                editor,
+                code: status.code(),
+            },
+        );
     }
 
     Ok(())

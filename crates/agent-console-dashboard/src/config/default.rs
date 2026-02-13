@@ -283,18 +283,17 @@ mod tests {
         let tinydate = generate_tinydate();
         assert_eq!(tinydate.len(), 16, "tinydate should be 16 characters");
         assert!(tinydate.ends_with('Z'), "tinydate should end with Z");
-        assert!(tinydate.contains('T'), "tinydate should contain T separator");
+        assert!(
+            tinydate.contains('T'),
+            "tinydate should contain T separator"
+        );
 
         // Format: YYYYMMDDTHHmmssZ
         // Verify it parses as expected structure
         let parts: Vec<&str> = tinydate.split('T').collect();
         assert_eq!(parts.len(), 2, "should split into date and time parts");
         assert_eq!(parts[0].len(), 8, "date part should be 8 chars (YYYYMMDD)");
-        assert_eq!(
-            parts[1].len(),
-            7,
-            "time part should be 7 chars (HHmmssZ)"
-        );
+        assert_eq!(parts[1].len(), 7, "time part should be 7 chars (HHmmssZ)");
 
         // Verify all chars except T and Z are digits
         let digits_only: String = tinydate

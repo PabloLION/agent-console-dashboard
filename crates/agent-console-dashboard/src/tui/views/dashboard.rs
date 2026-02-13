@@ -200,9 +200,7 @@ pub fn format_session_line<'a>(
         (
             Color::DarkGray,
             "◌",
-            Style::default()
-                .fg(text_color)
-                .add_modifier(Modifier::DIM),
+            Style::default().fg(text_color).add_modifier(Modifier::DIM),
             display_status,
         )
     } else {
@@ -377,7 +375,12 @@ pub fn render_session_list(
                 .map(|s| s.as_str())
                 .unwrap_or("<error>");
             let is_highlighted = selected_index == Some(index);
-            ListItem::new(format_session_line(session, width, dir_display, is_highlighted))
+            ListItem::new(format_session_line(
+                session,
+                width,
+                dir_display,
+                is_highlighted,
+            ))
         })
         .collect();
 
@@ -1972,8 +1975,8 @@ mod tests {
         )];
         // Render without selection
         let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
-        let row = find_row_with_text(&buffer, "closed-not-highlighted")
-            .expect("should find session");
+        let row =
+            find_row_with_text(&buffer, "closed-not-highlighted").expect("should find session");
         // The session ID text should be colored DarkGray (dimmed, not highlighted)
         assert_text_fg_in_row(&buffer, row, "closed-not-highlighted", Color::DarkGray);
     }
@@ -1992,9 +1995,7 @@ mod tests {
         let col = row_str
             .find("working-sess")
             .expect("should find session id text");
-        let cell = buffer
-            .cell((col as u16, row))
-            .expect("cell should exist");
+        let cell = buffer.cell((col as u16, row)).expect("cell should exist");
         assert_ne!(
             cell.fg,
             Color::DarkGray,
