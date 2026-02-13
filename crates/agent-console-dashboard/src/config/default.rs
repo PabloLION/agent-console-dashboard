@@ -10,6 +10,17 @@ use crate::config::error::ConfigError;
 use crate::config::xdg;
 
 // ---------------------------------------------------------------------------
+// Timestamp utilities
+// ---------------------------------------------------------------------------
+
+/// Generates a tinydate timestamp in Zulu (UTC) format: YYYYMMDDTHHmmssZ
+///
+/// Example: `20260213T143052Z` (16 characters)
+fn generate_tinydate() -> String {
+    chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string()
+}
+
+// ---------------------------------------------------------------------------
 // Default TOML template
 // ---------------------------------------------------------------------------
 
@@ -139,8 +150,11 @@ pub fn create_default_config_if_missing() -> Result<bool, ConfigError> {
 /// Creates (or force-overwrites) the default config file.
 ///
 /// - If the file exists and `force` is `false`, returns `ConfigError::AlreadyExists`.
-/// - If the file exists and `force` is `true`, backs it up to `.toml.backup` first.
+/// - If the file exists and `force` is `true`, backs it up to `<name>.bak.<tinydate>` first.
 /// - Returns the path where the config was written.
+///
+/// When `force` is true but the config doesn't exist, behaves like normal creation
+/// (no backup, just creates the file).
 pub fn create_default_config(force: bool) -> Result<PathBuf, ConfigError> {
     let path = xdg::config_path();
 
@@ -148,16 +162,19 @@ pub fn create_default_config(force: bool) -> Result<PathBuf, ConfigError> {
         if !force {
             return Err(ConfigError::AlreadyExists { path: path.clone() });
         }
-        // Back up existing file
-        let backup_path = path.with_extension("toml.backup");
+        // Back up existing file with tinydate format: config.toml.bak.YYYYMMDDTHHmmssZ
+        let tinydate = generate_tinydate();
+        let backup_path = PathBuf::from(format!("{}.bak.{}", path.display(), tinydate));
         fs::rename(&path, &backup_path).map_err(|e| ConfigError::WriteError {
             path: backup_path.clone(),
             source: e,
         })?;
+        println!("Old config backed up to: {}", backup_path.display());
         tracing::info!("Backed up existing config to {}", backup_path.display());
     }
 
     write_default_config(&path)?;
+    println!("Created new config: {}", path.display());
     Ok(path)
 }
 
@@ -259,6 +276,37 @@ mod tests {
         );
     }
 
+    // -- Timestamp tests ----------------------------------------------------
+
+    #[test]
+    fn tinydate_format_is_correct() {
+        let tinydate = generate_tinydate();
+        assert_eq!(tinydate.len(), 16, "tinydate should be 16 characters");
+        assert!(tinydate.ends_with('Z'), "tinydate should end with Z");
+        assert!(tinydate.contains('T'), "tinydate should contain T separator");
+
+        // Format: YYYYMMDDTHHmmssZ
+        // Verify it parses as expected structure
+        let parts: Vec<&str> = tinydate.split('T').collect();
+        assert_eq!(parts.len(), 2, "should split into date and time parts");
+        assert_eq!(parts[0].len(), 8, "date part should be 8 chars (YYYYMMDD)");
+        assert_eq!(
+            parts[1].len(),
+            7,
+            "time part should be 7 chars (HHmmssZ)"
+        );
+
+        // Verify all chars except T and Z are digits
+        let digits_only: String = tinydate
+            .chars()
+            .filter(|c| *c != 'T' && *c != 'Z')
+            .collect();
+        assert!(
+            digits_only.chars().all(|c| c.is_ascii_digit()),
+            "all chars except T and Z should be digits"
+        );
+    }
+
     // -- create_default_config_if_missing -----------------------------------
 
     #[test]
@@ -323,15 +371,76 @@ mod tests {
             let new_path = create_default_config(true).expect("force should succeed");
             assert_eq!(new_path, path);
 
-            // Backup should exist
-            let backup = path.with_extension("toml.backup");
-            assert!(backup.exists(), "backup file should exist");
-            let backup_content = fs::read_to_string(&backup).expect("read backup");
+            // Backup should exist with format: config.toml.bak.YYYYMMDDTHHmmssZ
+            let parent = path.parent().expect("config file should have parent dir");
+            let backups: Vec<_> = fs::read_dir(parent)
+                .expect("read config dir")
+                .filter_map(|e| e.ok())
+                .filter(|e| {
+                    e.file_name()
+                        .to_str()
+                        .map(|n| n.starts_with("config.toml.bak."))
+                        .unwrap_or(false)
+                })
+                .collect();
+            assert_eq!(backups.len(), 1, "should have exactly one backup file");
+            let backup_path = backups[0].path();
+
+            // Verify backup filename format: config.toml.bak.YYYYMMDDTHHmmssZ (16 char timestamp)
+            let backup_name = backup_path.file_name().expect("backup has filename");
+            let backup_str = backup_name.to_str().expect("filename is utf8");
+            assert!(
+                backup_str.starts_with("config.toml.bak."),
+                "backup name should start with config.toml.bak."
+            );
+            let timestamp = backup_str
+                .strip_prefix("config.toml.bak.")
+                .expect("strip prefix");
+            assert_eq!(
+                timestamp.len(),
+                16,
+                "tinydate timestamp should be 16 chars (YYYYMMDDTHHmmssZ)"
+            );
+            assert!(
+                timestamp.ends_with('Z'),
+                "tinydate should end with Z (Zulu time)"
+            );
+
+            let backup_content = fs::read_to_string(&backup_path).expect("read backup");
             assert_eq!(backup_content, "# custom content\n");
 
             // New file should be template
             let content = fs::read_to_string(&path).expect("read new");
             assert_eq!(content, DEFAULT_CONFIG_TEMPLATE);
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn create_with_force_when_no_existing_config() {
+        let tmp = tempfile::tempdir().expect("failed to create temp dir");
+        with_xdg_config(tmp.path().to_str().expect("non-utf8 tmpdir"), || {
+            // Call with force=true when no config exists
+            let path = create_default_config(true).expect("should succeed");
+
+            // Should create config normally (no backup)
+            assert!(path.exists(), "config file should exist");
+            let content = fs::read_to_string(&path).expect("should read");
+            assert_eq!(content, DEFAULT_CONFIG_TEMPLATE);
+
+            // No backup files should exist
+            let parent = path.parent().expect("config file should have parent dir");
+            let backups: Vec<_> = fs::read_dir(parent)
+                .expect("read config dir")
+                .filter_map(|e| e.ok())
+                .filter(|e| {
+                    e.file_name()
+                        .to_str()
+                        .map(|n| n.starts_with("config.toml.bak."))
+                        .unwrap_or(false)
+                })
+                .collect();
+            assert_eq!(backups.len(), 0, "should have no backup files");
         });
     }
 
