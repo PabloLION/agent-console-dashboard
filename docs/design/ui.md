@@ -144,6 +144,35 @@ selection visible. See [Q76](../archive/planning/6-open-questions.md),
 | q      | Quit dashboard                   |
 | ?      | Toggle help overlay              |
 
+### Focus interaction model
+
+The detail panel always reflects the currently focused session. Focus is the
+central concept — every interaction that changes focus also updates the detail
+panel to display information about the newly focused session.
+
+#### Actions that change focus
+
+- **Scroll wheel (mouse wheel)** — changes focus to the scrolled-to item
+- **Left click on unfocused item** — changes focus to the clicked item
+- **Double click on any item** — changes focus + triggers hook action
+- **j/k keyboard navigation** — changes focus to the next/previous item
+
+#### Actions that do NOT change focus
+
+- **Left click on already-focused item** — no-op (focus unchanged)
+
+#### Special behaviors
+
+- **Double click on already-focused item** — still triggers hook action (focus
+  stays, hook fires)
+- **Enter on focused item** — same as double-click (focus + trigger hook)
+- **Esc / click header** — defocus (hide detail panel, no item focused)
+
+#### Known issues
+
+Current gap: scroll wheel changes selection but doesn't show detail panel. This
+should be fixed (see [acd-bbm](https://beads.page/PabloLION/agent-console-dashboard/bbm)).
+
 ### Mouse and focus
 
 - Click to select an item. Hover to focus. Double-click for Enter action.
