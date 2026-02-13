@@ -45,6 +45,13 @@ Persistence:
 - **Conversation**: starts fresh each invocation, but MEMORY.md provides
   continuity
 
+## Issue Sizing
+
+Each issue should be handleable by one agent. If an issue is too large or spans
+multiple domains, break it into smaller issues before dispatching. Each
+sub-issue is assigned to one agent. The original issue becomes a parent or is
+replaced by the sub-issues.
+
 ## Sequential Batching
 
 One agent handles multiple issues sequentially. Group issues by:
@@ -70,15 +77,17 @@ clear and unambiguous. Otherwise, it is **not ready**.
 
 For each ready issue, before dispatching:
 
-1. Show the full issue (`bd show <id>`) including description, dependencies,
-   etc.
-2. State any remaining doubts, even minor ones
-3. Wait for user's explicit go-ahead
-4. If user wants changes: update the issue first, then re-present
-5. When a doubt is cleared or a design decision is made, update the issue
+1. Show the full issue: run `bd show <id>` and print doubts **immediately
+   after** that single output. Do NOT batch multiple `bd show` calls — present
+   one issue at a time, doubts directly following the output, before moving to
+   the next issue. If a doubt references another issue, run `bd show` for that
+   related issue inline (right where the doubt is stated).
+2. Wait for user's explicit go-ahead
+3. If user wants changes: update the issue first, then re-present
+4. When a doubt is cleared or a design decision is made, update the issue
    description or notes (`bd update <id> --description/--notes`) so the agent
    gets the full context at dispatch time
-6. Only dispatch after user says the issue is ready
+5. Only dispatch after user says the issue is ready
 
 ### Lookahead
 
