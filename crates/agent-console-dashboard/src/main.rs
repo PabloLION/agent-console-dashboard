@@ -190,8 +190,8 @@ fn main() -> ExitCode {
             use agent_console_dashboard::config::{default, loader::ConfigLoader, xdg};
             let result = match action {
                 ConfigAction::Init { force } => match default::create_default_config(force) {
-                    Ok(path) => {
-                        println!("Created configuration at {}", path.display());
+                    Ok(_path) => {
+                        // Output is handled by create_default_config
                         Ok(())
                     }
                     Err(e) => Err(e),
