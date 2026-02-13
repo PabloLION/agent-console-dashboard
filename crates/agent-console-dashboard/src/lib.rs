@@ -295,7 +295,5 @@ pub enum StoreError {
     SessionNotFound(String),
 }
 
-
-
 #[cfg(test)]
 mod tests;

@@ -68,8 +68,7 @@ fn test_daemon_dump_serialization_roundtrip() {
     };
 
     let json = serde_json::to_string(&dump).expect("failed to serialize DaemonDump");
-    let parsed: DaemonDump =
-        serde_json::from_str(&json).expect("failed to deserialize DaemonDump");
+    let parsed: DaemonDump = serde_json::from_str(&json).expect("failed to deserialize DaemonDump");
     assert_eq!(parsed, dump);
 }
 
@@ -103,8 +102,7 @@ fn test_daemon_dump_empty_sessions() {
     };
 
     let json = serde_json::to_string(&dump).expect("failed to serialize DaemonDump");
-    let parsed: DaemonDump =
-        serde_json::from_str(&json).expect("failed to deserialize DaemonDump");
+    let parsed: DaemonDump = serde_json::from_str(&json).expect("failed to deserialize DaemonDump");
     assert_eq!(parsed.sessions.len(), 0);
     assert_eq!(parsed.session_counts.active, 0);
 }
@@ -145,8 +143,7 @@ fn test_daemon_dump_multiple_sessions() {
     };
 
     let json = serde_json::to_string(&dump).expect("failed to serialize DaemonDump");
-    let parsed: DaemonDump =
-        serde_json::from_str(&json).expect("failed to deserialize DaemonDump");
+    let parsed: DaemonDump = serde_json::from_str(&json).expect("failed to deserialize DaemonDump");
     assert_eq!(parsed.sessions.len(), 3);
     assert_eq!(parsed.session_counts.active, 2);
     assert_eq!(parsed.session_counts.closed, 1);
