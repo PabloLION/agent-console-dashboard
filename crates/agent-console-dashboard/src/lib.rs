@@ -59,6 +59,16 @@ pub enum Status {
     Closed,
 }
 
+impl Status {
+    /// Returns `true` if this status should be visually dimmed in the TUI.
+    ///
+    /// Both inactive and closed sessions should appear dimmed to indicate
+    /// they are not actively in use.
+    pub fn should_dim(self) -> bool {
+        matches!(self, Status::Closed)
+    }
+}
+
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
@@ -1094,6 +1104,38 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_status_should_dim_closed() {
+        assert!(
+            Status::Closed.should_dim(),
+            "Closed status should be dimmed"
+        );
+    }
+
+    #[test]
+    fn test_status_should_dim_working() {
+        assert!(
+            !Status::Working.should_dim(),
+            "Working status should not be dimmed"
+        );
+    }
+
+    #[test]
+    fn test_status_should_dim_attention() {
+        assert!(
+            !Status::Attention.should_dim(),
+            "Attention status should not be dimmed"
+        );
+    }
+
+    #[test]
+    fn test_status_should_dim_question() {
+        assert!(
+            !Status::Question.should_dim(),
+            "Question status should not be dimmed"
+        );
     }
 
     #[test]
