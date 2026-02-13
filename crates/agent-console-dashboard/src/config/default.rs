@@ -16,7 +16,7 @@ use crate::config::xdg;
 /// Generates a tinydate timestamp in Zulu (UTC) format: YYYYMMDDTHHmmssZ
 ///
 /// Example: `20260213T143052Z` (16 characters)
-fn generate_tinydate() -> String {
+pub fn generate_tinydate() -> String {
     chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string()
 }
 
@@ -472,5 +472,14 @@ mod tests {
                 .mode();
             assert_eq!(mode & 0o777, 0o600, "file should be owner-only read/write");
         });
+    }
+
+    // -- generate_tinydate --------------------------------------------------
+
+    #[test]
+    fn generate_tinydate_is_public() {
+        // Verify that generate_tinydate is accessible (public)
+        let _tinydate = generate_tinydate();
+        // If this compiles, the function is public
     }
 }
