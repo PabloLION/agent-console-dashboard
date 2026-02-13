@@ -19,6 +19,13 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
+/// Passive refresh interval for elapsed-time recalculation.
+///
+/// This throttles background elapsed-time updates to 1 second, reducing CPU
+/// usage at scale (100 sessions × 100 TUIs = 10,000 calculations per tick).
+/// User input events (keyboard, mouse) bypass this throttle and render immediately.
+const ELAPSED_TIME_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
+
 /// Active view state for the TUI.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum View {
@@ -61,6 +68,8 @@ pub struct App {
     pub double_click_hook: Option<String>,
     /// Temporary status message shown in footer, with expiry time.
     pub status_message: Option<(String, Instant)>,
+    /// Last time elapsed-time rendering occurred (for throttling passive updates).
+    last_elapsed_render: Instant,
 }
 
 impl App {
@@ -78,6 +87,7 @@ impl App {
             last_click: None,
             double_click_hook: None,
             status_message: None,
+            last_elapsed_render: Instant::now(),
         }
     }
 
@@ -412,14 +422,9 @@ impl App {
                 }
             }
 
-            // Render
-            terminal.draw(|frame| {
-                render_dashboard(frame, self);
-            })?;
-
-            // Handle events
+            // Handle events first to determine if we should render
             let event = event_handler.next(&mut reader).await?;
-            match event {
+            let should_render = match event {
                 Event::Key(key) => {
                     match handle_key_event(self, key) {
                         Action::Quit => {
@@ -455,17 +460,29 @@ impl App {
                         }
                         Action::None => {}
                     }
+                    true // Input events always render immediately
                 }
                 Event::Mouse(mouse) => {
                     self.handle_mouse_event(mouse);
+                    true // Input events always render immediately
                 }
                 Event::Tick => {
                     self.tick_count += 1;
                     self.expire_status_message();
+                    // Passive tick: only render if interval has elapsed
+                    self.last_elapsed_render.elapsed() >= ELAPSED_TIME_REFRESH_INTERVAL
                 }
                 Event::Resize(_, _) => {
-                    // Terminal auto-handles resize on next draw
+                    true // Resize always renders immediately
                 }
+            };
+
+            // Render only when needed (input events or throttled passive tick)
+            if should_render {
+                terminal.draw(|frame| {
+                    render_dashboard(frame, self);
+                })?;
+                self.last_elapsed_render = Instant::now();
             }
         }
     }
