@@ -75,19 +75,34 @@ For each ready issue, before dispatching:
 2. State any remaining doubts, even minor ones
 3. Wait for user's explicit go-ahead
 4. If user wants changes: update the issue first, then re-present
-5. Only dispatch after user says the issue is ready
+5. When a doubt is cleared or a design decision is made, update the issue
+   description or notes (`bd update <id> --description/--notes`) so the agent
+   gets the full context at dispatch time
+6. Only dispatch after user says the issue is ready
+
+### Lookahead
+
+When showing an issue for review, also show the next issue that needs review in
+the same message. For each issue, include: full issue details, all doubts (even
+minor ones), and whether it reaches 95% confidence. Raise every doubt you can
+identify — if it's negligible, the user will skip it.
 
 ### Discussion Priority
 
-When choosing which issue to discuss next, apply these rules in order:
+The goal is to keep every agent busy. When choosing which issue to discuss next,
+apply these rules in order:
 
 1. **Idle agent first**: prefer issues whose corresponding agent has no active
-   work — this keeps agents utilized
+   work — this keeps agents utilized. Cycle through all idle agents before
+   revisiting busy ones.
 2. **Difficulty ordering** (tiebreaker among idle agents):
    - If fewer than 6 agents are running: discuss hardest issues first (lowest
      confidence), so complex design work happens while agents are available
    - If 6 or more agents are running: discuss easiest issues first (highest
      confidence), so agents get assigned sooner
+3. **Pace**: move quickly through idle agents. Show the issue, state doubts, get
+   approval, dispatch, immediately move to the next idle agent. Do not linger on
+   one agent while others sit idle.
 
 ### Dispatch Cycle
 
