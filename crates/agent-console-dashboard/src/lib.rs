@@ -514,6 +514,17 @@ impl IpcResponse {
 /// into a fully serializable struct with elapsed/idle seconds computed at
 /// conversion time.
 ///
+/// # Use Cases
+///
+/// This struct serves three primary purposes:
+///
+/// 1. **IPC wire format**: Daemon sends session snapshots to TUI consumers via
+///    JSON Lines over Unix domain socket (LIST, GET, SUB commands).
+/// 2. **Double-click hook payload**: TUI passes session context to user-defined
+///    hooks as JSON on stdin when a session is double-clicked.
+/// 3. **Public API for hook authors**: Re-exported from the library crate so
+///    Rust hook authors can deserialize the JSON payload with `serde_json`.
+///
 /// See `docs/decisions/variable-naming.md` for naming rationale.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct SessionSnapshot {
