@@ -175,7 +175,7 @@ fn compute_directory_display_names(
 /// - `40-80` cols: symbol + directory (flex) + session ID (40) + status (14) + elapsed (16)
 /// - `>80` cols: symbol + directory (flex) + session ID (40) + status (14) + elapsed (16)
 ///
-/// If `is_highlighted` is true and the session is inactive, uses black text for readability
+/// If `is_highlighted` is true and the session is inactive or closed, uses black text for readability
 /// against the dark gray highlight background.
 pub fn format_session_line<'a>(
     session: &Session,
@@ -184,12 +184,18 @@ pub fn format_session_line<'a>(
     is_highlighted: bool,
 ) -> Line<'a> {
     let inactive = session.is_inactive(INACTIVE_SESSION_THRESHOLD);
-    let (color, symbol, dim, status_text) = if inactive {
+    let should_dim = inactive || session.status.should_dim();
+    let (color, symbol, dim, status_text) = if should_dim {
         // Use black text when highlighted for readability against dark gray background
         let text_color = if is_highlighted {
             Color::Black
         } else {
             Color::DarkGray
+        };
+        let display_status = if inactive {
+            "inactive".to_string()
+        } else {
+            session.status.to_string()
         };
         (
             Color::DarkGray,
@@ -197,7 +203,7 @@ pub fn format_session_line<'a>(
             Style::default()
                 .fg(text_color)
                 .add_modifier(Modifier::DIM),
-            "inactive".to_string(),
+            display_status,
         )
     } else {
         (
@@ -1747,8 +1753,8 @@ mod tests {
         )];
         let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
         let row = find_row_with_text(&buffer, "test-sess").expect("should find session");
-        // The "closed" status text should be colored gray
-        assert_text_fg_in_row(&buffer, row, "closed", Color::Gray);
+        // Closed sessions should be dimmed (DarkGray) — same treatment as inactive
+        assert_text_fg_in_row(&buffer, row, "closed", Color::DarkGray);
     }
 
     #[test]
@@ -1923,6 +1929,76 @@ mod tests {
                     .ok()
                     .as_deref()
                     == Some("1")
+        );
+    }
+
+    // --- Story acd-88r: Closed sessions should use same visual style as inactive ---
+
+    #[test]
+    fn test_closed_session_renders_dimmed() {
+        let sessions = vec![make_test_session_with_dir(
+            "closed-sess",
+            Status::Closed,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
+        let row = find_row_with_text(&buffer, "closed-sess").expect("should find session");
+        // The "closed" status text should be colored DarkGray (dimmed)
+        assert_text_fg_in_row(&buffer, row, "closed", Color::DarkGray);
+    }
+
+    #[test]
+    fn test_closed_session_highlighted_uses_black_text() {
+        let sessions = vec![make_test_session_with_dir(
+            "closed-highlighted",
+            Status::Closed,
+            Some(PathBuf::from("/tmp")),
+        )];
+        // Render with selection (Some(0) = first item selected)
+        let buffer = render_session_list_to_buffer(&sessions, Some(0), 80, 10);
+        let row = find_row_with_text(&buffer, "closed-highlighted").expect("should find session");
+        // The session ID text should be colored Black for readability against dark gray background
+        assert_text_fg_in_row(&buffer, row, "closed-highlighted", Color::Black);
+        // The background should be DarkGray (highlight color)
+        assert_text_bg_in_row(&buffer, row, "closed-highlighted", Color::DarkGray);
+    }
+
+    #[test]
+    fn test_closed_session_not_highlighted_uses_dark_gray_text() {
+        let sessions = vec![make_test_session_with_dir(
+            "closed-not-highlighted",
+            Status::Closed,
+            Some(PathBuf::from("/tmp")),
+        )];
+        // Render without selection
+        let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
+        let row = find_row_with_text(&buffer, "closed-not-highlighted")
+            .expect("should find session");
+        // The session ID text should be colored DarkGray (dimmed, not highlighted)
+        assert_text_fg_in_row(&buffer, row, "closed-not-highlighted", Color::DarkGray);
+    }
+
+    #[test]
+    fn test_working_session_not_dimmed() {
+        let sessions = vec![make_test_session_with_dir(
+            "working-sess",
+            Status::Working,
+            Some(PathBuf::from("/tmp")),
+        )];
+        let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
+        let row = find_row_with_text(&buffer, "working-sess").expect("should find session");
+        // Working sessions should NOT be dimmed (session ID should not be DarkGray)
+        let row_str = row_text(&buffer, row);
+        let col = row_str
+            .find("working-sess")
+            .expect("should find session id text");
+        let cell = buffer
+            .cell((col as u16, row))
+            .expect("cell should exist");
+        assert_ne!(
+            cell.fg,
+            Color::DarkGray,
+            "working session should not be dimmed"
         );
     }
 }
