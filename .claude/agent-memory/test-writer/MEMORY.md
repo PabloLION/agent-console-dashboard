@@ -46,7 +46,42 @@ Pattern: two sessions with same basename (e.g., `/foo/project` and
 Never hardcode version numbers like "0.1.2" in tests. Use
 `env!("CARGO_PKG_VERSION")` to access the version from Cargo.toml dynamically.
 
+### Eliminating Environment Variable Mutation in Tests
+
+Pattern for refactoring tests that mutate env vars (example from
+`crates/claude-usage/src/credentials/linux.rs`):
+
+1. **Separate concerns**: Extract path-based logic into a new function that
+   takes `&Path` instead of reading from environment
+2. **Keep original function**: Make it a thin wrapper that resolves path then
+   calls the new function
+3. **Refactor tests**: Main tests call the new path-based function directly with
+   temp paths, eliminating need for `#[serial]` and env var guards
+4. **Acceptable exceptions**: Tests that MUST verify env var behavior (e.g.,
+   testing `get_credentials_path()` itself) can keep `#[serial]` and guards -
+   move guard structs inside those tests to reduce scope
+
+Benefits:
+
+- Parallel test execution for most tests
+- No risk of env var pollution between tests
+- Cleaner test code without RAII guard boilerplate
+
 ## Completed Work
+
+### Refactor Linux Credential Tests (env var elimination)
+
+Refactored `crates/claude-usage/src/credentials/linux.rs` to eliminate
+environment variable mutation in token-reading tests:
+
+- Added `get_token_from_path(&Path)` function for testable core logic
+- Converted 4 token-reading tests to use temp paths directly (no env var
+  mutation)
+- Kept 2 tests with `#[serial]` that legitimately test `get_credentials_path()`
+- Moved guard structs into the 2 tests that need them (reduced scope)
+- `serial_test` dependency remains (still needed for those 2 tests)
+
+Result: Most tests now run in parallel without risk of env var pollution.
 
 ### acd-0ci: Basename Disambiguation Rendering Tests
 
