@@ -313,13 +313,16 @@ pub(crate) fn debug_ruler_enabled() -> bool {
 }
 
 /// Renders the session list into the given area.
+///
+/// Returns the inner Rect of the List widget (excluding block borders),
+/// used for accurate mouse click detection.
 pub fn render_session_list(
     frame: &mut Frame,
     area: Rect,
     sessions: &[Session],
     selected_index: Option<usize>,
     width: u16,
-) {
+) -> Rect {
     // Split area into header (1 line) + optional ruler (1 line) + list (remaining) if not narrow mode
     let show_ruler = debug_ruler_enabled();
 
@@ -384,12 +387,15 @@ pub fn render_session_list(
         })
         .collect();
 
+    let block = Block::default()
+        .borders(Borders::TOP | Borders::BOTTOM)
+        .title(" Sessions ");
+
+    // Calculate inner area (excluding block borders) for mouse click detection
+    let inner_area = block.inner(list_area);
+
     let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::TOP | Borders::BOTTOM)
-                .title(" Sessions "),
-        )
+        .block(block)
         .highlight_style(Style::default().bg(Color::DarkGray))
         .highlight_symbol("▶ ")
         .highlight_spacing(HighlightSpacing::Always);
@@ -398,6 +404,8 @@ pub fn render_session_list(
     state.select(selected_index);
 
     frame.render_stateful_widget(list, list_area, &mut state);
+
+    inner_area
 }
 
 /// Truncates a string to the given max length, appending "..." if truncated.

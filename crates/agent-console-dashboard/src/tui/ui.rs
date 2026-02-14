@@ -33,7 +33,10 @@ const VERSION_TEXT: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 /// - Session list: flexible height (min 3 rows) showing all sessions
 /// - Detail panel: fixed height (12 lines) showing focused session info or hint
 /// - Footer: 1 line showing keybinding hints
-pub fn render_dashboard(frame: &mut Frame, app: &App) {
+///
+/// Updates `app.session_list_inner_area` with the inner Rect of the session list
+/// for accurate mouse click detection.
+pub fn render_dashboard(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
     let now = Instant::now();
 
@@ -55,14 +58,15 @@ pub fn render_dashboard(frame: &mut Frame, app: &App) {
     )]));
     frame.render_widget(header, chunks[0]);
 
-    // Session list
-    render_session_list(
+    // Session list - capture inner area for mouse click detection
+    let inner_area = render_session_list(
         frame,
         chunks[1],
         &app.sessions,
         app.selected_index,
         area.width,
     );
+    app.session_list_inner_area = Some(inner_area);
 
     // Detail panel (always visible — shows focused session or placeholder)
     if let Some(selected_idx) = app.selected_index {
@@ -140,9 +144,9 @@ mod tests {
     fn test_render_dashboard_empty_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
         let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
-        let app = make_app();
+        let mut app = make_app();
         terminal
-            .draw(|frame| render_dashboard(frame, &app))
+            .draw(|frame| render_dashboard(frame, &mut app))
             .expect("draw should not fail");
     }
 
@@ -153,7 +157,7 @@ mod tests {
         let mut app = make_app_with_sessions(5);
         app.selected_index = Some(2);
         terminal
-            .draw(|frame| render_dashboard(frame, &app))
+            .draw(|frame| render_dashboard(frame, &mut app))
             .expect("draw should not fail");
     }
 
@@ -161,9 +165,9 @@ mod tests {
     fn test_render_dashboard_narrow_no_panic() {
         let backend = ratatui::backend::TestBackend::new(30, 10);
         let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
-        let app = make_app_with_sessions(3);
+        let mut app = make_app_with_sessions(3);
         terminal
-            .draw(|frame| render_dashboard(frame, &app))
+            .draw(|frame| render_dashboard(frame, &mut app))
             .expect("draw should not fail");
     }
 
@@ -171,9 +175,9 @@ mod tests {
     fn test_render_dashboard_wide_no_panic() {
         let backend = ratatui::backend::TestBackend::new(200, 50);
         let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
-        let app = make_app_with_sessions(10);
+        let mut app = make_app_with_sessions(10);
         terminal
-            .draw(|frame| render_dashboard(frame, &app))
+            .draw(|frame| render_dashboard(frame, &mut app))
             .expect("draw should not fail");
     }
 
@@ -181,9 +185,9 @@ mod tests {
     fn test_render_dashboard_minimal_height_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 3);
         let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
-        let app = make_app_with_sessions(5);
+        let mut app = make_app_with_sessions(5);
         terminal
-            .draw(|frame| render_dashboard(frame, &app))
+            .draw(|frame| render_dashboard(frame, &mut app))
             .expect("draw should not fail");
     }
 
@@ -191,9 +195,9 @@ mod tests {
     fn test_render_dashboard_single_row_no_panic() {
         let backend = ratatui::backend::TestBackend::new(80, 1);
         let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
-        let app = make_app();
+        let mut app = make_app();
         terminal
-            .draw(|frame| render_dashboard(frame, &app))
+            .draw(|frame| render_dashboard(frame, &mut app))
             .expect("draw should not fail");
     }
 
@@ -204,7 +208,7 @@ mod tests {
         let mut app = make_app_with_sessions(100);
         app.selected_index = Some(50);
         terminal
-            .draw(|frame| render_dashboard(frame, &app))
+            .draw(|frame| render_dashboard(frame, &mut app))
             .expect("draw should not fail");
     }
 
@@ -221,8 +225,8 @@ mod tests {
 
     #[test]
     fn test_version_shown_in_footer_row() {
-        let app = make_app_with_sessions(3);
-        let buffer = render_dashboard_to_buffer(&app, 80, 24);
+        let mut app = make_app_with_sessions(3);
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
         let footer_row = buffer.area().height - 1;
         assert!(
             row_contains(&buffer, footer_row, VERSION_TEXT),
@@ -248,7 +252,7 @@ mod tests {
         app.selected_index = Some(1);
         app.open_detail(1);
         terminal
-            .draw(|frame| render_dashboard(frame, &app))
+            .draw(|frame| render_dashboard(frame, &mut app))
             .expect("draw should not fail with detail view active");
     }
 
@@ -259,7 +263,7 @@ mod tests {
         let mut app = make_app_with_sessions(3);
         app.open_detail(0);
         terminal
-            .draw(|frame| render_dashboard(frame, &app))
+            .draw(|frame| render_dashboard(frame, &mut app))
             .expect("draw should not fail with detail view on narrow terminal");
     }
 
@@ -270,7 +274,7 @@ mod tests {
         let mut app = make_app_with_sessions(3);
         app.open_detail(0);
         terminal
-            .draw(|frame| render_dashboard(frame, &app))
+            .draw(|frame| render_dashboard(frame, &mut app))
             .expect("draw should not fail with detail on minimal height");
     }
 
@@ -282,7 +286,7 @@ mod tests {
         // Set out-of-bounds selection to test placeholder path
         app.selected_index = Some(99);
         terminal
-            .draw(|frame| render_dashboard(frame, &app))
+            .draw(|frame| render_dashboard(frame, &mut app))
             .expect("draw should not fail with out-of-bounds detail index");
     }
 
@@ -326,7 +330,7 @@ mod tests {
         app.sessions.extend([s1, s2, s3, s4]);
         app.init_selection();
 
-        let buffer = render_dashboard_to_buffer(&app, 80, 30);
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 30);
 
         // Verify all sessions appear in the buffer
         assert!(
@@ -363,7 +367,7 @@ mod tests {
         app.init_selection();
         app.open_detail(1);
 
-        let buffer = render_dashboard_to_buffer(&app, 80, 35);
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 35);
 
         // Verify session list is visible
         assert!(
@@ -422,7 +426,7 @@ mod tests {
         // Select session #25
         app.selected_index = Some(25);
 
-        let buffer = render_dashboard_to_buffer(&app, 100, 40);
+        let buffer = render_dashboard_to_buffer(&mut app, 100, 40);
 
         // The selected session should appear in the buffer
         // (ratatui's List widget handles scrolling automatically to show selection)

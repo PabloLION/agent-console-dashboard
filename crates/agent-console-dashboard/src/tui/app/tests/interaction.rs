@@ -1,5 +1,6 @@
 use super::*;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use serial_test::serial;
 
 fn make_mouse_event(kind: MouseEventKind, row: u16, column: u16) -> MouseEvent {
     MouseEvent {
@@ -11,34 +12,58 @@ fn make_mouse_event(kind: MouseEventKind, row: u16, column: u16) -> MouseEvent {
 }
 
 #[test]
+#[serial]
 fn test_calculate_clicked_session_valid_row() {
-    let app = make_app_with_sessions(5);
-    // Header at row 0, border at row 1, first session at row 2
-    assert_eq!(app.calculate_clicked_session(2), Some(0));
-    assert_eq!(app.calculate_clicked_session(3), Some(1));
-    assert_eq!(app.calculate_clicked_session(6), Some(4));
+    use crate::tui::test_utils::render_dashboard_to_buffer;
+    let mut app = make_app_with_sessions(5);
+    // Render to populate session_list_inner_area
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
+
+    // Now calculate_clicked_session uses the stored inner_area
+    // In normal mode (80x24): header=0, session_list starts at row 1,
+    // has column header + border, inner starts at row 3
+    assert_eq!(app.calculate_clicked_session(3), Some(0));
+    assert_eq!(app.calculate_clicked_session(4), Some(1));
+    assert_eq!(app.calculate_clicked_session(7), Some(4));
 }
 
 #[test]
+#[serial]
 fn test_calculate_clicked_session_header_returns_none() {
-    let app = make_app_with_sessions(5);
+    use crate::tui::test_utils::render_dashboard_to_buffer;
+    let mut app = make_app_with_sessions(5);
+    // Render to populate session_list_inner_area
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
+
+    // Clicks above inner_area (header, column header, border) return None
     assert_eq!(app.calculate_clicked_session(0), None);
     assert_eq!(app.calculate_clicked_session(1), None);
+    assert_eq!(app.calculate_clicked_session(2), None);
 }
 
 #[test]
+#[serial]
 fn test_calculate_clicked_session_out_of_bounds() {
-    let app = make_app_with_sessions(3);
-    // Sessions at rows 2, 3, 4 (indices 0, 1, 2)
-    assert_eq!(app.calculate_clicked_session(5), None);
+    use crate::tui::test_utils::render_dashboard_to_buffer;
+    let mut app = make_app_with_sessions(3);
+    // Render to populate session_list_inner_area
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
+
+    // Sessions at rows 3, 4, 5 (indices 0, 1, 2) - click beyond returns None
+    assert_eq!(app.calculate_clicked_session(6), None);
     assert_eq!(app.calculate_clicked_session(10), None);
 }
 
 #[test]
 fn test_mouse_left_click_selects_and_opens_detail() {
+    use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(5);
     app.selected_index = Some(0);
-    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 4, 10);
+    // Render to populate session_list_inner_area
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
+
+    // In normal mode: inner starts at row 3, so row 5 = session index 2
+    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 5, 10);
     let action = app.handle_mouse_event(mouse);
     assert_eq!(action, Action::None);
     assert_eq!(app.selected_index, Some(2));
@@ -95,9 +120,13 @@ fn test_initial_state_no_selection() {
 
 #[test]
 fn test_mouse_double_click_fires_hook_returns_none() {
+    use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
-    // First click: focuses the session
-    let mouse1 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+    // Render to populate session_list_inner_area
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
+
+    // First click: focuses the session (row 4 = session index 1)
+    let mouse1 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 4, 10);
     let action1 = app.handle_mouse_event(mouse1);
     assert_eq!(action1, Action::None);
     assert_eq!(app.selected_index, Some(1));
@@ -105,7 +134,7 @@ fn test_mouse_double_click_fires_hook_returns_none() {
     assert_eq!(app.view, View::Dashboard);
 
     // Second click in quick succession at same position (double-click)
-    let mouse2 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+    let mouse2 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 4, 10);
     let action2 = app.handle_mouse_event(mouse2);
     assert_eq!(action2, Action::None);
     assert!(app.last_click.is_none());
@@ -113,13 +142,17 @@ fn test_mouse_double_click_fires_hook_returns_none() {
 
 #[test]
 fn test_mouse_double_click_different_position_no_detail() {
+    use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(5);
-    // First click
+    // Render to populate session_list_inner_area
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
+
+    // First click (row 3 = session index 0)
     let mouse1 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
     app.handle_mouse_event(mouse1);
 
-    // Second click at different row
-    let mouse2 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 4, 10);
+    // Second click at different row (row 5 = session index 2)
+    let mouse2 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 5, 10);
     let action2 = app.handle_mouse_event(mouse2);
     assert_eq!(action2, Action::None);
     assert_eq!(app.selected_index, Some(2));
@@ -163,12 +196,16 @@ fn test_mouse_scroll_at_boundaries() {
 
 #[test]
 fn test_mouse_click_in_detail_view_reselects() {
+    use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
     // open_detail is deprecated (no-op)
     app.open_detail(0);
     app.selected_index = Some(0);
+    // Render to populate session_list_inner_area
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
 
-    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+    // Click row 4 (session index 1)
+    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 4, 10);
     let action = app.handle_mouse_event(mouse);
     assert_eq!(action, Action::None);
     assert_eq!(app.selected_index, Some(1));
@@ -201,8 +238,12 @@ fn test_mouse_scroll_in_detail_view_scrolls_history() {
 
 #[test]
 fn test_mouse_right_click_ignored() {
+    use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
     app.selected_index = Some(0);
+    // Render to populate session_list_inner_area
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
+
     let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Right), 3, 10);
     let action = app.handle_mouse_event(mouse);
     assert_eq!(action, Action::None);
@@ -229,8 +270,11 @@ fn test_status_message_default_none() {
 
 #[test]
 fn test_double_click_no_hook_sets_config_message() {
+    use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
     app.double_click_hook = None;
+    // Render to populate session_list_inner_area
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
 
     let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
     app.handle_mouse_event(first_click);
@@ -248,8 +292,11 @@ fn test_double_click_no_hook_sets_config_message() {
 
 #[test]
 fn test_double_click_with_hook_sets_confirmation() {
+    use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
     app.double_click_hook = Some("echo test".to_string());
+    // Render to populate session_list_inner_area
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
 
     let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
     app.handle_mouse_event(first_click);
@@ -384,7 +431,11 @@ fn test_click_selects_and_renders_highlight() {
     let mut app = make_app_with_sessions(5);
     app.selected_index = Some(0);
 
-    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 4, 10);
+    // Render first to populate session_list_inner_area
+    let _ = render_dashboard_to_buffer(&mut app, 80, 30);
+
+    // Click session at row 5 (session index 2)
+    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 5, 10);
     app.handle_mouse_event(mouse);
 
     assert_eq!(
@@ -393,7 +444,7 @@ fn test_click_selects_and_renders_highlight() {
         "Click should select session at index 2"
     );
 
-    let buffer = render_dashboard_to_buffer(&app, 80, 30);
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 30);
 
     let session_row = find_row_with_text(&buffer, "session-2").expect("should find session-2");
 
@@ -418,7 +469,7 @@ fn test_no_selection_renders_no_highlight() {
     let mut app = make_app_with_sessions(3);
     app.selected_index = None;
 
-    let buffer = render_dashboard_to_buffer(&app, 80, 30);
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 30);
 
     for row in 0..buffer.area().height {
         let mut found_highlight_in_row = false;
@@ -436,4 +487,83 @@ fn test_no_selection_renders_no_highlight() {
             row
         );
     }
+}
+
+// --- Rect-Based Click Detection Tests (acd-khj) ---
+
+#[test]
+fn test_click_detection_works_in_normal_mode() {
+    use crate::tui::test_utils::render_dashboard_to_buffer;
+    let mut app = make_app_with_sessions(3);
+    // Normal mode: 80x24 terminal
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
+
+    // Verify session_list_inner_area is populated
+    assert!(
+        app.session_list_inner_area.is_some(),
+        "session_list_inner_area should be set after render"
+    );
+
+    // Click first session - should work
+    let inner = app.session_list_inner_area.unwrap();
+    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), inner.y, 10);
+    app.handle_mouse_event(mouse);
+    assert_eq!(app.selected_index, Some(0));
+}
+
+#[test]
+fn test_click_detection_works_in_narrow_mode() {
+    use crate::tui::test_utils::render_dashboard_to_buffer;
+    let mut app = make_app_with_sessions(3);
+    // Narrow mode: width < 40
+    let _ = render_dashboard_to_buffer(&mut app, 30, 24);
+
+    // Verify session_list_inner_area is populated
+    assert!(
+        app.session_list_inner_area.is_some(),
+        "session_list_inner_area should be set in narrow mode"
+    );
+
+    // Click first session - should work in narrow mode too
+    let inner = app.session_list_inner_area.unwrap();
+    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), inner.y, 10);
+    app.handle_mouse_event(mouse);
+    assert_eq!(app.selected_index, Some(0));
+}
+
+#[test]
+fn test_click_detection_returns_none_without_render() {
+    let mut app = make_app_with_sessions(3);
+    // Don't render - session_list_inner_area is None
+
+    // Click should return None because inner_area is not set
+    let result = app.calculate_clicked_session(3);
+    assert_eq!(result, None, "Should return None when session_list_inner_area is None");
+}
+
+#[test]
+#[serial]
+fn test_click_detection_works_in_debug_mode() {
+    use crate::tui::test_utils::render_dashboard_to_buffer;
+    // Enable debug ruler
+    std::env::set_var("AGENT_CONSOLE_DASHBOARD_DEBUG", "1");
+
+    let mut app = make_app_with_sessions(3);
+    // Render with debug mode enabled
+    let _ = render_dashboard_to_buffer(&mut app, 80, 24);
+
+    // Verify session_list_inner_area is populated
+    assert!(
+        app.session_list_inner_area.is_some(),
+        "session_list_inner_area should be set in debug mode"
+    );
+
+    // Click first session - should work in debug mode with ruler
+    let inner = app.session_list_inner_area.unwrap();
+    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), inner.y, 10);
+    app.handle_mouse_event(mouse);
+    assert_eq!(app.selected_index, Some(0));
+
+    // Clean up env var
+    std::env::remove_var("AGENT_CONSOLE_DASHBOARD_DEBUG");
 }
