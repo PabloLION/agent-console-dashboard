@@ -1,7 +1,7 @@
 use super::*;
 use crate::tui::test_utils::{
-    assert_text_fg_in_row, find_row_with_text, make_session as make_test_session_with_dir,
-    render_session_list_to_buffer, row_contains, row_text,
+    find_row_with_text, make_session as make_test_session_with_dir,
+    render_session_list_to_buffer, row_text,
 };
 
 // --- TUI TestBackend tests (acd-211) ---
@@ -243,5 +243,131 @@ fn test_data_columns_left_aligned_standard() {
         dir_pos < 10,
         "Directory data should be left-aligned (pos < 10), got pos={}",
         dir_pos
+    );
+}
+
+// --- Basename Disambiguation Rendering Tests (acd-0ci) ---
+
+#[test]
+fn test_renders_disambiguated_directories_with_parent() {
+    // Two sessions with same basename but different parent directories
+    let sessions = vec![
+        make_test_session_with_dir(
+            "session-1",
+            Status::Working,
+            Some(PathBuf::from("/foo/project")),
+        ),
+        make_test_session_with_dir(
+            "session-2",
+            Status::Attention,
+            Some(PathBuf::from("/bar/project")),
+        ),
+    ];
+    let buffer = render_session_list_to_buffer(&sessions, Some(0), 100, 10);
+
+    // Find rows containing each session
+    let row1 = find_row_with_text(&buffer, "session-1").expect("should find session-1");
+    let row2 = find_row_with_text(&buffer, "session-2").expect("should find session-2");
+
+    let row1_text = row_text(&buffer, row1);
+    let row2_text = row_text(&buffer, row2);
+
+    // Both should show parent/basename format since basename "project" is duplicated
+    assert!(
+        row1_text.contains("foo/project"),
+        "session-1 should display 'foo/project', got: '{}'",
+        row1_text
+    );
+    assert!(
+        row2_text.contains("bar/project"),
+        "session-2 should display 'bar/project', got: '{}'",
+        row2_text
+    );
+}
+
+#[test]
+fn test_renders_unique_basenames_without_parent() {
+    // Two sessions with unique basenames - no disambiguation needed
+    let sessions = vec![
+        make_test_session_with_dir(
+            "session-1",
+            Status::Working,
+            Some(PathBuf::from("/foo/alpha")),
+        ),
+        make_test_session_with_dir(
+            "session-2",
+            Status::Attention,
+            Some(PathBuf::from("/bar/beta")),
+        ),
+    ];
+    let buffer = render_session_list_to_buffer(&sessions, Some(0), 100, 10);
+
+    let row1 = find_row_with_text(&buffer, "session-1").expect("should find session-1");
+    let row2 = find_row_with_text(&buffer, "session-2").expect("should find session-2");
+
+    let row1_text = row_text(&buffer, row1);
+    let row2_text = row_text(&buffer, row2);
+
+    // Should show basename only (no parent) since basenames are unique
+    assert!(
+        row1_text.contains("alpha") && !row1_text.contains("foo/alpha"),
+        "session-1 should display 'alpha' without parent, got: '{}'",
+        row1_text
+    );
+    assert!(
+        row2_text.contains("beta") && !row2_text.contains("bar/beta"),
+        "session-2 should display 'beta' without parent, got: '{}'",
+        row2_text
+    );
+}
+
+#[test]
+fn test_renders_mixed_unique_and_duplicate_basenames() {
+    // Mix of duplicate and unique basenames
+    let sessions = vec![
+        make_test_session_with_dir(
+            "session-1",
+            Status::Working,
+            Some(PathBuf::from("/home/user/project")),
+        ),
+        make_test_session_with_dir(
+            "session-2",
+            Status::Attention,
+            Some(PathBuf::from("/work/client/project")),
+        ),
+        make_test_session_with_dir(
+            "session-3",
+            Status::Question,
+            Some(PathBuf::from("/tmp/unique-name")),
+        ),
+    ];
+    let buffer = render_session_list_to_buffer(&sessions, Some(0), 120, 12);
+
+    let row1 = find_row_with_text(&buffer, "session-1").expect("should find session-1");
+    let row2 = find_row_with_text(&buffer, "session-2").expect("should find session-2");
+    let row3 = find_row_with_text(&buffer, "session-3").expect("should find session-3");
+
+    let row1_text = row_text(&buffer, row1);
+    let row2_text = row_text(&buffer, row2);
+    let row3_text = row_text(&buffer, row3);
+
+    // Sessions 1 and 2 have duplicate basename "project" - need disambiguation
+    assert!(
+        row1_text.contains("user/project"),
+        "session-1 should display 'user/project', got: '{}'",
+        row1_text
+    );
+    assert!(
+        row2_text.contains("client/project"),
+        "session-2 should display 'client/project', got: '{}'",
+        row2_text
+    );
+
+    // Session 3 has unique basename - no disambiguation
+    assert!(
+        row3_text.contains("unique-name")
+            && !row3_text.contains("tmp/unique-name"),
+        "session-3 should display 'unique-name' without parent, got: '{}'",
+        row3_text
     );
 }
