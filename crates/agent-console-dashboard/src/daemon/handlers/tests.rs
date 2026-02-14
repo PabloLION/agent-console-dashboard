@@ -24,6 +24,7 @@ async fn test_stop_no_active_sessions_returns_ok() {
         status: None,
         working_dir: None,
         confirmed: None,
+        priority: None,
     };
 
     let response = handle_stop_command(&cmd, &state).await;
@@ -49,6 +50,7 @@ async fn test_stop_with_active_sessions_requires_confirmation() {
             Some(std::path::PathBuf::from("/tmp")),
             None,
             Status::Working,
+            0,
         )
         .await;
 
@@ -59,6 +61,7 @@ async fn test_stop_with_active_sessions_requires_confirmation() {
         status: None,
         working_dir: None,
         confirmed: None,
+        priority: None,
     };
 
     let response = handle_stop_command(&cmd, &state).await;
@@ -83,6 +86,7 @@ async fn test_stop_with_confirmation_returns_ok() {
             Some(std::path::PathBuf::from("/tmp")),
             None,
             Status::Working,
+            0,
         )
         .await;
 
@@ -93,6 +97,7 @@ async fn test_stop_with_confirmation_returns_ok() {
         status: None,
         working_dir: None,
         confirmed: Some(true),
+        priority: None,
     };
 
     let response = handle_stop_command(&cmd, &state).await;
@@ -118,6 +123,7 @@ async fn test_stop_with_closed_sessions_returns_ok() {
             Some(std::path::PathBuf::from("/tmp")),
             None,
             Status::Closed,
+            0,
         )
         .await;
 
@@ -128,6 +134,7 @@ async fn test_stop_with_closed_sessions_returns_ok() {
         status: None,
         working_dir: None,
         confirmed: None,
+        priority: None,
     };
 
     let response = handle_stop_command(&cmd, &state).await;
@@ -175,6 +182,7 @@ async fn test_stop_with_inactive_session_returns_ok_without_confirmation() {
         status: None,
         working_dir: None,
         confirmed: None,
+        priority: None,
     };
 
     let response = handle_stop_command(&cmd, &state).await;

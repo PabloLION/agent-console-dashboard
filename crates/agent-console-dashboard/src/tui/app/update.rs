@@ -38,6 +38,7 @@ impl App {
             }
             session.last_activity = backdated_activity;
             session.closed = info.closed;
+            session.priority = info.priority;
         } else {
             let mut session = Session::new(
                 info.session_id.clone(),
@@ -48,6 +49,7 @@ impl App {
             session.since = backdated_since;
             session.last_activity = backdated_activity;
             session.closed = info.closed;
+            session.priority = info.priority;
             // Reconstruct history from wire StatusChange entries
             let now_secs = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -89,5 +91,37 @@ impl App {
                 self.selected_index = Some(0);
             }
         }
+
+        // Sort sessions: status group → priority (desc) → elapsed (desc)
+        self.sessions.sort_by(|a, b| {
+            use std::cmp::Reverse;
+
+            // Determine status group for sorting
+            let a_group = if a.closed {
+                3u8 // Closed sessions: group 3
+            } else if a.is_inactive(crate::INACTIVE_SESSION_THRESHOLD) {
+                2u8 // Inactive sessions: group 2
+            } else {
+                a.status.status_group()
+            };
+
+            let b_group = if b.closed {
+                3u8
+            } else if b.is_inactive(crate::INACTIVE_SESSION_THRESHOLD) {
+                2u8
+            } else {
+                b.status.status_group()
+            };
+
+            let a_elapsed = a.since.elapsed().as_secs();
+            let b_elapsed = b.since.elapsed().as_secs();
+
+            // Sort by: group (asc) → priority (desc) → elapsed (desc)
+            (a_group, Reverse(a.priority), Reverse(a_elapsed)).cmp(&(
+                b_group,
+                Reverse(b.priority),
+                Reverse(b_elapsed),
+            ))
+        });
     }
 }

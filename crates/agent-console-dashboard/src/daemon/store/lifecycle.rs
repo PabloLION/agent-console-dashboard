@@ -76,14 +76,14 @@ impl SessionStore {
         Ok(session)
     }
 
-    /// Gets existing session or creates new one if not found, and sets status.
+    /// Gets existing session or creates new one if not found, and sets status and priority.
     ///
     /// This method is used for lazy session creation on first SET command.
     /// Unlike `create_session()`, this method never fails - it always returns
-    /// a valid session. If a session with the given ID exists, its status is
-    /// updated. Otherwise, a new session is created with the provided metadata
-    /// and status. Both operations happen under a single lock acquisition,
-    /// eliminating TOCTOU races between create and update.
+    /// a valid session. If a session with the given ID exists, its status and
+    /// priority are updated. Otherwise, a new session is created with the provided
+    /// metadata, status, and priority. Both operations happen under a single lock
+    /// acquisition, eliminating TOCTOU races between create and update.
     ///
     /// # Arguments
     ///
@@ -92,6 +92,7 @@ impl SessionStore {
     /// * `working_dir` - Working directory path for this session.
     /// * `session_id` - Optional Claude Code session ID for resume capability.
     /// * `status` - Status to set on the session.
+    /// * `priority` - Priority to set on the session (higher = ranked higher).
     ///
     /// # Returns
     ///
@@ -108,26 +109,30 @@ impl SessionStore {
     /// async fn main() {
     ///     let store = SessionStore::new();
     ///
-    ///     // First call creates a new session with status
+    ///     // First call creates a new session with status and priority
     ///     let session1 = store.get_or_create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
     ///         Some(PathBuf::from("/home/user/project")),
     ///         Some("claude-session-abc".to_string()),
     ///         Status::Working,
+    ///         0,
     ///     ).await;
     ///     assert_eq!(session1.session_id, "session-1");
     ///     assert_eq!(session1.status, Status::Working);
+    ///     assert_eq!(session1.priority, 0);
     ///
-    ///     // Second call updates status on existing session
+    ///     // Second call updates status and priority on existing session
     ///     let session2 = store.get_or_create_session(
     ///         "session-1".to_string(),
     ///         AgentType::ClaudeCode,
     ///         Some(PathBuf::from("/different/path")),
     ///         None,
     ///         Status::Attention,
+    ///         10,
     ///     ).await;
     ///     assert_eq!(session2.status, Status::Attention);
+    ///     assert_eq!(session2.priority, 10);
     /// }
     /// ```
     pub async fn get_or_create_session(
@@ -137,25 +142,32 @@ impl SessionStore {
         working_dir: Option<PathBuf>,
         _session_id: Option<String>,
         status: Status,
+        priority: u64,
     ) -> Session {
         let mut sessions = self.sessions.write().await;
 
-        // If session exists, update status and working_dir, then return
+        // If session exists, update status, working_dir, and priority, then return
         if let Some(existing) = sessions.get_mut(&id) {
             let old_status = existing.status;
+            let old_priority = existing.priority;
             // Update working_dir if the caller provides Some(path)
             if working_dir.is_some() {
                 existing.working_dir = working_dir;
             }
             existing.set_status(status);
+            existing.priority = priority;
             let updated = existing.clone();
-            self.broadcast_status_change(old_status, &updated);
+            // Broadcast if status or priority changed
+            if old_status != updated.status || old_priority != updated.priority {
+                self.broadcast_session_change(old_status, old_priority, &updated);
+            }
             return updated;
         }
 
-        // Create new session with the requested status
+        // Create new session with the requested status and priority
         let mut session = Session::new(id.clone(), agent_type, working_dir);
         session.set_status(status);
+        session.priority = priority;
 
         // Insert and return clone
         sessions.insert(id, session.clone());
@@ -212,10 +224,11 @@ impl SessionStore {
         // Get mutable reference to session, update status, return clone
         if let Some(session) = sessions.get_mut(id) {
             let old_status = session.status;
+            let old_priority = session.priority;
             session.set_status(new_status);
             let updated_session = session.clone();
 
-            self.broadcast_status_change(old_status, &updated_session);
+            self.broadcast_session_change(old_status, old_priority, &updated_session);
             Some(updated_session)
         } else {
             None

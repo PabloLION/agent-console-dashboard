@@ -97,6 +97,7 @@ pub(crate) async fn run_claude_hook_async(
         status: Some(status.to_string()),
         working_dir: Some(input.cwd.clone()),
         confirmed: None,
+        priority: None,
     };
     let cmd_json = serde_json::to_string(&cmd).expect("failed to serialize SET command");
     let cmd_line = format!("{}\n", cmd_json);

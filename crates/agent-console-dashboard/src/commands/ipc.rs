@@ -18,6 +18,7 @@ pub(crate) fn run_set_command(
     session_id: &str,
     status: &str,
     working_dir: Option<&std::path::Path>,
+    priority: Option<u64>,
 ) -> ExitCode {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;
@@ -48,6 +49,7 @@ pub(crate) fn run_set_command(
         status: Some(status.to_string()),
         working_dir: Some(wd),
         confirmed: None,
+        priority,
     };
     let json = serde_json::to_string(&cmd).expect("failed to serialize SET command");
     let line = format!("{}\n", json);
@@ -105,6 +107,7 @@ pub(crate) fn run_status_command(socket: &PathBuf) -> ExitCode {
         status: None,
         working_dir: None,
         confirmed: None,
+        priority: None,
     };
     let json = serde_json::to_string(&cmd).expect("failed to serialize STATUS command");
     let line = format!("{}\n", json);
@@ -191,6 +194,7 @@ pub(crate) fn run_dump_command(socket: &PathBuf) -> ExitCode {
         status: None,
         working_dir: None,
         confirmed: None,
+        priority: None,
     };
     let json = serde_json::to_string(&cmd).expect("failed to serialize DUMP command");
     let line = format!("{}\n", json);
@@ -264,6 +268,7 @@ pub(crate) fn run_resurrect_command(socket: &PathBuf, session_id: &str, quiet: b
         status: None,
         working_dir: None,
         confirmed: None,
+        priority: None,
     };
     let json = serde_json::to_string(&cmd).expect("failed to serialize RESURRECT command");
     let line = format!("{}\n", json);

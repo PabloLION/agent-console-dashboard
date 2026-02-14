@@ -1,7 +1,7 @@
 use super::*;
 use crate::tui::test_utils::{
-    find_row_with_text, make_session as make_test_session_with_dir,
-    render_session_list_to_buffer, row_text,
+    find_row_with_text, make_session as make_test_session_with_dir, render_session_list_to_buffer,
+    row_text,
 };
 
 // --- TUI TestBackend tests (acd-211) ---
@@ -365,8 +365,7 @@ fn test_renders_mixed_unique_and_duplicate_basenames() {
 
     // Session 3 has unique basename - no disambiguation
     assert!(
-        row3_text.contains("unique-name")
-            && !row3_text.contains("tmp/unique-name"),
+        row3_text.contains("unique-name") && !row3_text.contains("tmp/unique-name"),
         "session-3 should display 'unique-name' without parent, got: '{}'",
         row3_text
     );

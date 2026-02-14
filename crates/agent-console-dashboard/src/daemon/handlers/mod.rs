@@ -58,6 +58,8 @@ pub(super) async fn handle_set_command(cmd: &IpcCommand, store: &SessionStore) -
         }
     };
 
+    let priority = cmd.priority.unwrap_or(0);
+
     let session = store
         .get_or_create_session(
             session_id.clone(),
@@ -65,6 +67,7 @@ pub(super) async fn handle_set_command(cmd: &IpcCommand, store: &SessionStore) -
             working_dir,
             None,
             status,
+            priority,
         )
         .await;
 
@@ -202,7 +205,7 @@ pub(super) async fn handle_sub_command(
                                     idle_seconds: 0,
                                     history: vec![],
                                     closed: update.status == Status::Closed,
-
+                                    priority: 0,
                                 };
                                 IpcNotification::session_update(info)
                             };
@@ -262,6 +265,7 @@ pub(super) async fn handle_sub_command(
                             idle_seconds: 0,
                             history: vec![],
                             closed: update.status == Status::Closed,
+                            priority: 0,
                         };
                         IpcNotification::session_update(info)
                     };
