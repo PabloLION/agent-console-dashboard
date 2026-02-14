@@ -128,6 +128,15 @@ enum DaemonCommands {
         #[arg(short, long)]
         force: bool,
     },
+    /// Restart the daemon (stop with force, then start)
+    Restart {
+        /// Socket path for IPC communication
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
+        socket: PathBuf,
+        /// Run daemon in background (detach from terminal)
+        #[arg(short, long)]
+        detach: bool,
+    },
 }
 
 /// Actions for the `config` subcommand.
@@ -281,6 +290,23 @@ fn main() -> ExitCode {
             }
             DaemonCommands::Stop { socket, force } => {
                 return run_daemon_stop_command(&socket, force);
+            }
+            DaemonCommands::Restart { socket, detach } => {
+                // Stop daemon with force=true (skip confirmation)
+                if is_daemon_running(&socket) {
+                    let stop_exit = run_daemon_stop_command(&socket, true);
+                    if stop_exit != ExitCode::SUCCESS {
+                        eprintln!("Error: failed to stop daemon during restart");
+                        return ExitCode::FAILURE;
+                    }
+                }
+
+                // Start daemon with same socket path and detach flag
+                let config = DaemonConfig::new(socket, detach);
+                if let Err(e) = run_daemon(config) {
+                    eprintln!("Error: failed to start daemon during restart: {}", e);
+                    return ExitCode::FAILURE;
+                }
             }
         },
         Commands::ClaudeHook { status, socket } => {

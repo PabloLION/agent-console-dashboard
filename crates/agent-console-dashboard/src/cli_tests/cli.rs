@@ -493,6 +493,83 @@ fn test_config_edit_parses() {
     }
 }
 
+// -- Daemon restart subcommand --------------------------------------------
+
+#[test]
+fn test_daemon_restart_parses() {
+    let cli =
+        Cli::try_parse_from(["agent-console-dashboard", "daemon", "restart"]).expect("daemon restart should parse");
+    match cli.command {
+        Commands::Daemon {
+            command: DaemonCommands::Restart { socket, detach },
+        } => {
+            assert_eq!(socket, PathBuf::from("/tmp/agent-console-dashboard.sock"));
+            assert!(!detach);
+        }
+        _ => panic!("expected daemon restart command"),
+    }
+}
+
+#[test]
+fn test_daemon_restart_with_detach() {
+    let cli = Cli::try_parse_from(["agent-console-dashboard", "daemon", "restart", "--detach"])
+        .expect("daemon restart --detach should parse");
+    match cli.command {
+        Commands::Daemon {
+            command: DaemonCommands::Restart { detach, .. },
+        } => {
+            assert!(detach);
+        }
+        _ => panic!("expected daemon restart command"),
+    }
+}
+
+#[test]
+fn test_daemon_restart_with_custom_socket() {
+    let cli = Cli::try_parse_from([
+        "agent-console-dashboard",
+        "daemon",
+        "restart",
+        "--socket",
+        "/custom/restart.sock",
+    ])
+    .expect("daemon restart --socket should parse");
+    match cli.command {
+        Commands::Daemon {
+            command: DaemonCommands::Restart { socket, .. },
+        } => {
+            assert_eq!(socket, PathBuf::from("/custom/restart.sock"));
+        }
+        _ => panic!("expected daemon restart command"),
+    }
+}
+
+#[test]
+fn test_daemon_restart_help_contains_expected_options() {
+    // Verify that daemon restart subcommand help contains --detach and --socket
+    let cmd = Cli::command();
+    let daemon_cmd = cmd
+        .get_subcommands()
+        .find(|sc| sc.get_name() == "daemon")
+        .expect("daemon subcommand should exist");
+    let restart_cmd = daemon_cmd
+        .get_subcommands()
+        .find(|sc| sc.get_name() == "restart")
+        .expect("daemon restart subcommand should exist");
+
+    // Check that --detach option exists
+    let detach_arg = restart_cmd
+        .get_arguments()
+        .find(|arg| arg.get_id() == "detach");
+    assert!(detach_arg.is_some(), "--detach flag should exist");
+
+    // Check that --socket option exists
+    let socket_arg = restart_cmd
+        .get_arguments()
+        .find(|arg| arg.get_id() == "socket");
+    assert!(socket_arg.is_some(), "--socket flag should exist");
+}
+
 // -- Install/Uninstall subcommands ----------------------------------------
 
 #[test]
