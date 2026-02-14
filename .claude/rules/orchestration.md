@@ -73,6 +73,11 @@ clear and unambiguous. Otherwise, it is **not ready**.
 - Ready issues: proceed to pre-dispatch protocol
 - Not-ready issues: label as `needs-design`, discuss with user
 
+For every issue presented, report a **numerical confidence percentage** (0-100%)
+that the issue is actionable as-written. If below 100%, list every doubt that
+reduces confidence. This applies to the confidence table and to each issue in
+the pre-dispatch protocol.
+
 ### Pre-Dispatch Protocol (per issue)
 
 For each ready issue, before dispatching:
@@ -127,17 +132,31 @@ apply these rules in order:
 - `needs-design`: issue spec is incomplete, needs user discussion
 - Remove label after design is settled and spec is updated
 
-## Worktree Sync Lifecycle
+## Worktree Lifecycle
+
+### Merge immediately, independently
+
+When an agent completes, merge its worktree branch to main immediately. Do NOT
+wait for other agents to finish — each agent's work is independent. Waiting for
+unrelated agents wastes time and creates false dependencies.
+
+### Merge and cleanup
 
 After an agent completes an issue:
 
 1. Agent commits in its worktree branch
-2. Orchestrator merges worktree branch → main
+2. Orchestrator merges worktree branch → main (`git merge --no-ff` for
+   traceability)
 3. Orchestrator runs test suite on main
-4. Orchestrator syncs main → worktree (`git merge main` in worktree)
-5. Only then: dispatch next issue to that agent
+4. Orchestrator removes worktree and branch (`git worktree remove`,
+   `git branch -d`)
+5. Close the beads issue
 
-This prevents agents from drifting when other agents' changes land on main.
+### Fresh worktree per dispatch
+
+Do NOT reuse worktrees. Each new dispatch gets a fresh worktree from current
+main. This avoids sync problems and stale state. Creating a new worktree is
+cheap; debugging a stale one is not.
 
 ## Overlap Management
 

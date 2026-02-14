@@ -51,10 +51,20 @@ if [ -n "$STAGED_RS" ]; then
     # TODO: migrate to justfile recipe (acd-n7r)
     TEST_OUTPUT=$(mktemp)
     if cargo test --workspace --quiet -- --test-threads=4 > "$TEST_OUTPUT" 2>&1; then
-        # Success: remove lines consisting entirely of dots/ignored markers (i),
-        # optionally followed by a progress counter (e.g., "... 174/625").
-        # Keep everything else (warnings, errors, headers, summaries).
-        grep -Ev '^[.i]+( [0-9]+/[0-9]+)?$' "$TEST_OUTPUT" || true
+        # Success: denylist noisy lines, keep everything else.
+        # 1. Remove lines of dots/ignored markers (test progress)
+        # 2. Remove "running N tests" + "test result: ok." pairs (only when
+        #    consecutive and result is ok — keep pairs with failures)
+        # 3. Collapse consecutive blank lines into one
+        grep -Ev '^[.i]+( [0-9]+/[0-9]+)?$' "$TEST_OUTPUT" \
+            | awk '
+                /^running [0-9]+ tests$/ { pending = $0; next }
+                /^test result: ok\./ { if (pending) { pending = ""; next } }
+                { if (pending) { print pending; pending = "" } print }
+                END { if (pending) print pending }
+            ' \
+            | cat -s \
+            || true
         rm "$TEST_OUTPUT"
     else
         # Failure: show full output so developer can see what failed
