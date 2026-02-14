@@ -21,6 +21,10 @@ Can also target specific modules:
 
 Output is written to stderr in both foreground and background daemon modes.
 
+**Note:** This variable is read at daemon startup. Changing it has no effect on
+an already running daemon. Stop and restart the daemon for log level changes to
+take effect.
+
 ## Path Resolution
 
 ### XDG_CONFIG_HOME

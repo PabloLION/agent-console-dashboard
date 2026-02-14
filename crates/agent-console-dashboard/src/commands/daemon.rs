@@ -10,6 +10,12 @@ use std::process::ExitCode;
 /// Checks if daemon is already running by attempting to connect to the socket.
 ///
 /// Returns `true` if the socket exists and accepts connections, `false` otherwise.
+///
+/// When starting a daemon, this function is used to check for an existing daemon
+/// instance. If found, the existing daemon is reused and no new daemon is started.
+/// This prevents duplicate daemon processes and preserves the state of the running
+/// daemon. See the "Reusing existing daemon... no new daemon started" message in
+/// `acd daemon start`.
 pub(crate) fn is_daemon_running(socket: &std::path::Path) -> bool {
     use std::os::unix::net::UnixStream;
     UnixStream::connect(socket).is_ok()
