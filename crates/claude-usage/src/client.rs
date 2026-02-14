@@ -110,6 +110,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires network access to Anthropic API"]
     #[cfg(feature = "blocking")]
     fn test_fetch_with_invalid_token() {
         // Test that invalid token returns Unauthorized
