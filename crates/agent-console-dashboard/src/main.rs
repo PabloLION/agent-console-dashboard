@@ -80,6 +80,9 @@ enum Commands {
         /// Working directory
         #[arg(long)]
         working_dir: Option<PathBuf>,
+        /// Session priority for sorting (higher = ranked higher)
+        #[arg(long)]
+        priority: Option<u64>,
         /// Socket path for IPC communication
         #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
         socket: PathBuf,
@@ -261,9 +264,16 @@ fn main() -> ExitCode {
             session_id,
             status,
             working_dir,
+            priority,
             socket,
         } => {
-            return run_set_command(&socket, &session_id, &status, working_dir.as_deref());
+            return run_set_command(
+                &socket,
+                &session_id,
+                &status,
+                working_dir.as_deref(),
+                priority,
+            );
         }
         Commands::Daemon { command } => match command {
             DaemonCommands::Start { socket, detach } => {

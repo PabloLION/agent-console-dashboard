@@ -497,8 +497,8 @@ fn test_config_edit_parses() {
 
 #[test]
 fn test_daemon_restart_parses() {
-    let cli =
-        Cli::try_parse_from(["agent-console-dashboard", "daemon", "restart"]).expect("daemon restart should parse");
+    let cli = Cli::try_parse_from(["agent-console-dashboard", "daemon", "restart"])
+        .expect("daemon restart should parse");
     match cli.command {
         Commands::Daemon {
             command: DaemonCommands::Restart { socket, detach },

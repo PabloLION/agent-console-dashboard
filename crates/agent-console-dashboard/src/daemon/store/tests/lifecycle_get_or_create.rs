@@ -15,6 +15,7 @@ async fn test_get_or_create_session_creates_new() {
             Some(PathBuf::from("/home/user/project")),
             Some("claude-session-123".to_string()),
             Status::Working,
+            0,
         )
         .await;
 
@@ -46,6 +47,7 @@ async fn test_get_or_create_session_returns_existing_and_updates_status() {
             Some(PathBuf::from("/original/path")),
             Some("original-session-id".to_string()),
             Status::Working,
+            0,
         )
         .await;
     assert_eq!(original.status, Status::Working);
@@ -57,6 +59,7 @@ async fn test_get_or_create_session_returns_existing_and_updates_status() {
             Some(PathBuf::from("/different/path")),
             Some("different-session-id".to_string()),
             Status::Attention,
+            0,
         )
         .await;
 
@@ -81,6 +84,7 @@ async fn test_get_or_create_session_without_session_id() {
             Some(PathBuf::from("/tmp/test")),
             None,
             Status::Working,
+            0,
         )
         .await;
 
@@ -101,6 +105,7 @@ async fn test_get_or_create_session_after_set() {
             Some(PathBuf::from("/new/path")),
             None,
             Status::Attention,
+            0,
         )
         .await;
 
@@ -131,6 +136,7 @@ async fn test_get_or_create_session_after_create_session() {
             Some(PathBuf::from("/new/path")),
             Some("new-id".to_string()),
             Status::Question,
+            0,
         )
         .await;
 
@@ -152,6 +158,7 @@ async fn test_get_or_create_session_multiple_unique() {
                 Some(PathBuf::from(format!("/path/{}", i))),
                 None,
                 Status::Working,
+                0,
             )
             .await;
         assert_eq!(session.session_id, format!("session-{}", i));
@@ -172,6 +179,7 @@ async fn test_get_or_create_session_idempotent() {
             Some(PathBuf::from("/path/1")),
             None,
             Status::Working,
+            0,
         )
         .await;
 
@@ -182,6 +190,7 @@ async fn test_get_or_create_session_idempotent() {
             Some(PathBuf::from("/path/2")),
             None,
             Status::Working,
+            0,
         )
         .await;
 
@@ -192,6 +201,7 @@ async fn test_get_or_create_session_idempotent() {
             Some(PathBuf::from("/path/3")),
             None,
             Status::Working,
+            0,
         )
         .await;
 

@@ -108,12 +108,16 @@ impl SessionStore {
         }
     }
 
-    /// Broadcasts a status change notification to all subscribers.
+    /// Broadcasts a session change notification to all subscribers.
     ///
-    /// Only sends if the status actually changed (old_status != session.status).
-    /// Logs the result at trace/debug level.
-    pub(super) fn broadcast_status_change(&self, old_status: Status, session: &Session) {
-        if old_status != session.status {
+    /// Sends if status or priority changed. Logs the result at trace/debug level.
+    pub(super) fn broadcast_session_change(
+        &self,
+        old_status: Status,
+        old_priority: u64,
+        session: &Session,
+    ) {
+        if old_status != session.status || old_priority != session.priority {
             let update = SessionUpdate::new(
                 session.session_id.clone(),
                 session.status,

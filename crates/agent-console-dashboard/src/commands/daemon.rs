@@ -47,6 +47,7 @@ pub(crate) fn run_daemon_stop_command(socket: &std::path::Path, force: bool) -> 
         status: None,
         working_dir: None,
         confirmed: None,
+        priority: None,
     };
     let json = serde_json::to_string(&cmd).expect("failed to serialize STOP command");
     let line = format!("{}\n", json);
@@ -105,6 +106,7 @@ pub(crate) fn run_daemon_stop_command(socket: &std::path::Path, force: bool) -> 
                             status: None,
                             working_dir: None,
                             confirmed: Some(true),
+                            priority: None,
                         };
                         let json_confirmed = serde_json::to_string(&cmd_confirmed)
                             .expect("failed to serialize STOP command");

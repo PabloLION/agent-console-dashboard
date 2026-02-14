@@ -64,10 +64,11 @@ impl SessionStore {
 
             if let Some(session) = sessions.get_mut(id) {
                 let old_status = session.status;
+                let old_priority = session.priority;
                 session.closed = true;
                 session.set_status(Status::Closed);
                 let result = session.clone();
-                self.broadcast_status_change(old_status, &result);
+                self.broadcast_session_change(old_status, old_priority, &result);
                 Some(result)
             } else {
                 None

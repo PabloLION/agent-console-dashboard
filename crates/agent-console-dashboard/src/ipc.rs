@@ -30,6 +30,9 @@ pub struct IpcCommand {
     /// Confirmation flag (for STOP).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub confirmed: Option<bool>,
+    /// Session priority (for SET).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<u64>,
 }
 
 /// Response envelope from daemon to client.
@@ -113,6 +116,9 @@ pub struct SessionSnapshot {
     pub history: Vec<StatusChange>,
     /// Whether session has been closed.
     pub closed: bool,
+    /// Session priority for sorting (higher = ranked higher).
+    #[serde(default)]
+    pub priority: u64,
 }
 
 /// A single status change in the history, serializable for IPC.
@@ -166,6 +172,7 @@ impl From<&Session> for SessionSnapshot {
             idle_seconds: session.last_activity.elapsed().as_secs(),
             history,
             closed: session.closed,
+            priority: session.priority,
         }
     }
 }

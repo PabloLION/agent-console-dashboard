@@ -274,3 +274,210 @@ fn test_app_usage_starts_none() {
     let app = App::new(PathBuf::from("/tmp/test.sock"));
     assert!(app.usage.is_none());
 }
+
+// --- Session sorting tests ---
+
+#[test]
+fn test_session_sort_by_status_group() {
+    use crate::SessionSnapshot;
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+
+    // Create sessions with different statuses
+    let attention = SessionSnapshot {
+        session_id: "attention-1".to_string(),
+        agent_type: "claudecode".to_string(),
+        status: "attention".to_string(),
+        working_dir: None,
+        elapsed_seconds: 10,
+        idle_seconds: 5,
+        history: vec![],
+        closed: false,
+        priority: 0,
+    };
+
+    let working = SessionSnapshot {
+        session_id: "working-1".to_string(),
+        agent_type: "claudecode".to_string(),
+        status: "working".to_string(),
+        working_dir: None,
+        elapsed_seconds: 10,
+        idle_seconds: 5,
+        history: vec![],
+        closed: false,
+        priority: 0,
+    };
+
+    let closed = SessionSnapshot {
+        session_id: "closed-1".to_string(),
+        agent_type: "claudecode".to_string(),
+        status: "closed".to_string(),
+        working_dir: None,
+        elapsed_seconds: 10,
+        idle_seconds: 5,
+        history: vec![],
+        closed: true,
+        priority: 0,
+    };
+
+    // Apply in reverse order: closed, working, attention
+    app.apply_update(&closed);
+    app.apply_update(&working);
+    app.apply_update(&attention);
+
+    // After sorting, attention should be first, working second, closed last
+    assert_eq!(app.sessions[0].session_id, "attention-1");
+    assert_eq!(app.sessions[1].session_id, "working-1");
+    assert_eq!(app.sessions[2].session_id, "closed-1");
+}
+
+#[test]
+fn test_session_sort_by_priority() {
+    use crate::SessionSnapshot;
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+
+    // Create sessions with same status but different priorities
+    let low_priority = SessionSnapshot {
+        session_id: "low".to_string(),
+        agent_type: "claudecode".to_string(),
+        status: "working".to_string(),
+        working_dir: None,
+        elapsed_seconds: 10,
+        idle_seconds: 5,
+        history: vec![],
+        closed: false,
+        priority: 1,
+    };
+
+    let high_priority = SessionSnapshot {
+        session_id: "high".to_string(),
+        agent_type: "claudecode".to_string(),
+        status: "working".to_string(),
+        working_dir: None,
+        elapsed_seconds: 10,
+        idle_seconds: 5,
+        history: vec![],
+        closed: false,
+        priority: 10,
+    };
+
+    // Apply in wrong order
+    app.apply_update(&low_priority);
+    app.apply_update(&high_priority);
+
+    // After sorting, high priority should be first
+    assert_eq!(app.sessions[0].session_id, "high");
+    assert_eq!(app.sessions[0].priority, 10);
+    assert_eq!(app.sessions[1].session_id, "low");
+    assert_eq!(app.sessions[1].priority, 1);
+}
+
+#[test]
+fn test_session_sort_by_elapsed_time() {
+    use crate::SessionSnapshot;
+    use std::time::Duration;
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+
+    // Create sessions with same status and priority but different elapsed times
+    let short = SessionSnapshot {
+        session_id: "short".to_string(),
+        agent_type: "claudecode".to_string(),
+        status: "working".to_string(),
+        working_dir: None,
+        elapsed_seconds: 10,
+        idle_seconds: 5,
+        history: vec![],
+        closed: false,
+        priority: 5,
+    };
+
+    let long = SessionSnapshot {
+        session_id: "long".to_string(),
+        agent_type: "claudecode".to_string(),
+        status: "working".to_string(),
+        working_dir: None,
+        elapsed_seconds: 100,
+        idle_seconds: 5,
+        history: vec![],
+        closed: false,
+        priority: 5,
+    };
+
+    // Apply in wrong order
+    app.apply_update(&short);
+    // Wait a tiny bit so the timestamps differ
+    std::thread::sleep(Duration::from_millis(10));
+    app.apply_update(&long);
+
+    // After sorting, longer elapsed time should be first (same status, same priority)
+    assert_eq!(app.sessions[0].session_id, "long");
+    assert_eq!(app.sessions[1].session_id, "short");
+}
+
+#[test]
+fn test_session_sort_combined() {
+    use crate::SessionSnapshot;
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+
+    // Test combined sorting: status → priority → elapsed
+    let sessions = vec![
+        SessionSnapshot {
+            session_id: "closed-high".to_string(),
+            agent_type: "claudecode".to_string(),
+            status: "closed".to_string(),
+            working_dir: None,
+            elapsed_seconds: 100,
+            idle_seconds: 5,
+            history: vec![],
+            closed: true,
+            priority: 100,
+        },
+        SessionSnapshot {
+            session_id: "attention-low".to_string(),
+            agent_type: "claudecode".to_string(),
+            status: "attention".to_string(),
+            working_dir: None,
+            elapsed_seconds: 50,
+            idle_seconds: 5,
+            history: vec![],
+            closed: false,
+            priority: 1,
+        },
+        SessionSnapshot {
+            session_id: "working-high-short".to_string(),
+            agent_type: "claudecode".to_string(),
+            status: "working".to_string(),
+            working_dir: None,
+            elapsed_seconds: 10,
+            idle_seconds: 5,
+            history: vec![],
+            closed: false,
+            priority: 10,
+        },
+        SessionSnapshot {
+            session_id: "working-high-long".to_string(),
+            agent_type: "claudecode".to_string(),
+            status: "working".to_string(),
+            working_dir: None,
+            elapsed_seconds: 100,
+            idle_seconds: 5,
+            history: vec![],
+            closed: false,
+            priority: 10,
+        },
+    ];
+
+    // Apply in random order
+    for session in sessions {
+        app.apply_update(&session);
+    }
+
+    // Expected order:
+    // 1. attention-low (status group 0, priority 1)
+    // 2. working-high-long (status group 1, priority 10, elapsed 100)
+    // 3. working-high-short (status group 1, priority 10, elapsed 10)
+    // 4. closed-high (status group 3)
+    assert_eq!(app.sessions[0].session_id, "attention-low");
+    assert_eq!(app.sessions[1].session_id, "working-high-long");
+    assert_eq!(app.sessions[2].session_id, "working-high-short");
+    assert_eq!(app.sessions[3].session_id, "closed-high");
+}

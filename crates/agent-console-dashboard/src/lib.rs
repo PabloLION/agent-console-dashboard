@@ -75,6 +75,28 @@ impl Status {
     pub fn should_dim(self) -> bool {
         matches!(self, Status::Closed)
     }
+
+    /// Returns the sort group for this status.
+    ///
+    /// Lower values sort first. Note that "inactive" is NOT a status variant;
+    /// it's determined at sort time by checking `session.is_inactive(threshold)`.
+    ///
+    /// Sort groups:
+    /// - 0: Attention (highest priority)
+    /// - 1: Working
+    /// - 2: Question
+    /// - 3: Closed (lowest priority)
+    ///
+    /// Inactive sessions (non-closed sessions with idle_seconds > threshold)
+    /// are assigned group 2 at sort time.
+    pub fn status_group(self) -> u8 {
+        match self {
+            Status::Attention => 0,
+            Status::Working => 1,
+            Status::Question => 2,
+            Status::Closed => 3,
+        }
+    }
 }
 
 impl fmt::Display for Status {
@@ -166,6 +188,8 @@ pub struct Session {
     pub api_usage: Option<ApiUsage>,
     /// Whether session has been closed (for resurrection).
     pub closed: bool,
+    /// Session priority for sorting (higher = ranked higher).
+    pub priority: u64,
 }
 
 impl Session {
@@ -181,6 +205,7 @@ impl Session {
             history: Vec::new(),
             api_usage: None,
             closed: false,
+            priority: 0,
         }
     }
 
@@ -251,7 +276,18 @@ impl Session {
 
 impl Default for Session {
     fn default() -> Self {
-        Self::new(String::new(), AgentType::ClaudeCode, None)
+        Self {
+            session_id: String::new(),
+            agent_type: AgentType::ClaudeCode,
+            status: Status::Working,
+            working_dir: None,
+            since: Instant::now(),
+            last_activity: Instant::now(),
+            history: Vec::new(),
+            api_usage: None,
+            closed: false,
+            priority: 0,
+        }
     }
 }
 
