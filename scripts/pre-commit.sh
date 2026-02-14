@@ -47,7 +47,21 @@ if [ -n "$STAGED_RS" ]; then
     cargo clippy --workspace -- -D warnings
 
     echo "  Running cargo test..."
-    cargo test --workspace --quiet -- --test-threads=4
+    # Capture test output; filter noise on success, show full output on failure.
+    # TODO: migrate to justfile recipe (acd-n7r)
+    TEST_OUTPUT=$(mktemp)
+    if cargo test --workspace --quiet -- --test-threads=4 > "$TEST_OUTPUT" 2>&1; then
+        # Success: remove lines consisting entirely of dots/ignored markers (i),
+        # optionally followed by a progress counter (e.g., "... 174/625").
+        # Keep everything else (warnings, errors, headers, summaries).
+        grep -Ev '^[.i]+( [0-9]+/[0-9]+)?$' "$TEST_OUTPUT" || true
+        rm "$TEST_OUTPUT"
+    else
+        # Failure: show full output so developer can see what failed
+        cat "$TEST_OUTPUT"
+        rm "$TEST_OUTPUT"
+        exit 1
+    fi
 
     echo "Rust checks passed!"
 fi
