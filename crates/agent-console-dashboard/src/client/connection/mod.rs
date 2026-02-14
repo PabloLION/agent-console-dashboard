@@ -325,6 +325,5 @@ fn calculate_backoff(attempt: u32) -> Duration {
     Duration::from_millis(delay_ms.min(MAX_BACKOFF_MS))
 }
 
-
 #[cfg(test)]
 mod tests;

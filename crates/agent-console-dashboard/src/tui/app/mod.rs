@@ -289,7 +289,6 @@ impl App {
         }
     }
 
-
     /// Runs the TUI application: sets up terminal, enters event loop, restores on exit.
     pub async fn run(&mut self) -> io::Result<()> {
         // Install panic hook that restores terminal before printing panic info
@@ -432,7 +431,6 @@ pub fn substitute_hook_placeholders(template: &str, session: &Session) -> String
         .replace("{working_dir}", &working_dir_str)
         .replace("{status}", &session.status.to_string())
 }
-
 
 #[cfg(test)]
 mod tests;

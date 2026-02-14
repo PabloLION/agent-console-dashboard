@@ -282,6 +282,5 @@ fn format_transition_time(timestamp: Instant, now: Instant) -> String {
     format!("{} ago", super::dashboard::format_duration_secs(ago))
 }
 
-
 #[cfg(test)]
 mod tests;

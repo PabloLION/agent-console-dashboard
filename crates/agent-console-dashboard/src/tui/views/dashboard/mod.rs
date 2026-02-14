@@ -411,6 +411,5 @@ pub(crate) fn truncate_string(s: &str, max_len: usize) -> String {
     }
 }
 
-
 #[cfg(test)]
 mod tests;

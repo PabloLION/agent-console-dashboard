@@ -20,8 +20,7 @@ fn test_detail_renders_below_session_list_not_centered() {
 
     let buffer = render_dashboard_to_buffer(&app, 80, 30);
 
-    let status_row =
-        find_row_with_text(&buffer, "Status:").expect("should find Status: in detail");
+    let status_row = find_row_with_text(&buffer, "Status:").expect("should find Status: in detail");
 
     assert!(
         status_row > 10,

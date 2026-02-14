@@ -27,8 +27,7 @@ async fn test_stop_no_active_sessions_returns_ok() {
     };
 
     let response = handle_stop_command(&cmd, &state).await;
-    let parsed: IpcResponse =
-        serde_json::from_str(&response).expect("failed to parse response");
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
 
     assert!(parsed.ok);
     assert_eq!(
@@ -63,8 +62,7 @@ async fn test_stop_with_active_sessions_requires_confirmation() {
     };
 
     let response = handle_stop_command(&cmd, &state).await;
-    let parsed: IpcResponse =
-        serde_json::from_str(&response).expect("failed to parse response");
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
 
     assert!(parsed.ok);
     let data = parsed.data.as_ref().unwrap();
@@ -98,8 +96,7 @@ async fn test_stop_with_confirmation_returns_ok() {
     };
 
     let response = handle_stop_command(&cmd, &state).await;
-    let parsed: IpcResponse =
-        serde_json::from_str(&response).expect("failed to parse response");
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
 
     assert!(parsed.ok);
     assert_eq!(
@@ -134,8 +131,7 @@ async fn test_stop_with_closed_sessions_returns_ok() {
     };
 
     let response = handle_stop_command(&cmd, &state).await;
-    let parsed: IpcResponse =
-        serde_json::from_str(&response).expect("failed to parse response");
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
 
     assert!(parsed.ok);
     assert_eq!(
@@ -182,8 +178,7 @@ async fn test_stop_with_inactive_session_returns_ok_without_confirmation() {
     };
 
     let response = handle_stop_command(&cmd, &state).await;
-    let parsed: IpcResponse =
-        serde_json::from_str(&response).expect("failed to parse response");
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
 
     assert!(parsed.ok);
     assert_eq!(

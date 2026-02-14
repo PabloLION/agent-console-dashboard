@@ -228,8 +228,7 @@ async fn test_concurrent_clients_connect_to_existing_daemon() {
     // Spawn a task to accept multiple connections
     let accept_handle = tokio::spawn(async move {
         let mut connections = 0;
-        while let Ok(Ok((stream, _))) = timeout(Duration::from_secs(5), listener.accept()).await
-        {
+        while let Ok(Ok((stream, _))) = timeout(Duration::from_secs(5), listener.accept()).await {
             connections += 1;
             tokio::spawn(async move {
                 tokio::time::sleep(Duration::from_millis(200)).await;

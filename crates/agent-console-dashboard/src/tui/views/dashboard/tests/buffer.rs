@@ -83,8 +83,7 @@ fn test_dashboard_selected_session_has_highlight() {
     ));
     app.init_selection();
     let buffer = render_dashboard_to_buffer(&app, 80, 24);
-    let session_row =
-        find_row_with_text(&buffer, "highlighted").expect("should find session row");
+    let session_row = find_row_with_text(&buffer, "highlighted").expect("should find session row");
     assert_text_bg_in_row(&buffer, session_row, "highlighted", Color::DarkGray);
 }
 
@@ -181,8 +180,7 @@ fn test_closed_status_renders_gray() {
 
 #[test]
 fn test_inactive_session_renders_dark_gray() {
-    let session =
-        make_inactive_session("test-sess", INACTIVE_SESSION_THRESHOLD.as_secs() + 100);
+    let session = make_inactive_session("test-sess", INACTIVE_SESSION_THRESHOLD.as_secs() + 100);
     let sessions = vec![session];
     let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
     let row = find_row_with_text(&buffer, "test-sess").expect("should find session");
@@ -244,8 +242,7 @@ fn test_wide_mode_shows_wider_directory() {
     let buffer_standard = render_session_list_to_buffer(&sessions, None, 60, 10);
     let buffer_wide = render_session_list_to_buffer(&sessions, None, 100, 10);
 
-    let row_standard =
-        find_row_with_text(&buffer_standard, "wide").expect("should find session");
+    let row_standard = find_row_with_text(&buffer_standard, "wide").expect("should find session");
     let row_wide = find_row_with_text(&buffer_wide, "wide").expect("should find session");
 
     let text_standard = row_text(&buffer_standard, row_standard);
@@ -375,8 +372,7 @@ fn test_closed_session_not_highlighted_uses_dark_gray_text() {
         Some(PathBuf::from("/tmp")),
     )];
     let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
-    let row =
-        find_row_with_text(&buffer, "closed-not-highlighted").expect("should find session");
+    let row = find_row_with_text(&buffer, "closed-not-highlighted").expect("should find session");
     assert_text_fg_in_row(&buffer, row, "closed-not-highlighted", Color::DarkGray);
 }
 

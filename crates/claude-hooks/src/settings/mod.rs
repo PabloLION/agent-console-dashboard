@@ -241,6 +241,5 @@ pub fn list_hooks(value: &Value) -> Vec<(HookEvent, Option<String>, HookHandler)
     result
 }
 
-
 #[cfg(test)]
 mod tests;
