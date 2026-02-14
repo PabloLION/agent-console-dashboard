@@ -42,6 +42,7 @@ fn get_credentials_path() -> Result<PathBuf, CredentialError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::fs::{self, File};
     use std::io::Write;
     use tempfile::TempDir;
@@ -72,6 +73,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_get_credentials_path_uses_home() {
         let temp_dir = TempDir::new().expect("create temp dir");
         let _guard = HomeGuard::set(temp_dir.path());
@@ -82,6 +84,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_get_credentials_path_no_home() {
         // Use a special guard that removes HOME instead of setting it
         struct NoHomeGuard(Option<String>);
@@ -106,6 +109,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_read_valid_credentials_file() {
         let temp_dir = TempDir::new().expect("create temp dir");
         let claude_dir = temp_dir.path().join(".claude");
@@ -134,6 +138,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_missing_credentials_file() {
         let temp_dir = TempDir::new().expect("create temp dir");
         let _guard = HomeGuard::set(temp_dir.path());
@@ -143,6 +148,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_invalid_json_in_file() {
         let temp_dir = TempDir::new().expect("create temp dir");
         let claude_dir = temp_dir.path().join(".claude");
@@ -159,6 +165,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_expired_token_in_file() {
         let temp_dir = TempDir::new().expect("create temp dir");
         let claude_dir = temp_dir.path().join(".claude");
