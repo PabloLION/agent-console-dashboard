@@ -171,18 +171,43 @@ impl App {
     /// Substitutes `{session_id}`, `{working_dir}`, and `{status}` placeholders
     /// in the hook command, then spawns it via `sh -c` in fire-and-forget mode.
     /// The child process is detached (stdout/stderr piped to null).
+    ///
+    /// Pipes the full SessionSnapshot as JSON to the hook's stdin, following the
+    /// same pattern as Claude Code hooks.
     fn execute_double_click_hook(&self, session: &Session) {
+        use crate::SessionSnapshot;
+        use std::io::Write;
+
         if let Some(ref hook) = self.double_click_hook {
             let cmd = substitute_hook_placeholders(hook, session);
             tracing::debug!("executing double-click hook: {}", cmd);
+
+            // Convert Session to SessionSnapshot and serialize to JSON
+            let snapshot: SessionSnapshot = session.into();
+            let json_payload = match serde_json::to_string(&snapshot) {
+                Ok(json) => json,
+                Err(e) => {
+                    tracing::warn!("failed to serialize SessionSnapshot: {}", e);
+                    return;
+                }
+            };
+
             match std::process::Command::new("sh")
                 .arg("-c")
                 .arg(&cmd)
+                .stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .spawn()
             {
-                Ok(_) => tracing::debug!("double-click hook spawned: {}", cmd),
+                Ok(mut child) => {
+                    tracing::debug!("double-click hook spawned: {}", cmd);
+                    if let Some(ref mut stdin) = child.stdin {
+                        if let Err(e) = stdin.write_all(json_payload.as_bytes()) {
+                            tracing::warn!("failed to write to hook stdin: {}", e);
+                        }
+                    }
+                }
                 Err(e) => tracing::warn!("double-click hook failed: {}: {}", cmd, e),
             }
         }

@@ -370,6 +370,35 @@ fn test_substitute_hook_empty_template() {
     assert_eq!(result, "");
 }
 
+// --- SessionSnapshot stdin tests ---
+
+#[test]
+fn test_execute_double_click_hook_serializes_session_snapshot() {
+    use crate::SessionSnapshot;
+
+    // Create a session with known values
+    let mut session = Session::new(
+        "test-session-123".to_string(),
+        AgentType::ClaudeCode,
+        Some(PathBuf::from("/tmp/test-project")),
+    );
+    session.status = Status::Attention;
+
+    // Convert to SessionSnapshot and serialize
+    let snapshot: SessionSnapshot = (&session).into();
+    let json_str = serde_json::to_string(&snapshot).expect("should serialize");
+
+    // Verify the JSON can be deserialized back to SessionSnapshot
+    let parsed: SessionSnapshot = serde_json::from_str(&json_str)
+        .expect("Should be valid SessionSnapshot JSON");
+
+    assert_eq!(parsed.session_id, "test-session-123");
+    assert_eq!(parsed.status, "attention");
+    assert_eq!(parsed.working_dir, Some("/tmp/test-project".to_string()));
+    assert_eq!(parsed.agent_type, "claudecode");
+    assert!(!parsed.closed);
+}
+
 // --- Mouse Interaction Tests (acd-211) ---
 
 use crate::tui::test_utils::{find_row_with_text, render_dashboard_to_buffer};
