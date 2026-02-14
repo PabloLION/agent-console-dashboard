@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Smoke test for Agent Console Dashboard
-# Automates non-interactive parts of the E2E test plan
+# E2E test for Agent Console Dashboard
+# Automated daemon lifecycle and hook simulation test
 
 set -euo pipefail
 
@@ -67,7 +67,7 @@ trap cleanup EXIT
 
 # Step 2: Start daemon in background
 info "Step 2: Starting daemon..."
-"$ACD_BIN" daemon --socket "$SOCKET_PATH" &
+"$ACD_BIN" daemon start --socket "$SOCKET_PATH" &
 DAEMON_PID=$!
 info "Daemon started with PID: $DAEMON_PID"
 
@@ -154,7 +154,7 @@ fi
 
 # Step 7: Stop daemon
 info "Step 7: Stopping daemon..."
-"$ACD_BIN" daemon-stop --socket "$SOCKET_PATH" >/dev/null 2>&1 || fail "Failed to stop daemon"
+"$ACD_BIN" daemon stop --force --socket "$SOCKET_PATH" >/dev/null 2>&1 || fail "Failed to stop daemon"
 
 # Wait for daemon to exit (socket cleanup may take a moment)
 for i in $(seq 1 5); do

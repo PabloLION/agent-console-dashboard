@@ -309,5 +309,5 @@ All steps should complete without errors. The following must hold:
 
 ## Automation
 
-See `scripts/smoke-test.sh` for an automated version of steps 1-6 and 8-9. The
-TUI (step 7) cannot be automated and must be tested manually.
+See `scripts/e2e-test.sh` for an automated version of steps 1-6 and 8-9. The TUI
+(step 7) cannot be automated and must be tested manually.

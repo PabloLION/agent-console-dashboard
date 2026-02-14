@@ -1,15 +1,16 @@
-# Smoke Test Guide
+# Manual Test Guide
 
-Template for generating release-specific smoke test checklists. Each release,
+Template for generating release-specific manual test checklists. Each release,
 generate a concrete checklist from this template covering recent changes and
-regression-prone areas.
+regression-prone areas. For automated E2E testing, see `scripts/e2e-test.sh`.
 
 ## Pre-Test Setup
 
-### Build
+### Build and Install
 
-- Build from source: `cargo build -p agent-console-dashboard`
+- Install from source: `cargo install --path crates/agent-console-dashboard`
 - Verify version: `acd --version` (should match Cargo.toml)
+- Verify binary location: `which acd` (should point to cargo bin)
 
 ### Clean State
 
@@ -22,15 +23,19 @@ regression-prone areas.
 
 ### Install and Hooks
 
-- `acd install` registers all expected hooks (count and event types)
+- `acd install` registers all expected hooks (7 hooks, no PostToolUse)
 - `acd uninstall` removes all hooks cleanly
 - Reinstall after uninstall works correctly
-- Verify hook list matches `acd_hook_definitions()` in main.rs
+- Verify hook count matches between `acd install` output and
+  `~/.claude/settings.json` hooks section
 
 ### Daemon Lifecycle
 
 - `acd daemon start` starts the daemon (check process exists)
-- `acd daemon stop` stops it cleanly
+- `acd daemon stop` shows confirmation prompt when sessions are active
+- `acd daemon stop --force` stops without confirmation
+- `acd status` shows running state, uptime, session counts, memory, socket path
+- `acd dump` returns valid JSON with all sessions and metadata
 - Daemon auto-starts via hooks (start a Claude Code session without manual
   daemon start)
 - Idle timeout shuts down daemon after configured period
@@ -50,10 +55,11 @@ regression-prone areas.
 
 - Start a Claude Code session in a project directory
 - TUI shows new session with correct directory basename, session ID, and status
-- Status transitions: working (green) → attention (yellow) when waiting for
-  input
-- Elapsed time counts up correctly
-- Session closure shows "closed" status (gray)
+- Status transitions: working (green) → attention (yellow) → question (blue)
+- Elapsed time counts up correctly (throttled to 1-second updates)
+- Session closure shows "closed" status (gray, dimmed same as inactive)
+- Sort order: status group → priority (higher first) → time elapsed
+- `acd resurrect <session_id>` reopens a closed session
 
 ### Navigation and Interaction
 
@@ -75,8 +81,13 @@ regression-prone areas.
 
 - `acd config init` creates default config file
 - `acd config init` with existing file returns error
-- `acd config init --force` backs up and recreates
-- `acd config show` displays current configuration
+- `acd config init --force` backs up and recreates (shows backup path)
+- `acd config path` shows config file location
+- `acd config show` displays current effective configuration
+- `acd config validate` reports valid or shows parse errors with line/column
+- `acd config edit` opens config in `$VISUAL` or `$EDITOR` (backs up first)
+- `acd config edit` with no config file returns error ("Run acd config init
+  first")
 
 ### Debug Mode
 
@@ -96,16 +107,20 @@ Areas that have historically broken. Always test these regardless of changes:
 
 - Elapsed time resets correctly on status change
 - Inactive sessions show "◌" symbol and "inactive" status
+- Closed sessions dimmed identically to inactive (gray text)
+- Highlighted inactive/closed session text is readable (black text on highlight)
 - Multiple sessions with same directory basename disambiguate with parent
 - Config file parse errors show line and column
 - Status message auto-expires (doesn't persist after timeout)
+- Hook count stays at 7 (no PostToolUse per acd-ws6 experiment)
 
 ## Generating a Release Checklist
 
 For each release:
 
 1. Start with all items from Test Categories above
-2. Add specific items for each feature/fix in the release
-3. Add regression items for any area that was modified
-4. Mark items as PASS/FAIL during testing
-5. Record any issues found as beads issues
+2. Run `scripts/e2e-test.sh` for automated daemon lifecycle verification
+3. Add specific items for each feature/fix in the release
+4. Add regression items for any area that was modified
+5. Mark items as PASS/FAIL during testing
+6. Record any issues found as beads issues

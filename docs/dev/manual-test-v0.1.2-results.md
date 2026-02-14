@@ -1,4 +1,4 @@
-# Smoke Test Results — v0.1.2
+# Manual Test Results — v0.1.2
 
 Tested: 2026-02-12
 
