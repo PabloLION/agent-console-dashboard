@@ -120,11 +120,24 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
             Action::None
         }
         KeyCode::Enter => {
+            // Enter on focused session fires the double-click hook (same as double-click)
             if let Some(idx) = app.selected_index {
-                Action::OpenDetail(idx)
-            } else {
-                Action::None
+                if let Some(session) = app.sessions.get(idx) {
+                    if app.double_click_hook.is_some() {
+                        let session_clone = session.clone();
+                        app.execute_double_click_hook(&session_clone);
+                        return Action::None;
+                    } else {
+                        // No hook configured — show hint message
+                        app.status_message = Some((
+                            "Set tui.double_click_hook in config to enable Enter action".to_string(),
+                            std::time::Instant::now() + std::time::Duration::from_secs(3),
+                        ));
+                        return Action::None;
+                    }
+                }
             }
+            Action::None
         }
         KeyCode::Char('r') => {
             if let Some(session) = app.selected_session() {
@@ -145,7 +158,11 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
             }
         }
         KeyCode::Char(c @ '1'..='4') => Action::SwitchLayout(c as u8 - b'0'),
-        KeyCode::Esc => Action::Back,
+        KeyCode::Esc => {
+            // Esc clears selection (defocus)
+            app.selected_index = None;
+            Action::None
+        }
         _ => Action::None,
     }
 }

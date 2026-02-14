@@ -29,11 +29,15 @@ use tokio::sync::mpsc;
 const ELAPSED_TIME_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Active view state for the TUI.
+///
+/// Deprecated: detail panel is now always visible. This enum is kept for
+/// backward compatibility but only Dashboard variant is used. The history
+/// scroll offset is tracked directly in App.history_scroll.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum View {
-    /// Main dashboard showing session list.
+    /// Main dashboard showing session list with always-visible detail panel.
     Dashboard,
-    /// Detail modal overlay for a specific session.
+    /// Detail modal overlay (deprecated, not used).
     Detail {
         /// Index of the session being viewed.
         session_index: usize,
@@ -55,8 +59,10 @@ pub struct App {
     pub sessions: Vec<Session>,
     /// Currently selected session index in the list.
     pub selected_index: Option<usize>,
-    /// Current active view.
+    /// Current active view (deprecated, always Dashboard now).
     pub view: View,
+    /// Scroll offset for history entries in the detail panel.
+    pub history_scroll: usize,
     /// Active layout preset index (1=default, 2=compact).
     pub layout_preset: u8,
     /// Latest API usage data from the daemon, if available.
@@ -84,6 +90,7 @@ impl App {
             sessions: Vec::new(),
             selected_index: None,
             view: View::Dashboard,
+            history_scroll: 0,
             layout_preset: 1,
             usage: None,
             last_click: None,
@@ -103,20 +110,32 @@ impl App {
     }
 
     /// Moves the selection down by one, clamped to the last session.
+    ///
+    /// Resets history scroll when selection changes.
     pub fn select_next(&mut self) {
         if self.sessions.is_empty() {
             return;
         }
         let last = self.sessions.len().saturating_sub(1);
-        self.selected_index = Some(self.selected_index.map_or(0, |i| (i + 1).min(last)));
+        let new_idx = self.selected_index.map_or(0, |i| (i + 1).min(last));
+        if self.selected_index != Some(new_idx) {
+            self.history_scroll = 0;
+        }
+        self.selected_index = Some(new_idx);
     }
 
     /// Moves the selection up by one, clamped to index 0.
+    ///
+    /// Resets history scroll when selection changes.
     pub fn select_previous(&mut self) {
         if self.sessions.is_empty() {
             return;
         }
-        self.selected_index = Some(self.selected_index.map_or(0, |i| i.saturating_sub(1)));
+        let new_idx = self.selected_index.map_or(0, |i| i.saturating_sub(1));
+        if self.selected_index != Some(new_idx) {
+            self.history_scroll = 0;
+        }
+        self.selected_index = Some(new_idx);
     }
 
     /// Returns a reference to the currently selected session, if any.
@@ -125,31 +144,29 @@ impl App {
     }
 
     /// Opens the detail view for the session at `index`.
-    pub fn open_detail(&mut self, index: usize) {
-        if index < self.sessions.len() {
-            self.view = View::Detail {
-                session_index: index,
-                history_scroll: 0,
-            };
-        }
+    ///
+    /// Deprecated: detail panel is always visible. This method is kept for
+    /// backward compatibility but has no effect (detail is always shown).
+    pub fn open_detail(&mut self, _index: usize) {
+        // No-op: detail panel is always visible based on selected_index
     }
 
     /// Closes any overlay and returns to the dashboard view.
+    ///
+    /// Deprecated: detail panel is always visible. This method now just clears
+    /// the selection (defocus).
     pub fn close_detail(&mut self) {
-        self.view = View::Dashboard;
+        self.selected_index = None;
+        self.history_scroll = 0;
     }
 
     /// Scrolls the detail history down by one entry.
     pub fn scroll_history_down(&mut self) {
-        if let View::Detail {
-            session_index,
-            ref mut history_scroll,
-        } = self.view
-        {
-            if let Some(session) = self.sessions.get(session_index) {
+        if let Some(idx) = self.selected_index {
+            if let Some(session) = self.sessions.get(idx) {
                 let max_scroll = session.history.len().saturating_sub(5);
-                if *history_scroll < max_scroll {
-                    *history_scroll += 1;
+                if self.history_scroll < max_scroll {
+                    self.history_scroll += 1;
                 }
             }
         }
@@ -157,13 +174,7 @@ impl App {
 
     /// Scrolls the detail history up by one entry.
     pub fn scroll_history_up(&mut self) {
-        if let View::Detail {
-            ref mut history_scroll,
-            ..
-        } = self.view
-        {
-            *history_scroll = history_scroll.saturating_sub(1);
-        }
+        self.history_scroll = self.history_scroll.saturating_sub(1);
     }
 
     /// Executes the double-click hook for the given session, if configured.
@@ -171,7 +182,7 @@ impl App {
     /// Substitutes `{session_id}`, `{working_dir}`, and `{status}` placeholders
     /// in the hook command, then spawns it via `sh -c` in fire-and-forget mode.
     /// The child process is detached (stdout/stderr piped to null).
-    fn execute_double_click_hook(&self, session: &Session) {
+    pub fn execute_double_click_hook(&self, session: &Session) {
         if let Some(ref hook) = self.double_click_hook {
             let cmd = substitute_hook_placeholders(hook, session);
             tracing::debug!("executing double-click hook: {}", cmd);
@@ -208,10 +219,10 @@ impl App {
 
     /// Handles a mouse event and returns the appropriate action.
     ///
-    /// Processes mouse events in both Dashboard and Detail views since the
-    /// detail panel is rendered inline (not as a modal overlay). Left click
-    /// selects a session and immediately opens the inline detail panel.
-    /// Double-click fires a configurable hook (see `double_click_hook`).
+    /// Processes mouse events for session list interaction. Left click focuses
+    /// a session (updating the always-visible detail panel). Double-click focuses
+    /// and fires the configurable hook. Scroll wheel always navigates sessions —
+    /// the detail panel never steals focus.
     fn handle_mouse_event(&mut self, mouse: MouseEvent) -> Action {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
@@ -226,6 +237,10 @@ impl App {
                 };
 
                 if let Some(idx) = self.calculate_clicked_session(mouse.row) {
+                    // Reset history scroll when clicking a different session
+                    if self.selected_index != Some(idx) {
+                        self.history_scroll = 0;
+                    }
                     self.selected_index = Some(idx);
                     if is_double_click {
                         self.last_click = None;
@@ -249,31 +264,23 @@ impl App {
                         }
                         return Action::None;
                     }
-                    // Single click: select + open inline detail
-                    self.open_detail(idx);
+                    // Single click: just focus the session (detail panel updates automatically)
                 } else {
-                    // Click on header or outside list → clear selection
+                    // Click on header or outside list → clear selection (defocus)
                     self.selected_index = None;
-                    self.view = View::Dashboard;
                 }
 
                 self.last_click = Some((now, mouse.row, mouse.column));
                 Action::None
             }
             MouseEventKind::ScrollDown => {
-                if matches!(self.view, View::Detail { .. }) {
-                    self.scroll_history_down();
-                } else {
-                    self.select_next();
-                }
+                // Scroll always navigates sessions (detail panel never steals focus)
+                self.select_next();
                 Action::None
             }
             MouseEventKind::ScrollUp => {
-                if matches!(self.view, View::Detail { .. }) {
-                    self.scroll_history_up();
-                } else {
-                    self.select_previous();
-                }
+                // Scroll always navigates sessions (detail panel never steals focus)
+                self.select_previous();
                 Action::None
             }
             _ => Action::None,
@@ -343,9 +350,9 @@ impl App {
                             self.should_quit = true;
                             return Ok(());
                         }
-                        Action::OpenDetail(idx) => {
-                            tracing::debug!("open detail view for session index {idx}");
-                            self.open_detail(idx);
+                        Action::OpenDetail(_) => {
+                            // OpenDetail action is deprecated (detail is always visible)
+                            // No-op for backward compatibility
                         }
                         Action::Resurrect(id) => {
                             tracing::debug!("resurrect session {id}");
@@ -362,7 +369,8 @@ impl App {
                             }
                         }
                         Action::Back => {
-                            self.close_detail();
+                            // Back action now just clears selection (defocus)
+                            self.selected_index = None;
                         }
                         Action::ScrollHistoryDown => {
                             self.scroll_history_down();

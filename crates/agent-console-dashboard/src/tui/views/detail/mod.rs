@@ -102,6 +102,9 @@ pub fn render_inline_detail(
 }
 
 /// Renders a placeholder message when no session is selected.
+///
+/// Shows a hint message with keybinding guidance to help users understand
+/// how to navigate and interact with sessions.
 pub fn render_detail_placeholder(frame: &mut Frame, area: Rect) {
     if area.height < 3 || area.width < 20 {
         return;
@@ -115,10 +118,24 @@ pub fn render_detail_placeholder(frame: &mut Frame, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let text = Paragraph::new(Line::from(vec![Span::styled(
-        "Select a session to show detail",
-        Style::default().fg(Color::DarkGray),
-    )]));
+    // Build hint text with keybinding guidance
+    let lines = vec![
+        Line::from(vec![Span::styled(
+            "Select a session to see details",
+            Style::default().fg(Color::DarkGray),
+        )]),
+        Line::from(vec![]),
+        Line::from(vec![
+            Span::styled("[j/k] ", Style::default().fg(Color::Cyan)),
+            Span::styled("Navigate  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[Enter] ", Style::default().fg(Color::Cyan)),
+            Span::styled("Hook  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("[q] ", Style::default().fg(Color::Cyan)),
+            Span::styled("Quit", Style::default().fg(Color::DarkGray)),
+        ]),
+    ];
+
+    let text = Paragraph::new(lines);
     frame.render_widget(text, inner);
 }
 

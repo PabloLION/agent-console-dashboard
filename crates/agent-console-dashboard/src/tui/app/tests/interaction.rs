@@ -42,14 +42,9 @@ fn test_mouse_left_click_selects_and_opens_detail() {
     let action = app.handle_mouse_event(mouse);
     assert_eq!(action, Action::None);
     assert_eq!(app.selected_index, Some(2));
-    // Single click should also open inline detail
-    assert_eq!(
-        app.view,
-        View::Detail {
-            session_index: 2,
-            history_scroll: 0,
-        }
-    );
+    // Single click focuses the session (detail panel updates automatically)
+    // View stays as Dashboard (detail is always visible)
+    assert_eq!(app.view, View::Dashboard);
 }
 
 #[test]
@@ -74,28 +69,19 @@ fn test_mouse_left_click_header_clears_selection() {
 fn test_mouse_header_click_from_detail_view_returns_to_dashboard() {
     let mut app = make_app_with_sessions(3);
     app.selected_index = Some(1);
+    // open_detail is now deprecated (no-op), but call it for backward compat
     app.open_detail(1);
-    assert_eq!(
-        app.view,
-        View::Detail {
-            session_index: 1,
-            history_scroll: 0,
-        },
-        "Should start in Detail view"
-    );
+    // View is always Dashboard now (detail panel is always visible)
+    assert_eq!(app.view, View::Dashboard, "View is always Dashboard");
     // Click header
     let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 10);
     let action = app.handle_mouse_event(mouse);
     assert_eq!(action, Action::None);
     assert_eq!(
         app.selected_index, None,
-        "Header click should clear selection"
+        "Header click should clear selection (defocus)"
     );
-    assert_eq!(
-        app.view,
-        View::Dashboard,
-        "Header click should return to Dashboard view"
-    );
+    assert_eq!(app.view, View::Dashboard, "View stays as Dashboard");
 }
 
 #[test]
@@ -110,18 +96,13 @@ fn test_initial_state_no_selection() {
 #[test]
 fn test_mouse_double_click_fires_hook_returns_none() {
     let mut app = make_app_with_sessions(3);
-    // First click: selects and opens inline detail
+    // First click: focuses the session
     let mouse1 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
     let action1 = app.handle_mouse_event(mouse1);
     assert_eq!(action1, Action::None);
     assert_eq!(app.selected_index, Some(1));
-    assert_eq!(
-        app.view,
-        View::Detail {
-            session_index: 1,
-            history_scroll: 0,
-        }
-    );
+    // View is always Dashboard (detail panel is always visible)
+    assert_eq!(app.view, View::Dashboard);
 
     // Second click in quick succession at same position (double-click)
     let mouse2 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
@@ -183,6 +164,7 @@ fn test_mouse_scroll_at_boundaries() {
 #[test]
 fn test_mouse_click_in_detail_view_reselects() {
     let mut app = make_app_with_sessions(3);
+    // open_detail is deprecated (no-op)
     app.open_detail(0);
     app.selected_index = Some(0);
 
@@ -190,13 +172,8 @@ fn test_mouse_click_in_detail_view_reselects() {
     let action = app.handle_mouse_event(mouse);
     assert_eq!(action, Action::None);
     assert_eq!(app.selected_index, Some(1));
-    assert_eq!(
-        app.view,
-        View::Detail {
-            session_index: 1,
-            history_scroll: 0,
-        }
-    );
+    // View is always Dashboard (detail is always visible)
+    assert_eq!(app.view, View::Dashboard);
 }
 
 #[test]
@@ -210,18 +187,16 @@ fn test_mouse_scroll_in_detail_view_scrolls_history() {
             duration: std::time::Duration::from_secs(1),
         });
     }
-    app.open_detail(0);
+    app.selected_index = Some(0);
 
+    // Scroll now always navigates sessions (detail panel never steals focus)
     let scroll = make_mouse_event(MouseEventKind::ScrollDown, 5, 10);
     let action = app.handle_mouse_event(scroll);
     assert_eq!(action, Action::None);
-    assert_eq!(
-        app.view,
-        View::Detail {
-            session_index: 0,
-            history_scroll: 1,
-        }
-    );
+    // Scroll down tries to select next session (clamped at boundary)
+    assert_eq!(app.selected_index, Some(0));
+    // View is always Dashboard
+    assert_eq!(app.view, View::Dashboard);
 }
 
 #[test]
