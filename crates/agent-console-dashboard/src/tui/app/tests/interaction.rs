@@ -55,6 +55,7 @@ fn test_calculate_clicked_session_out_of_bounds() {
 }
 
 #[test]
+#[serial]
 fn test_mouse_left_click_selects_and_opens_detail() {
     use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(5);
@@ -73,6 +74,7 @@ fn test_mouse_left_click_selects_and_opens_detail() {
 }
 
 #[test]
+#[serial]
 fn test_mouse_left_click_header_clears_selection() {
     let mut app = make_app_with_sessions(3);
     app.selected_index = Some(1);
@@ -91,6 +93,7 @@ fn test_mouse_left_click_header_clears_selection() {
 }
 
 #[test]
+#[serial]
 fn test_mouse_header_click_from_detail_view_returns_to_dashboard() {
     let mut app = make_app_with_sessions(3);
     app.selected_index = Some(1);
@@ -110,6 +113,7 @@ fn test_mouse_header_click_from_detail_view_returns_to_dashboard() {
 }
 
 #[test]
+#[serial]
 fn test_initial_state_no_selection() {
     let app = App::new(PathBuf::from("/tmp/test.sock"));
     assert_eq!(
@@ -119,6 +123,7 @@ fn test_initial_state_no_selection() {
 }
 
 #[test]
+#[serial]
 fn test_mouse_double_click_fires_hook_returns_none() {
     use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
@@ -141,6 +146,7 @@ fn test_mouse_double_click_fires_hook_returns_none() {
 }
 
 #[test]
+#[serial]
 fn test_mouse_double_click_different_position_no_detail() {
     use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(5);
@@ -159,6 +165,7 @@ fn test_mouse_double_click_different_position_no_detail() {
 }
 
 #[test]
+#[serial]
 fn test_mouse_scroll_down_selects_next() {
     let mut app = make_app_with_sessions(5);
     app.selected_index = Some(1);
@@ -169,6 +176,7 @@ fn test_mouse_scroll_down_selects_next() {
 }
 
 #[test]
+#[serial]
 fn test_mouse_scroll_up_selects_previous() {
     let mut app = make_app_with_sessions(5);
     app.selected_index = Some(2);
@@ -179,6 +187,7 @@ fn test_mouse_scroll_up_selects_previous() {
 }
 
 #[test]
+#[serial]
 fn test_mouse_scroll_at_boundaries() {
     let mut app = make_app_with_sessions(3);
     // Scroll down at end
@@ -195,6 +204,7 @@ fn test_mouse_scroll_at_boundaries() {
 }
 
 #[test]
+#[serial]
 fn test_mouse_click_in_detail_view_reselects() {
     use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
@@ -214,6 +224,7 @@ fn test_mouse_click_in_detail_view_reselects() {
 }
 
 #[test]
+#[serial]
 fn test_mouse_scroll_in_detail_view_scrolls_history() {
     let mut app = make_app_with_sessions(1);
     for _ in 0..10 {
@@ -237,6 +248,7 @@ fn test_mouse_scroll_in_detail_view_scrolls_history() {
 }
 
 #[test]
+#[serial]
 fn test_mouse_right_click_ignored() {
     use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
@@ -251,24 +263,28 @@ fn test_mouse_right_click_ignored() {
 }
 
 #[test]
+#[serial]
 fn test_last_click_initialized_to_none() {
     let app = App::new(PathBuf::from("/tmp/test.sock"));
     assert!(app.last_click.is_none());
 }
 
 #[test]
+#[serial]
 fn test_double_click_hook_default_none() {
     let app = App::new(PathBuf::from("/tmp/test.sock"));
     assert!(app.double_click_hook.is_none());
 }
 
 #[test]
+#[serial]
 fn test_status_message_default_none() {
     let app = App::new(PathBuf::from("/tmp/test.sock"));
     assert!(app.status_message.is_none());
 }
 
 #[test]
+#[serial]
 fn test_double_click_no_hook_sets_config_message() {
     use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
@@ -291,6 +307,7 @@ fn test_double_click_no_hook_sets_config_message() {
 }
 
 #[test]
+#[serial]
 fn test_double_click_with_hook_sets_confirmation() {
     use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
@@ -310,6 +327,7 @@ fn test_double_click_with_hook_sets_confirmation() {
 }
 
 #[test]
+#[serial]
 fn test_expire_status_message_clears_expired() {
     let mut app = App::new(PathBuf::from("/tmp/test.sock"));
     app.status_message = Some((
@@ -324,6 +342,7 @@ fn test_expire_status_message_clears_expired() {
 }
 
 #[test]
+#[serial]
 fn test_expire_status_message_keeps_fresh() {
     let mut app = App::new(PathBuf::from("/tmp/test.sock"));
     app.status_message = Some((
@@ -337,6 +356,7 @@ fn test_expire_status_message_keeps_fresh() {
 // --- substitute_hook_placeholders tests ---
 
 #[test]
+#[serial]
 fn test_substitute_hook_all_placeholders() {
     let session = Session::new(
         "sess-123".to_string(),
@@ -348,6 +368,7 @@ fn test_substitute_hook_all_placeholders() {
 }
 
 #[test]
+#[serial]
 fn test_substitute_hook_status_placeholder() {
     let mut session = Session::new(
         "sess-456".to_string(),
@@ -360,6 +381,7 @@ fn test_substitute_hook_status_placeholder() {
 }
 
 #[test]
+#[serial]
 fn test_substitute_hook_no_placeholders() {
     let session = Session::new(
         "sess-789".to_string(),
@@ -371,6 +393,7 @@ fn test_substitute_hook_no_placeholders() {
 }
 
 #[test]
+#[serial]
 fn test_substitute_hook_repeated_placeholders() {
     let session = Session::new(
         "abc".to_string(),
@@ -382,6 +405,7 @@ fn test_substitute_hook_repeated_placeholders() {
 }
 
 #[test]
+#[serial]
 fn test_substitute_hook_empty_template() {
     let session = Session::new(
         "s".to_string(),
@@ -395,6 +419,7 @@ fn test_substitute_hook_empty_template() {
 // --- SessionSnapshot stdin tests ---
 
 #[test]
+#[serial]
 fn test_execute_double_click_hook_serializes_session_snapshot() {
     use crate::SessionSnapshot;
 
@@ -427,6 +452,7 @@ use crate::tui::test_utils::{find_row_with_text, render_dashboard_to_buffer};
 use ratatui::style::Color;
 
 #[test]
+#[serial]
 fn test_click_selects_and_renders_highlight() {
     let mut app = make_app_with_sessions(5);
     app.selected_index = Some(0);
@@ -465,6 +491,7 @@ fn test_click_selects_and_renders_highlight() {
 }
 
 #[test]
+#[serial]
 fn test_no_selection_renders_no_highlight() {
     let mut app = make_app_with_sessions(3);
     app.selected_index = None;
@@ -492,6 +519,7 @@ fn test_no_selection_renders_no_highlight() {
 // --- Rect-Based Click Detection Tests (acd-khj) ---
 
 #[test]
+#[serial]
 fn test_click_detection_works_in_normal_mode() {
     use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
@@ -512,6 +540,7 @@ fn test_click_detection_works_in_normal_mode() {
 }
 
 #[test]
+#[serial]
 fn test_click_detection_works_in_narrow_mode() {
     use crate::tui::test_utils::render_dashboard_to_buffer;
     let mut app = make_app_with_sessions(3);
@@ -532,13 +561,17 @@ fn test_click_detection_works_in_narrow_mode() {
 }
 
 #[test]
+#[serial]
 fn test_click_detection_returns_none_without_render() {
     let mut app = make_app_with_sessions(3);
     // Don't render - session_list_inner_area is None
 
     // Click should return None because inner_area is not set
     let result = app.calculate_clicked_session(3);
-    assert_eq!(result, None, "Should return None when session_list_inner_area is None");
+    assert_eq!(
+        result, None,
+        "Should return None when session_list_inner_area is None"
+    );
 }
 
 #[test]
