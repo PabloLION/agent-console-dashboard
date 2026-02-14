@@ -18,7 +18,7 @@ fn test_detail_renders_below_session_list_not_centered() {
     app.init_selection();
     app.open_detail(0);
 
-    let buffer = render_dashboard_to_buffer(&app, 80, 30);
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 30);
 
     let status_row = find_row_with_text(&buffer, "Status:").expect("should find Status: in detail");
 
@@ -42,7 +42,7 @@ fn test_detail_section_shows_session_status() {
     app.init_selection();
     app.open_detail(0);
 
-    let buffer = render_dashboard_to_buffer(&app, 80, 30);
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 30);
 
     assert!(
         find_row_with_text(&buffer, "Status:").is_some(),
@@ -66,7 +66,7 @@ fn test_detail_section_shows_working_directory() {
     app.init_selection();
     app.open_detail(0);
 
-    let buffer = render_dashboard_to_buffer(&app, 80, 30);
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 30);
 
     assert!(
         find_row_with_text(&buffer, "Dir:").is_some(),
@@ -90,7 +90,7 @@ fn test_detail_section_shows_session_id() {
     app.init_selection();
     app.open_detail(0);
 
-    let buffer = render_dashboard_to_buffer(&app, 80, 30);
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 30);
 
     assert!(
         find_row_with_text(&buffer, "ID:").is_some(),

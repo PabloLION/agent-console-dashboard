@@ -141,7 +141,11 @@ pub fn render_session_list_to_buffer(
 ///
 /// Creates a terminal of the specified size, renders the full dashboard using
 /// `render_dashboard`, and returns the resulting buffer.
-pub fn render_dashboard_to_buffer(app: &crate::tui::app::App, width: u16, height: u16) -> Buffer {
+pub fn render_dashboard_to_buffer(
+    app: &mut crate::tui::app::App,
+    width: u16,
+    height: u16,
+) -> Buffer {
     let mut terminal = test_terminal(width, height);
     terminal
         .draw(|frame| {

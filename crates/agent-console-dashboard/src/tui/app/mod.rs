@@ -15,6 +15,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use ratatui::layout::Rect;
 use ratatui::prelude::{CrosstermBackend, Terminal};
 use std::io::{self, stdout};
 use std::path::PathBuf;
@@ -78,6 +79,11 @@ pub struct App {
     pub status_message: Option<(String, Instant)>,
     /// Last time elapsed-time rendering occurred (for throttling passive updates).
     last_elapsed_render: Instant,
+    /// Inner area of the session list widget (excluding block borders).
+    ///
+    /// Updated during each render pass. Used by mouse click detection to accurately
+    /// map click coordinates to session indices. None if the list hasn't been rendered yet.
+    pub session_list_inner_area: Option<Rect>,
 }
 
 impl App {
@@ -97,6 +103,7 @@ impl App {
             double_click_hook: None,
             status_message: None,
             last_elapsed_render: Instant::now(),
+            session_list_inner_area: None,
         }
     }
 
@@ -227,14 +234,18 @@ impl App {
     /// Calculates which session index was clicked based on mouse row coordinate.
     ///
     /// Returns None if the click was outside the session list area.
-    /// Accounts for header (1 line) and block borders (1 line at top).
+    /// Uses the stored inner area from the last render pass to accurately map
+    /// click coordinates to session indices across all layout modes (normal, debug, narrow).
     fn calculate_clicked_session(&self, row: u16) -> Option<usize> {
-        // Header takes 1 line, block border takes 1 line
-        // Session list starts at row 2
-        if row < 2 {
+        let inner_area = self.session_list_inner_area?;
+
+        // Check if click is within the inner area
+        if row < inner_area.y || row >= inner_area.y + inner_area.height {
             return None;
         }
-        let list_row = (row - 2) as usize;
+
+        // Calculate session index from row offset within inner area
+        let list_row = (row - inner_area.y) as usize;
         if list_row < self.sessions.len() {
             Some(list_row)
         } else {

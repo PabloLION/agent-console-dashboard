@@ -10,8 +10,8 @@ use crate::tui::test_utils::{
 #[test]
 fn test_dashboard_buffer_contains_header_text() {
     use crate::tui::app::App;
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
-    let buffer = render_dashboard_to_buffer(&app, 80, 24);
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
     assert!(
         find_row_with_text(&buffer, "Agent Console Dashboard").is_some(),
         "Buffer should contain header text"
@@ -21,8 +21,8 @@ fn test_dashboard_buffer_contains_header_text() {
 #[test]
 fn test_dashboard_buffer_contains_footer_keybindings() {
     use crate::tui::app::App;
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
-    let buffer = render_dashboard_to_buffer(&app, 80, 24);
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
     let last_row = buffer.area().height - 1;
     assert!(
         row_contains(&buffer, last_row, "[q] Quit"),
@@ -33,8 +33,8 @@ fn test_dashboard_buffer_contains_footer_keybindings() {
 #[test]
 fn test_dashboard_buffer_contains_session_border() {
     use crate::tui::app::App;
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
-    let buffer = render_dashboard_to_buffer(&app, 80, 24);
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
     assert!(
         find_row_with_text(&buffer, "Sessions").is_some(),
         "Buffer should contain 'Sessions' border title"
@@ -51,7 +51,7 @@ fn test_dashboard_buffer_shows_session_names() {
         Some(PathBuf::from("/tmp")),
     ));
     app.init_selection();
-    let buffer = render_dashboard_to_buffer(&app, 80, 24);
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
     assert!(
         find_row_with_text(&buffer, "test-session-id").is_some(),
         "Buffer should contain session ID"
@@ -61,8 +61,8 @@ fn test_dashboard_buffer_shows_session_names() {
 #[test]
 fn test_dashboard_empty_renders_without_session_text() {
     use crate::tui::app::App;
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
-    let buffer = render_dashboard_to_buffer(&app, 80, 24);
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
     for row in 0..buffer.area().height {
         let text = row_text(&buffer, row);
         assert!(
@@ -82,7 +82,7 @@ fn test_dashboard_selected_session_has_highlight() {
         Some(PathBuf::from("/tmp")),
     ));
     app.init_selection();
-    let buffer = render_dashboard_to_buffer(&app, 80, 24);
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
     let session_row = find_row_with_text(&buffer, "highlighted").expect("should find session row");
     assert_text_bg_in_row(&buffer, session_row, "highlighted", Color::DarkGray);
 }
@@ -97,7 +97,7 @@ fn test_dashboard_selected_session_has_arrow_symbol() {
         Some(PathBuf::from("/tmp")),
     ));
     app.init_selection();
-    let buffer = render_dashboard_to_buffer(&app, 80, 24);
+    let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
     let session_row = find_row_with_text(&buffer, "with-arrow").expect("should find session");
     let row_string = row_text(&buffer, session_row);
     assert!(
