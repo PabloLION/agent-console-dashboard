@@ -3,7 +3,7 @@
 //! Provides the top-level `render_dashboard` function that composes
 //! the header, session list, and footer into a cohesive layout.
 
-use crate::tui::app::{App, View};
+use crate::tui::app::App;
 use crate::tui::views::dashboard::render_session_list;
 use crate::tui::views::detail::{render_detail_placeholder, render_inline_detail};
 use ratatui::{
@@ -19,47 +19,34 @@ use std::time::Instant;
 const HEADER_TEXT: &str = "Agent Console Dashboard";
 
 /// Footer text showing available keybindings.
-const FOOTER_TEXT: &str = "[j/k] Navigate  [Enter] Details  [r] Resurrect  [q] Quit";
+const FOOTER_TEXT: &str = "[j/k] Navigate  [Enter] Hook  [r] Resurrect  [q] Quit";
 
 /// Version string shown in the bottom-right corner.
 const VERSION_TEXT: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 
-/// Renders the full dashboard layout: header, session list, optional detail, and footer.
+/// Renders the full dashboard layout: header, session list, detail panel, and footer.
 ///
-/// When the detail view is active, the layout splits into four regions:
+/// The detail panel is always visible below the session list. It shows information
+/// about the currently focused session, or a hint message when no session is focused.
+/// Layout regions:
 /// - Header: 1 line showing the application title
 /// - Session list: flexible height (min 3 rows) showing all sessions
-/// - Detail panel: fixed height showing selected session detail
+/// - Detail panel: fixed height (12 lines) showing focused session info or hint
 /// - Footer: 1 line showing keybinding hints
-///
-/// When in dashboard-only mode, the detail panel is omitted and the session
-/// list gets all available vertical space.
 pub fn render_dashboard(frame: &mut Frame, app: &App) {
     let area = frame.area();
     let now = Instant::now();
 
-    let detail_active = matches!(app.view, View::Detail { .. });
-
-    let chunks = if detail_active {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1),  // header
-                Constraint::Min(3),     // session list (minimum 3 rows)
-                Constraint::Length(12), // detail panel
-                Constraint::Length(1),  // footer
-            ])
-            .split(area)
-    } else {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // header
-                Constraint::Min(1),    // session list
-                Constraint::Length(1), // footer
-            ])
-            .split(area)
-    };
+    // Detail panel is always visible
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),  // header
+            Constraint::Min(3),     // session list (minimum 3 rows)
+            Constraint::Length(12), // detail panel (always visible)
+            Constraint::Length(1),  // footer
+        ])
+        .split(area);
 
     // Header
     let header = Paragraph::new(Line::from(vec![Span::styled(
@@ -77,23 +64,18 @@ pub fn render_dashboard(frame: &mut Frame, app: &App) {
         area.width,
     );
 
-    // Detail panel (only when detail view is active)
-    if detail_active {
-        if let View::Detail {
-            session_index,
-            history_scroll,
-        } = app.view
-        {
-            if let Some(session) = app.sessions.get(session_index) {
-                render_inline_detail(frame, session, chunks[2], history_scroll, now);
-            } else {
-                render_detail_placeholder(frame, chunks[2]);
-            }
+    // Detail panel (always visible — shows focused session or placeholder)
+    if let Some(selected_idx) = app.selected_index {
+        if let Some(session) = app.sessions.get(selected_idx) {
+            render_inline_detail(frame, session, chunks[2], app.history_scroll, now);
+        } else {
+            render_detail_placeholder(frame, chunks[2]);
         }
+    } else {
+        render_detail_placeholder(frame, chunks[2]);
     }
 
     // Footer (with optional status message overlay)
-    let footer_idx = if detail_active { 3 } else { 2 };
     let footer_text = if let Some((ref msg, expiry)) = app.status_message {
         if Instant::now() < expiry {
             Line::from(vec![Span::styled(
@@ -113,7 +95,7 @@ pub fn render_dashboard(frame: &mut Frame, app: &App) {
         )])
     };
     let footer = Paragraph::new(footer_text);
-    frame.render_widget(footer, chunks[footer_idx]);
+    frame.render_widget(footer, chunks[3]);
 
     // Version string in the bottom-right corner (overlays footer area)
     let version = Paragraph::new(Line::from(vec![Span::styled(
@@ -121,7 +103,7 @@ pub fn render_dashboard(frame: &mut Frame, app: &App) {
         Style::default().fg(Color::DarkGray),
     )]))
     .alignment(Alignment::Right);
-    frame.render_widget(version, chunks[footer_idx]);
+    frame.render_widget(version, chunks[3]);
 }
 
 #[cfg(test)]
@@ -253,7 +235,7 @@ mod tests {
         assert!(FOOTER_TEXT.contains("[j/k]"));
         assert!(FOOTER_TEXT.contains("[q] Quit"));
         assert!(FOOTER_TEXT.contains("[r] Resurrect"));
-        assert!(FOOTER_TEXT.contains("[Enter] Details"));
+        assert!(FOOTER_TEXT.contains("[Enter] Hook"));
     }
 
     // --- Detail view (inline panel) tests ---
@@ -297,11 +279,8 @@ mod tests {
         let backend = ratatui::backend::TestBackend::new(80, 30);
         let mut terminal = ratatui::Terminal::new(backend).expect("failed to create test terminal");
         let mut app = make_app_with_sessions(2);
-        // Force detail view with out-of-bounds index to test placeholder path
-        app.view = View::Detail {
-            session_index: 99,
-            history_scroll: 0,
-        };
+        // Set out-of-bounds selection to test placeholder path
+        app.selected_index = Some(99);
         terminal
             .draw(|frame| render_dashboard(frame, &app))
             .expect("draw should not fail with out-of-bounds detail index");

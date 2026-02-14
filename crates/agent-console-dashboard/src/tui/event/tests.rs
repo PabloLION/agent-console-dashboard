@@ -143,8 +143,11 @@ fn test_handle_key_unknown_returns_none() {
 #[test]
 fn test_handle_enter_opens_detail() {
     let mut app = make_app_with_sessions(3);
+    // Enter now fires the hook (same as double-click), not OpenDetail
     let action = handle_key_event(&mut app, make_key(KeyCode::Enter, KeyModifiers::NONE));
-    assert_eq!(action, Action::OpenDetail(0));
+    // With no hook configured, it returns None and shows a status message
+    assert_eq!(action, Action::None);
+    assert!(app.status_message.is_some());
 }
 
 #[test]
@@ -192,8 +195,11 @@ fn test_handle_layout_keys() {
 #[test]
 fn test_handle_esc_returns_back() {
     let mut app = make_app_with_sessions(1);
+    app.selected_index = Some(0);
     let action = handle_key_event(&mut app, make_key(KeyCode::Esc, KeyModifiers::NONE));
-    assert_eq!(action, Action::Back);
+    // Esc now clears selection (defocus)
+    assert_eq!(action, Action::None);
+    assert_eq!(app.selected_index, None);
 }
 
 #[test]

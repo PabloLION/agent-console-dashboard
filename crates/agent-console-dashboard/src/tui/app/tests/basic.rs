@@ -192,13 +192,9 @@ fn test_single_session_navigation() {
 fn test_open_detail_sets_view() {
     let mut app = make_app_with_sessions(3);
     app.open_detail(1);
-    assert_eq!(
-        app.view,
-        View::Detail {
-            session_index: 1,
-            history_scroll: 0,
-        }
-    );
+    // open_detail is now deprecated (detail is always visible)
+    // View should still be Dashboard
+    assert_eq!(app.view, View::Dashboard);
 }
 
 #[test]
@@ -211,9 +207,11 @@ fn test_open_detail_out_of_bounds_no_change() {
 #[test]
 fn test_close_detail_returns_to_dashboard() {
     let mut app = make_app_with_sessions(3);
-    app.open_detail(0);
+    app.selected_index = Some(0);
     app.close_detail();
-    assert_eq!(app.view, View::Dashboard);
+    // close_detail now clears selection (defocus)
+    assert_eq!(app.selected_index, None);
+    assert_eq!(app.history_scroll, 0);
 }
 
 #[test]
@@ -228,15 +226,11 @@ fn test_scroll_history_down() {
             duration: std::time::Duration::from_secs(1),
         });
     }
-    app.open_detail(0);
+    app.selected_index = Some(0);
     app.scroll_history_down();
-    assert_eq!(
-        app.view,
-        View::Detail {
-            session_index: 0,
-            history_scroll: 1,
-        }
-    );
+    // History scroll is now tracked separately from View
+    assert_eq!(app.history_scroll, 1);
+    assert_eq!(app.view, View::Dashboard);
 }
 
 #[test]
@@ -250,32 +244,21 @@ fn test_scroll_history_up() {
             duration: std::time::Duration::from_secs(1),
         });
     }
-    app.view = View::Detail {
-        session_index: 0,
-        history_scroll: 3,
-    };
+    app.selected_index = Some(0);
+    app.history_scroll = 3;
     app.scroll_history_up();
-    assert_eq!(
-        app.view,
-        View::Detail {
-            session_index: 0,
-            history_scroll: 2,
-        }
-    );
+    // History scroll is now a field on App
+    assert_eq!(app.history_scroll, 2);
+    assert_eq!(app.view, View::Dashboard);
 }
 
 #[test]
 fn test_scroll_history_up_clamps_at_zero() {
     let mut app = make_app_with_sessions(1);
-    app.open_detail(0);
+    app.selected_index = Some(0);
     app.scroll_history_up();
-    assert_eq!(
-        app.view,
-        View::Detail {
-            session_index: 0,
-            history_scroll: 0,
-        }
-    );
+    assert_eq!(app.history_scroll, 0);
+    assert_eq!(app.view, View::Dashboard);
 }
 
 #[test]
