@@ -69,21 +69,25 @@ Press `q` to quit.
 acd daemon start           # Start in foreground
 acd daemon start --detach  # Start in background
 acd daemon stop            # Stop the daemon
-acd status                 # Check daemon health
+acd daemon status          # Check daemon health
+acd daemon dump            # Export all sessions as JSON
 ```
 
 ### Session Commands
 
 ```sh
-acd dump                   # Export all sessions as JSON
-acd resurrect <session-id> # Get resume command for a closed session
+acd session update <id> --status=working   # Update session status
+acd session update <id> --priority=5       # Set session priority
 ```
 
 ## Development
 
+See [Development Scripts](scripts/README.md) for available commands.
+
 ```sh
-cargo build
-cargo test
+./scripts/test.sh   # Run tests
+./scripts/lint.sh   # Check formatting + clippy
+./scripts/fmt.sh    # Auto-fix formatting
 ```
 
 ## License

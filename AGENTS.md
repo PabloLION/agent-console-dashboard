@@ -13,17 +13,19 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
+## Development Scripts
+
+@scripts/README.md
+
 ## Development Standards
 
 ### Rust
 
-- Run `cargo fmt -p agent-console-dashboard` before committing
-- Run `cargo clippy -p agent-console-dashboard -- -D warnings` — treat all
-  warnings as errors
-- Run `cargo test` to verify all tests pass
+- Run `./scripts/fmt.sh` before committing (or `cargo fmt --all`)
+- Run `./scripts/lint.sh` to check formatting + clippy
+- Run `./scripts/test.sh` to verify all tests pass
 - Use `expect("message")` over `unwrap()` — never use bare `unwrap()`
-- Pre-commit hooks run `cargo fmt --check`, `cargo clippy`, and `cargo test`
-  automatically
+- Pre-commit hooks run formatting, clippy, and tests automatically
 
 ### Testing
 
