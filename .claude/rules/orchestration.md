@@ -80,13 +80,15 @@ the pre-dispatch protocol.
 
 ### Pre-Dispatch Protocol (per issue)
 
-For each ready issue, before dispatching:
+For **every** issue, before dispatching — even when the orchestrator has zero
+doubts. The user may have doubts of their own. Never skip showing an issue.
 
 1. Show the full issue: run `bd show <id>` and print doubts **immediately
    after** that single output. Do NOT batch multiple `bd show` calls — present
    one issue at a time, doubts directly following the output, before moving to
    the next issue. If a doubt references another issue, run `bd show` for that
-   related issue inline (right where the doubt is stated).
+   related issue inline (right where the doubt is stated). If no doubts, state
+   "No doubts from orchestrator" explicitly.
 2. Wait for user's explicit go-ahead
 3. If user wants changes: update the issue first, then re-present
 4. When a doubt is cleared or a design decision is made, update the issue
