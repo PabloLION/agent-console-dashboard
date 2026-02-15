@@ -60,13 +60,22 @@ widgets = ["session-status:two-line", "api-usage"]
 # Note: Changing this requires a restart (not hot-reloadable).
 tick_rate = "250ms"
 
-# Shell command to run on double-click.
+# Shell command to run on double-click of active session (activate action).
+# Fires when double-clicking a non-closed session.
 # Supports placeholders: {session_id}, {working_dir}, {status}
 # Executed via `sh -c` (fire-and-forget, no callback).
 # Empty string means double-click has no effect.
 # Examples: "code {working_dir}", "tmux new-window -c {working_dir}"
 # Hot-reloadable: Yes
-double_click_hook = ""
+activate_hook = ""
+
+# Shell command to run on double-click of closed session (reopen action).
+# Supports placeholders: {session_id}, {working_dir}, {status}
+# Executed via `sh -c` (fire-and-forget, no callback).
+# Empty string means double-click has no effect.
+# Example: "zellij action new-tab -c {working_dir}"
+# Hot-reloadable: Yes
+reopen_hook = ""
 
 # ==============================================================================
 # Agent Configuration
