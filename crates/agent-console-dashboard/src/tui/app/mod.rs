@@ -226,7 +226,11 @@ impl App {
                 "activate_hook"
             };
             self.status_message = Some((
-                format!("Set tui.{} in {} to enable this action", key, config_path.display()),
+                format!(
+                    "Set tui.{} in {} to enable this action",
+                    key,
+                    config_path.display()
+                ),
                 Instant::now() + Duration::from_secs(3),
             ));
             return;
