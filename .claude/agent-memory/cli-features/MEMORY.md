@@ -106,3 +106,20 @@ invoke the CLI. Update all call sites when command paths change. Tests in
 Key insight: When making a field optional (e.g., status becomes `Option<&str>`),
 update handler to check if any fields provided and warn if none. This prevents
 silent no-ops.
+
+### Enhancing Uninstall Command (acd-lj1)
+
+When enhancing `run_uninstall_command()` to clean up the full system:
+
+1. Hook removal (existing functionality, preserve)
+2. Stop daemon: use `is_daemon_running()` and
+   `run_daemon_stop_command(&socket, true)` with force=true
+3. Remove socket file: use `agent_console_dashboard::config::xdg::socket_path()`
+   and `std::fs::remove_file()`
+4. Print config path: use `agent_console_dashboard::config::xdg::config_path()`
+   but do NOT delete
+
+Pattern: Use `agent_console_dashboard::` prefix for library imports from binary
+crate, not `crate::`. The binary crate (`src/main.rs`) imports from the library
+crate. Use graceful failures (warnings) for daemon stop and socket removal to
+avoid blocking uninstall on missing resources.
