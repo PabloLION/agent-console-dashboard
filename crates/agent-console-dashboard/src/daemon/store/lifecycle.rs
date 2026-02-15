@@ -234,4 +234,100 @@ impl SessionStore {
             None
         }
     }
+
+    /// Reopens a closed session by moving it from closed queue to active sessions.
+    ///
+    /// This method finds the session in the closed queue, removes it from there,
+    /// sets its status to `Status::Attention`, marks it as not closed, and
+    /// inserts it into the active sessions map. This operation is used when
+    /// resuming a previously closed session.
+    ///
+    /// # Arguments
+    ///
+    /// * `session_id` - The session ID to reopen.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Session)` - The reopened session with status set to Attention.
+    /// * `Err(StoreError::SessionNotFound)` - If no closed session with this ID exists.
+    /// * `Err(StoreError::SessionExists)` - If the session is already active.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use agent_console_dashboard::daemon::store::SessionStore;
+    /// use agent_console_dashboard::{AgentType, Status};
+    /// use std::path::PathBuf;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let store = SessionStore::new();
+    ///
+    ///     // Create and close a session
+    ///     let _ = store.get_or_create_session(
+    ///         "session-1".to_string(),
+    ///         AgentType::ClaudeCode,
+    ///         Some(PathBuf::from("/tmp")),
+    ///         None,
+    ///         Status::Working,
+    ///         0,
+    ///     ).await;
+    ///     store.close_session("session-1").await;
+    ///
+    ///     // Reopen the session
+    ///     let result = store.reopen_session("session-1").await;
+    ///     assert!(result.is_ok());
+    ///     let session = result.unwrap();
+    ///     assert_eq!(session.status, Status::Attention);
+    ///     assert!(!session.closed);
+    ///
+    ///     // Reopening a non-existent session returns error
+    ///     let result = store.reopen_session("nonexistent").await;
+    ///     assert!(result.is_err());
+    ///
+    ///     // Reopening an already-active session returns error
+    ///     let result = store.reopen_session("session-1").await;
+    ///     assert!(result.is_err());
+    /// }
+    /// ```
+    pub async fn reopen_session(&self, session_id: &str) -> Result<Session, StoreError> {
+        // Check if session exists and is already active (not closed)
+        {
+            let sessions = self.sessions.read().await;
+            if let Some(existing) = sessions.get(session_id) {
+                if !existing.closed {
+                    return Err(StoreError::SessionExists(session_id.to_string()));
+                }
+            }
+        }
+
+        // Get closed session metadata
+        let closed_meta = match self.get_closed(session_id).await {
+            Some(meta) => meta,
+            None => return Err(StoreError::SessionNotFound(session_id.to_string())),
+        };
+
+        // Remove from closed queue
+        self.remove_closed(session_id).await;
+
+        // Create new active session with status = Attention
+        // Default to ClaudeCode agent type since ClosedSession doesn't track agent_type
+        let mut session = Session::new(
+            closed_meta.session_id,
+            AgentType::ClaudeCode,
+            closed_meta.working_dir,
+        );
+        session.set_status(Status::Attention);
+        session.closed = false;
+        session.priority = 0;
+
+        // Insert into active sessions (will overwrite if exists)
+        let mut sessions = self.sessions.write().await;
+        sessions.insert(session_id.to_string(), session.clone());
+
+        // Broadcast the session change
+        self.broadcast_session_change(Status::Closed, 0, &session);
+
+        Ok(session)
+    }
 }

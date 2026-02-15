@@ -29,23 +29,22 @@ async fn close_session_stores_closed_metadata() {
     let meta = &closed[0];
     assert_eq!(meta.session_id, "s1");
     assert_eq!(meta.working_dir, Some(PathBuf::from("/tmp/project")));
-    assert!(!meta.resumable);
-    assert!(meta.not_resumable_reason.is_some());
+    assert!(meta.resumable); // Sessions with working_dir are resumable
+    assert!(meta.not_resumable_reason.is_none());
     assert_eq!(meta.last_status, Status::Closed);
 }
 
 #[tokio::test]
-async fn close_session_without_session_id_not_resumable() {
+async fn close_session_without_working_dir_not_resumable() {
     let store = SessionStore::new();
 
-    let _ = store
-        .create_session(
-            "s2".to_string(),
-            AgentType::ClaudeCode,
-            Some(PathBuf::from("/tmp/project")),
-            None,
-        )
-        .await;
+    // Create a session without working_dir
+    let mut session = crate::Session::new(
+        "s2".to_string(),
+        AgentType::ClaudeCode,
+        None, // No working dir
+    );
+    store.set("s2".to_string(), session).await;
 
     let _ = store.close_session("s2").await;
 
@@ -105,7 +104,7 @@ async fn get_closed_returns_correct_session() {
     assert!(result.is_some());
     let meta = result.expect("already checked is_some");
     assert_eq!(meta.session_id, "target");
-    assert!(!meta.resumable);
+    assert!(meta.resumable); // Sessions with working_dir are resumable
 }
 
 #[tokio::test]
@@ -271,8 +270,8 @@ async fn closed_metadata_includes_all_fields() {
 
     assert_eq!(meta.session_id, "full");
     assert_eq!(meta.working_dir, Some(PathBuf::from("/home/user/project")));
-    assert!(!meta.resumable);
-    assert!(meta.not_resumable_reason.is_some());
+    assert!(meta.resumable); // Sessions with working_dir are resumable
+    assert!(meta.not_resumable_reason.is_none());
     assert_eq!(meta.last_status, Status::Closed);
     assert!(meta.closed_at.is_some());
     // Elapsed values should be non-negative (they are u64 so always >= 0)

@@ -61,7 +61,7 @@ pub struct SessionStore {
     /// Broadcast channel sender for subscriber notifications.
     /// Subscribers receive [`SessionUpdate`] messages on state changes.
     update_tx: broadcast::Sender<SessionUpdate>,
-    /// Closed session metadata for resurrection, ordered by close time.
+    /// Closed session metadata for reopen, ordered by close time.
     closed: Arc<RwLock<VecDeque<ClosedSession>>>,
     /// Maximum count of closed sessions to retain before evicting oldest.
     max_closed_sessions: usize,

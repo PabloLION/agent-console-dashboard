@@ -7,6 +7,7 @@
 //!   - `lifecycle_get_or_create`: get_or_create_session tests
 //!   - `lifecycle_update`: update_session tests
 //!   - `lifecycle_close`: close_session and remove_session tests
+//!   - `lifecycle_reopen`: reopen_session tests
 //! - `concurrent`: Concurrent access and thread-safety
 //! - `subscriber`: Broadcast channel and notifications
 
@@ -17,6 +18,7 @@ mod inactive;
 mod lifecycle_close;
 mod lifecycle_create;
 mod lifecycle_get_or_create;
+mod lifecycle_reopen;
 mod lifecycle_update;
 mod subscriber;
 

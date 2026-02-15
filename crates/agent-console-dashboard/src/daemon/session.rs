@@ -1,7 +1,7 @@
-//! Closed session metadata for resurrection support.
+//! Closed session metadata for reopen support.
 //!
 //! When a session is closed, its metadata is preserved in a [`ClosedSession`]
-//! struct that can be used to resurrect the session later. Since `Instant`
+//! struct that can be used to reopen the session later. Since `Instant`
 //! cannot be serialized, elapsed seconds from daemon start are stored for
 //! serialization, while a runtime-only `Instant` field is kept for sorting.
 
@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use crate::{Session, Status};
 
-/// Metadata for a closed session available for resurrection.
+/// Metadata for a closed session available for reopen.
 ///
 /// This struct captures the essential information needed to identify and
 /// potentially resume a previously active session. It is stored in the
@@ -58,11 +58,12 @@ impl ClosedSession {
         let started_at_elapsed = session.since.duration_since(daemon_start).as_secs();
         let closed_at_elapsed = now.duration_since(daemon_start).as_secs();
 
-        // Sessions are not resumable (Claude Code session ID tracking removed)
-        let (resumable, not_resumable_reason) = (
-            false,
-            Some("no Claude Code session ID available".to_string()),
-        );
+        // Sessions with a working_dir are resumable (even without Claude Code session ID)
+        let (resumable, not_resumable_reason) = if session.working_dir.is_some() {
+            (true, None)
+        } else {
+            (false, Some("no working directory available".to_string()))
+        };
 
         Self {
             session_id: session.session_id.clone(),
@@ -98,16 +99,17 @@ mod tests {
 
         assert_eq!(closed.session_id, "s1");
         assert_eq!(closed.working_dir, Some(PathBuf::from("/tmp/test")));
-        assert!(!closed.resumable);
-        assert!(closed.not_resumable_reason.is_some());
+        assert!(closed.resumable); // Sessions with working_dir are resumable
+        assert!(closed.not_resumable_reason.is_none());
         assert_eq!(closed.last_status, Status::Working);
         assert!(closed.closed_at.is_some());
     }
 
     #[test]
-    fn from_session_without_session_id_is_not_resumable() {
+    fn from_session_without_working_dir_is_not_resumable() {
         let daemon_start = Instant::now();
-        let session = make_session("s2");
+        let mut session = make_session("s2");
+        session.working_dir = None; // Remove working dir
         let closed = ClosedSession::from_session(&session, daemon_start);
 
         assert!(!closed.resumable);
@@ -116,7 +118,7 @@ mod tests {
             .not_resumable_reason
             .as_ref()
             .expect("reason should exist")
-            .contains("no Claude Code session ID"));
+            .contains("no working directory"));
     }
 
     #[test]
@@ -140,7 +142,7 @@ mod tests {
         let deserialized: ClosedSession = serde_json::from_str(&json).expect("should deserialize");
 
         assert_eq!(deserialized.session_id, "s4");
-        assert!(!deserialized.resumable);
+        assert!(deserialized.resumable); // Sessions with working_dir are resumable
         assert_eq!(deserialized.working_dir, Some(PathBuf::from("/tmp/test")));
         // closed_at should be None after deserialization (skipped)
         assert!(deserialized.closed_at.is_none());

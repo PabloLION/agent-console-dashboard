@@ -304,17 +304,18 @@ async fn write_or_disconnect(writer: &mut tokio::net::unix::OwnedWriteHalf, mess
     false
 }
 
-/// Handles the RESURRECT command.
+/// Handles the REOPEN command.
 ///
 /// Expects `cmd.session_id`. Validates that the session exists, is resumable,
-/// and its working directory still exists. On success, returns resurrection
-/// metadata and removes the session from the closed queue.
-pub(super) async fn handle_resurrect_command(cmd: &IpcCommand, store: &SessionStore) -> String {
+/// and its working directory still exists. On success, reopens the session
+/// (moves from closed to active with status=Attention) and returns the session.
+pub(super) async fn handle_reopen_command(cmd: &IpcCommand, store: &SessionStore) -> String {
     let session_id = match &cmd.session_id {
         Some(id) => id,
-        None => return IpcResponse::error("RESURRECT requires session_id").to_json_line(),
+        None => return IpcResponse::error("REOPEN requires session_id").to_json_line(),
     };
 
+    // Validate closed session exists and is resumable
     let closed = match store.get_closed(session_id).await {
         Some(c) => c,
         None => {
@@ -351,15 +352,17 @@ pub(super) async fn handle_resurrect_command(cmd: &IpcCommand, store: &SessionSt
         Some(_) => {} // working_dir exists, continue
     }
 
-    let info = serde_json::json!({
-        "session_id": closed.session_id,
-        "working_dir": closed.working_dir,
-        "command": format!("claude --resume {}", closed.session_id),
-    });
-
-    store.remove_closed(session_id).await;
-
-    IpcResponse::success(Some(info)).to_json_line()
+    // Reopen the session (closed → active with status=Attention)
+    match store.reopen_session(session_id).await {
+        Ok(session) => {
+            let info = SessionSnapshot::from(&session);
+            IpcResponse::success(Some(
+                serde_json::to_value(&info).expect("failed to serialize SessionSnapshot"),
+            ))
+            .to_json_line()
+        }
+        Err(e) => IpcResponse::error(format!("Failed to reopen session: {}", e)).to_json_line(),
+    }
 }
 
 /// Handles the STATUS command.
