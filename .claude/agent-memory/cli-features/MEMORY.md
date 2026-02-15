@@ -53,3 +53,31 @@ actually running commands. Tests verify:
 - All daemon commands accept `--socket` flag
 - `--detach` flag runs daemon in background
 - Tests must not hardcode version numbers - use `env!("CARGO_PKG_VERSION")`
+
+### Removing CLI Commands (acd-jau)
+
+When removing a CLI command:
+
+1. Remove enum variant from `Commands` in `src/main.rs`
+2. Remove match arm handler in `src/main.rs`
+3. Remove function import from `use` statement in `src/main.rs`
+4. Remove function implementation from `src/commands/<module>.rs`
+5. Remove related tests from `src/cli_tests/cli.rs`
+6. Update module doc comments in `src/commands/mod.rs` and affected module files
+
+Pattern: CLI command removal is straightforward - no complex dependencies.
+Daemon/TUI functionality may remain (separate concerns).
+
+### Config Schema Changes (acd-puk)
+
+When renaming or adding config fields:
+
+1. Update struct fields in `src/config/schema.rs` with doc comments
+2. Update Default impl to initialize new fields
+3. Update tests - rename existing tests and add new ones for new fields
+4. Update `DEFAULT_CONFIG_TEMPLATE` in `src/config/default.rs`
+5. Check for field references outside config module (e.g., main.rs TUI setup)
+
+Pattern: Config schema changes may require minimal updates to config consumers
+(like main.rs) even when TUI logic changes are separate. Add TODO comments
+referencing the follow-up issue for full integration.
