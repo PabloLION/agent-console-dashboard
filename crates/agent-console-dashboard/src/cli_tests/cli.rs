@@ -360,45 +360,6 @@ fn test_dump_with_custom_socket() {
     }
 }
 
-// -- Resurrect subcommand ------------------------------------------------
-
-#[test]
-fn test_resurrect_subcommand_parses() {
-    let cli = Cli::try_parse_from(["agent-console-dashboard", "resurrect", "session-abc"])
-        .expect("resurrect should parse");
-    match cli.command {
-        Commands::Resurrect {
-            session_id, quiet, ..
-        } => {
-            assert_eq!(session_id, "session-abc");
-            assert!(!quiet);
-        }
-        _ => panic!("expected Resurrect command"),
-    }
-}
-
-#[test]
-fn test_resurrect_quiet_flag() {
-    let cli = Cli::try_parse_from([
-        "agent-console-dashboard",
-        "resurrect",
-        "session-abc",
-        "--quiet",
-    ])
-    .expect("resurrect --quiet should parse");
-    match cli.command {
-        Commands::Resurrect { quiet, .. } => {
-            assert!(quiet);
-        }
-        _ => panic!("expected Resurrect command"),
-    }
-}
-
-#[test]
-fn test_resurrect_requires_session_id() {
-    let result = Cli::try_parse_from(["agent-console-dashboard", "resurrect"]);
-    assert!(result.is_err());
-}
 
 // -- Config subcommand --------------------------------------------------
 

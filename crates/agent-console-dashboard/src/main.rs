@@ -11,7 +11,7 @@ use agent_console_dashboard::{daemon::run_daemon, tui::app::App, DaemonConfig, S
 use clap::{Parser, Subcommand};
 use commands::{
     is_daemon_running, run_claude_hook_async, run_config_edit_command, run_daemon_stop_command,
-    run_dump_command, run_install_command, run_resurrect_command, run_set_command,
+    run_dump_command, run_install_command, run_set_command,
     run_status_command, run_uninstall_command, HookInput,
 };
 use std::path::PathBuf;
@@ -57,18 +57,6 @@ enum Commands {
     Config {
         #[command(subcommand)]
         action: ConfigAction,
-    },
-
-    /// Resurrect a previously closed session
-    Resurrect {
-        /// Session ID to resurrect
-        session_id: String,
-        /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
-        socket: PathBuf,
-        /// Print command without explanation (for scripting)
-        #[arg(long)]
-        quiet: bool,
     },
 
     /// Set session status (used by hooks)
@@ -198,13 +186,6 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
             return run_dump_command(&socket);
-        }
-        Commands::Resurrect {
-            session_id,
-            socket,
-            quiet,
-        } => {
-            return run_resurrect_command(&socket, &session_id, quiet);
         }
         Commands::Config { action } => {
             use agent_console_dashboard::config::{default, loader::ConfigLoader, xdg};

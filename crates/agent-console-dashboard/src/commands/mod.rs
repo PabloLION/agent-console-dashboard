@@ -4,7 +4,7 @@
 //! - `daemon` - Daemon lifecycle commands (start, stop)
 //! - `hook` - Claude Code hook integration
 //! - `install` - Hook installation/uninstallation
-//! - `ipc` - IPC commands (set, status, dump, resurrect)
+//! - `ipc` - IPC commands (set, status, dump)
 
 pub(crate) mod daemon;
 pub(crate) mod hook;
