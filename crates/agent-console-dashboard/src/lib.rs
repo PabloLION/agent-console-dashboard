@@ -36,9 +36,6 @@ pub mod widgets;
 /// Terminal execution module for running commands in panes/terminals.
 pub mod terminal;
 
-/// Integration modules for external tools (Zellij, tmux, etc.).
-pub mod integrations;
-
 /// Client module for daemon communication with lazy-start capability.
 pub mod client;
 

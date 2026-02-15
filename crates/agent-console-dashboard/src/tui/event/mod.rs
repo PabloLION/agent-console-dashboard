@@ -170,8 +170,8 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
 
 /// Handles key events when the detail view is active.
 ///
-/// When a `Resurrect` action is returned, the caller should use
-/// `integrations::zellij::resurrect_session` to execute the resurrection.
+/// When a `Resurrect` action is returned, the caller should use hook-based reopen
+/// to execute the resurrection.
 fn handle_detail_key(app: &App, key: KeyEvent, session_index: usize) -> Action {
     match key.code {
         KeyCode::Esc => Action::Back,
