@@ -4,7 +4,6 @@
 //! - `set` - Update session status
 //! - `status` - Check daemon health
 //! - `dump` - Dump full daemon state
-//! - `resurrect` - Get resurrection command for a closed session
 
 use agent_console_dashboard::{
     format_uptime, DaemonDump, HealthStatus, IpcCommand, IpcResponse, IPC_VERSION,
@@ -229,77 +228,6 @@ pub(crate) fn run_dump_command(socket: &PathBuf) -> ExitCode {
                 }
             }
             eprintln!("Unexpected response: no data in DUMP response");
-            ExitCode::FAILURE
-        }
-        Ok(resp) => {
-            eprintln!(
-                "Error: {}",
-                resp.error.unwrap_or_else(|| "unknown error".to_string())
-            );
-            ExitCode::FAILURE
-        }
-        Err(e) => {
-            eprintln!("Failed to parse daemon response: {}", e);
-            ExitCode::FAILURE
-        }
-    }
-}
-
-/// Connects to daemon, sends RESURRECT as JSON, and displays resurrection metadata.
-pub(crate) fn run_resurrect_command(socket: &PathBuf, session_id: &str, quiet: bool) -> ExitCode {
-    use std::io::{BufRead, BufReader, Write};
-    use std::os::unix::net::UnixStream;
-
-    let stream = match UnixStream::connect(socket) {
-        Ok(s) => s,
-        Err(_) => {
-            eprintln!("Error: daemon not running (cannot connect to {:?})", socket);
-            return ExitCode::FAILURE;
-        }
-    };
-
-    let mut writer = stream.try_clone().expect("failed to clone unix stream");
-    let mut reader = BufReader::new(stream);
-
-    let cmd = IpcCommand {
-        version: IPC_VERSION,
-        cmd: "RESURRECT".to_string(),
-        session_id: Some(session_id.to_string()),
-        status: None,
-        working_dir: None,
-        confirmed: None,
-        priority: None,
-    };
-    let json = serde_json::to_string(&cmd).expect("failed to serialize RESURRECT command");
-    let line = format!("{}\n", json);
-
-    if writer.write_all(line.as_bytes()).is_err() || writer.flush().is_err() {
-        eprintln!("Error: failed to send RESURRECT command");
-        return ExitCode::FAILURE;
-    }
-
-    let mut response = String::new();
-    if reader.read_line(&mut response).is_err() {
-        eprintln!("Error: failed to read daemon response");
-        return ExitCode::FAILURE;
-    }
-
-    match serde_json::from_str::<IpcResponse>(response.trim()) {
-        Ok(resp) if resp.ok => {
-            if let Some(data) = resp.data {
-                let sid = data["session_id"].as_str().unwrap_or(session_id);
-                let wd = data["working_dir"].as_str().unwrap_or("<unknown>");
-                let resume_cmd = data["command"].as_str().unwrap_or("claude --resume");
-                if quiet {
-                    println!("cd {} && {}", wd, resume_cmd);
-                } else {
-                    println!("To resurrect session {}:", sid);
-                    println!("  cd {}", wd);
-                    println!("  {}", resume_cmd);
-                }
-                return ExitCode::SUCCESS;
-            }
-            eprintln!("Unexpected response: no data in RESURRECT response");
             ExitCode::FAILURE
         }
         Ok(resp) => {
