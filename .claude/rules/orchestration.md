@@ -149,7 +149,8 @@ After an agent completes an issue:
 1. Agent commits in its worktree branch
 2. Orchestrator merges worktree branch → main (`git merge --no-ff` for
    traceability)
-3. Orchestrator runs test suite on main
+3. The `post-merge` git hook automatically checks formatting (fixes drift) and
+   runs the test suite. If tests fail, fix before pushing.
 4. Orchestrator removes worktree and branch (`git worktree remove`,
    `git branch -d`)
 5. Close the beads issue with
