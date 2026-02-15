@@ -81,3 +81,28 @@ When renaming or adding config fields:
 Pattern: Config schema changes may require minimal updates to config consumers
 (like main.rs) even when TUI logic changes are separate. Add TODO comments
 referencing the follow-up issue for full integration.
+
+### CLI Tree Restructuring (acd-2jp)
+
+When restructuring the CLI command hierarchy:
+
+1. Create new subcommand enum (e.g., `SessionCommands`) with proper clap
+   attributes
+2. Move command variants from `Commands` to new enum, adjusting field types as
+   needed (positional → optional flags)
+3. Update `Commands` enum to reference new subcommand enum
+4. Update match arms in `main()` to handle new command structure
+5. Rename command handler functions in `src/commands/*.rs` if semantics changed
+6. Update handler function signatures to match new optional parameters
+7. Update tests in `src/cli_tests/cli.rs` - add new enum to imports, rewrite
+   test assertions for new command paths
+8. Update integration tests in `tests/*.rs` - change command invocations to new
+   syntax
+
+Pattern: Integration tests use `assert_cmd::Command` with `.args([...])` to
+invoke the CLI. Update all call sites when command paths change. Tests in
+`tests/` directory are separate from unit tests in `src/`.
+
+Key insight: When making a field optional (e.g., status becomes `Option<&str>`),
+update handler to check if any fields provided and warn if none. This prevents
+silent no-ops.

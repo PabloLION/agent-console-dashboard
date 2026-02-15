@@ -308,8 +308,8 @@ fn test_claude_hook_closed_parses() {
 
 #[test]
 fn test_daemon_dump_subcommand_parses() {
-    let cli =
-        Cli::try_parse_from(["agent-console-dashboard", "daemon", "dump"]).expect("daemon dump should parse");
+    let cli = Cli::try_parse_from(["agent-console-dashboard", "daemon", "dump"])
+        .expect("daemon dump should parse");
     match cli.command {
         Commands::Daemon {
             command: DaemonCommands::Dump { socket, format },
