@@ -160,14 +160,12 @@ fn main() -> ExitCode {
                 tokio::runtime::Runtime::new().expect("failed to create tokio runtime for TUI");
             if let Err(e) = rt.block_on(async {
                 let mut app = App::new(socket);
-                // Wire double-click hook from config if available
-                // TODO(acd-1j2): Update to use both activate_hook and reopen_hook
+                // Wire hooks from config if available
                 if let Ok(config) =
                     agent_console_dashboard::config::loader::ConfigLoader::load_default()
                 {
-                    if !config.tui.activate_hook.is_empty() {
-                        app.double_click_hook = Some(config.tui.activate_hook);
-                    }
+                    app.activate_hook = config.tui.activate_hook;
+                    app.reopen_hook = config.tui.reopen_hook;
                 }
                 app.run().await
             }) {

@@ -233,9 +233,15 @@ fn test_last_click_initialized_to_none() {
 }
 
 #[test]
-fn test_double_click_hook_default_none() {
+fn test_activate_hook_default_none() {
     let app = App::new(PathBuf::from("/tmp/test.sock"));
-    assert!(app.double_click_hook.is_none());
+    assert!(app.activate_hook.is_none());
+}
+
+#[test]
+fn test_reopen_hook_default_none() {
+    let app = App::new(PathBuf::from("/tmp/test.sock"));
+    assert!(app.reopen_hook.is_none());
 }
 
 #[test]
@@ -247,7 +253,7 @@ fn test_status_message_default_none() {
 #[test]
 fn test_double_click_no_hook_sets_config_message() {
     let mut app = make_clickable_app(3);
-    app.double_click_hook = None;
+    app.activate_hook = None;
     let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
     app.handle_mouse_event(first_click);
     let second_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
@@ -255,15 +261,15 @@ fn test_double_click_no_hook_sets_config_message() {
     assert!(app.status_message.is_some(), "should set status message");
     let (msg, _) = app.status_message.as_ref().expect("msg");
     assert!(
-        msg.contains("double_click_hook"),
+        msg.contains("activate_hook"),
         "message should mention config key"
     );
 }
 
 #[test]
-fn test_double_click_with_hook_sets_confirmation() {
+fn test_double_click_with_activate_hook() {
     let mut app = make_clickable_app(3);
-    app.double_click_hook = Some("echo test".to_string());
+    app.activate_hook = Some("echo test".to_string());
     let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
     app.handle_mouse_event(first_click);
     let second_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
@@ -271,6 +277,41 @@ fn test_double_click_with_hook_sets_confirmation() {
     assert!(app.status_message.is_some(), "should set status message");
     let (msg, _) = app.status_message.as_ref().expect("msg");
     assert_eq!(msg, "Hook executed");
+}
+
+#[test]
+fn test_double_click_closed_session_fires_reopen_hook() {
+    let mut app = make_clickable_app(3);
+    app.sessions[0].status = Status::Closed;
+    app.reopen_hook = Some("echo reopen".to_string());
+    let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+    app.handle_mouse_event(first_click);
+    let second_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+    app.handle_mouse_event(second_click);
+    assert!(app.status_message.is_some(), "should set status message");
+    let (msg, _) = app.status_message.as_ref().expect("msg");
+    assert_eq!(msg, "Hook executed");
+    // Session should be updated to Attention locally
+    assert_eq!(app.sessions[0].status, Status::Attention);
+}
+
+#[test]
+fn test_double_click_closed_session_no_reopen_hook() {
+    let mut app = make_clickable_app(3);
+    app.sessions[0].status = Status::Closed;
+    app.reopen_hook = None;
+    let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+    app.handle_mouse_event(first_click);
+    let second_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
+    app.handle_mouse_event(second_click);
+    assert!(app.status_message.is_some(), "should set status message");
+    let (msg, _) = app.status_message.as_ref().expect("msg");
+    assert!(
+        msg.contains("reopen_hook"),
+        "message should mention reopen_hook"
+    );
+    // Session should remain closed
+    assert_eq!(app.sessions[0].status, Status::Closed);
 }
 
 #[test]

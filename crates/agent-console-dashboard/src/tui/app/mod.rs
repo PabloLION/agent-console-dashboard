@@ -70,11 +70,14 @@ pub struct App {
     pub usage: Option<UsageData>,
     /// Last click time and position for double-click detection.
     last_click: Option<(Instant, u16, u16)>,
-    /// Shell command to execute on double-click, with placeholder support.
+    /// Shell command to execute on double-click/Enter for non-closed sessions.
     ///
-    /// Loaded from `tui.double_click_hook` in config. `None` means no hook
-    /// configured (empty string in config is treated as no hook).
-    pub double_click_hook: Option<String>,
+    /// Loaded from `tui.activate_hook` in config. `None` means no hook configured.
+    pub activate_hook: Option<String>,
+    /// Shell command to execute on double-click/Enter/'r' for closed sessions.
+    ///
+    /// Loaded from `tui.reopen_hook` in config. `None` means no hook configured.
+    pub reopen_hook: Option<String>,
     /// Temporary status message shown in footer, with expiry time.
     pub status_message: Option<(String, Instant)>,
     /// Last time elapsed-time rendering occurred (for throttling passive updates).
@@ -100,7 +103,8 @@ impl App {
             layout_preset: 1,
             usage: None,
             last_click: None,
-            double_click_hook: None,
+            activate_hook: None,
+            reopen_hook: None,
             status_message: None,
             last_elapsed_render: Instant::now(),
             session_list_inner_area: None,
@@ -184,7 +188,10 @@ impl App {
         self.history_scroll = self.history_scroll.saturating_sub(1);
     }
 
-    /// Executes the double-click hook for the given session, if configured.
+    /// Executes the appropriate hook for the given session based on its status.
+    ///
+    /// - Non-closed sessions → activate_hook
+    /// - Closed sessions → reopen_hook
     ///
     /// Substitutes `{session_id}`, `{working_dir}`, and `{status}` placeholders
     /// in the hook command, then spawns it via `sh -c` in fire-and-forget mode.
@@ -192,41 +199,88 @@ impl App {
     ///
     /// Pipes the full SessionSnapshot as JSON to the hook's stdin, following the
     /// same pattern as Claude Code hooks.
-    pub fn execute_double_click_hook(&self, session: &Session) {
+    ///
+    /// For closed sessions reopened via reopen_hook, the session status is updated
+    /// locally to Attention (TUI-only, no IPC to daemon).
+    pub fn execute_hook(&mut self, session_index: usize) {
         use crate::SessionSnapshot;
         use std::io::Write;
 
-        if let Some(ref hook) = self.double_click_hook {
-            let cmd = substitute_hook_placeholders(hook, session);
-            tracing::debug!("executing double-click hook: {}", cmd);
+        let Some(session) = self.sessions.get(session_index) else {
+            return;
+        };
 
-            // Convert Session to SessionSnapshot and serialize to JSON
-            let snapshot: SessionSnapshot = session.into();
-            let json_payload = match serde_json::to_string(&snapshot) {
-                Ok(json) => json,
-                Err(e) => {
-                    tracing::warn!("failed to serialize SessionSnapshot: {}", e);
-                    return;
-                }
+        let is_closed = session.status == Status::Closed;
+        let hook = if is_closed {
+            &self.reopen_hook
+        } else {
+            &self.activate_hook
+        };
+
+        let Some(ref hook_cmd) = hook else {
+            // No hook configured — show hint message
+            let config_path = crate::config::xdg::config_path();
+            let key = if is_closed {
+                "reopen_hook"
+            } else {
+                "activate_hook"
             };
+            self.status_message = Some((
+                format!("Set tui.{} in {} to enable this action", key, config_path.display()),
+                Instant::now() + Duration::from_secs(3),
+            ));
+            return;
+        };
 
-            match std::process::Command::new("sh")
-                .arg("-c")
-                .arg(&cmd)
-                .stdin(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-            {
-                Ok(mut child) => {
-                    tracing::debug!("double-click hook spawned: {}", cmd);
-                    if let Some(ref mut stdin) = child.stdin {
-                        if let Err(e) = stdin.write_all(json_payload.as_bytes()) {
-                            tracing::warn!("failed to write to hook stdin: {}", e);
-                        }
+        let cmd = substitute_hook_placeholders(hook_cmd, session);
+        let hook_type = if is_closed { "reopen" } else { "activate" };
+        tracing::debug!("executing {} hook: {}", hook_type, cmd);
+
+        // Convert Session to SessionSnapshot and serialize to JSON
+        let snapshot: SessionSnapshot = session.into();
+        let json_payload = match serde_json::to_string(&snapshot) {
+            Ok(json) => json,
+            Err(e) => {
+                tracing::warn!("failed to serialize SessionSnapshot: {}", e);
+                return;
+            }
+        };
+
+        match std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&cmd)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+        {
+            Ok(mut child) => {
+                tracing::debug!("{} hook spawned: {}", hook_type, cmd);
+                if let Some(ref mut stdin) = child.stdin {
+                    if let Err(e) = stdin.write_all(json_payload.as_bytes()) {
+                        tracing::warn!("failed to write to hook stdin: {}", e);
                     }
                 }
-                Err(e) => tracing::warn!("double-click hook failed: {}: {}", cmd, e),
+
+                // For closed sessions, update local status to Attention (no IPC)
+                if is_closed {
+                    if let Some(session) = self.sessions.get_mut(session_index) {
+                        session.status = Status::Attention;
+                        tracing::debug!("updated local session status to attention");
+                    }
+                }
+
+                self.status_message = Some((
+                    "Hook executed".to_string(),
+                    Instant::now() + Duration::from_secs(2),
+                ));
+            }
+            Err(e) => {
+                tracing::warn!("{} hook failed: {}: {}", hook_type, cmd, e);
+                self.status_message = Some((
+                    format!("Hook failed: {}", e),
+                    Instant::now() + Duration::from_secs(3),
+                ));
             }
         }
     }
@@ -280,24 +334,7 @@ impl App {
                     self.selected_index = Some(idx);
                     if is_double_click {
                         self.last_click = None;
-                        if self.double_click_hook.is_some() {
-                            // Fire the hook and show confirmation
-                            if let Some(session) = self.sessions.get(idx) {
-                                let session_clone = session.clone();
-                                self.execute_double_click_hook(&session_clone);
-                            }
-                            self.status_message = Some((
-                                "Hook executed".to_string(),
-                                Instant::now() + Duration::from_secs(2),
-                            ));
-                        } else {
-                            // No hook configured — tell the user where to set it
-                            self.status_message = Some((
-                                "Set tui.double_click_hook in config to enable double-click action"
-                                    .to_string(),
-                                Instant::now() + Duration::from_secs(3),
-                            ));
-                        }
+                        self.execute_hook(idx);
                         return Action::None;
                     }
                     // Single click: just focus the session (detail panel updates automatically)

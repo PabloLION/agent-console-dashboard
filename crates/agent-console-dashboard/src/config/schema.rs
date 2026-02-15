@@ -61,9 +61,10 @@ pub struct TuiConfig {
     /// - `{status}` — the session's current status (working, attention, etc.)
     ///
     /// Executed via `sh -c` in a fire-and-forget manner.
-    /// Empty string means double-click has no effect.
+    /// None means double-click has no effect.
     /// Hot-reloadable: Yes.
-    pub activate_hook: String,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    pub activate_hook: Option<String>,
     /// Shell command to execute on double-click of a closed session.
     ///
     /// Supports placeholder substitution:
@@ -72,9 +73,10 @@ pub struct TuiConfig {
     /// - `{status}` — the session's current status (always "closed")
     ///
     /// Executed via `sh -c` in a fire-and-forget manner.
-    /// Empty string means double-click has no effect.
+    /// None means double-click has no effect.
     /// Hot-reloadable: Yes.
-    pub reopen_hook: String,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    pub reopen_hook: Option<String>,
 }
 
 impl Default for TuiConfig {
@@ -86,10 +88,19 @@ impl Default for TuiConfig {
                 "api-usage".to_string(),
             ],
             tick_rate: "250ms".to_string(),
-            activate_hook: String::new(),
-            reopen_hook: String::new(),
+            activate_hook: None,
+            reopen_hook: None,
         }
     }
+}
+
+/// Deserializes an optional string, treating empty strings as None.
+fn deserialize_optional_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    Ok(s.and_then(|s| if s.is_empty() { None } else { Some(s) }))
 }
 
 /// Layout preset variants.
@@ -397,15 +408,15 @@ log_level = "debug"
     }
 
     #[test]
-    fn default_activate_hook_is_empty() {
+    fn default_activate_hook_is_none() {
         let config = Config::default();
-        assert_eq!(config.tui.activate_hook, "");
+        assert_eq!(config.tui.activate_hook, None);
     }
 
     #[test]
-    fn default_reopen_hook_is_empty() {
+    fn default_reopen_hook_is_none() {
         let config = Config::default();
-        assert_eq!(config.tui.reopen_hook, "");
+        assert_eq!(config.tui.reopen_hook, None);
     }
 
     #[test]
@@ -415,7 +426,10 @@ log_level = "debug"
 activate_hook = "open {working_dir}"
 "#;
         let config: Config = toml::from_str(toml_str).expect("should parse activate_hook");
-        assert_eq!(config.tui.activate_hook, "open {working_dir}");
+        assert_eq!(
+            config.tui.activate_hook,
+            Some("open {working_dir}".to_string())
+        );
     }
 
     #[test]
@@ -427,25 +441,51 @@ reopen_hook = "zellij action new-tab -c {working_dir}"
         let config: Config = toml::from_str(toml_str).expect("should parse reopen_hook");
         assert_eq!(
             config.tui.reopen_hook,
-            "zellij action new-tab -c {working_dir}"
+            Some("zellij action new-tab -c {working_dir}".to_string())
         );
     }
 
     #[test]
     fn activate_hook_roundtrip() {
         let mut config = Config::default();
-        config.tui.activate_hook = "echo {session_id}".to_string();
+        config.tui.activate_hook = Some("echo {session_id}".to_string());
         let toml_str = toml::to_string(&config).expect("serialization should succeed");
         let parsed: Config = toml::from_str(&toml_str).expect("roundtrip should parse");
-        assert_eq!(parsed.tui.activate_hook, "echo {session_id}");
+        assert_eq!(
+            parsed.tui.activate_hook,
+            Some("echo {session_id}".to_string())
+        );
     }
 
     #[test]
     fn reopen_hook_roundtrip() {
         let mut config = Config::default();
-        config.tui.reopen_hook = "zellij action new-tab".to_string();
+        config.tui.reopen_hook = Some("zellij action new-tab".to_string());
         let toml_str = toml::to_string(&config).expect("serialization should succeed");
         let parsed: Config = toml::from_str(&toml_str).expect("roundtrip should parse");
-        assert_eq!(parsed.tui.reopen_hook, "zellij action new-tab");
+        assert_eq!(
+            parsed.tui.reopen_hook,
+            Some("zellij action new-tab".to_string())
+        );
+    }
+
+    #[test]
+    fn empty_activate_hook_becomes_none() {
+        let toml_str = r#"
+[tui]
+activate_hook = ""
+"#;
+        let config: Config = toml::from_str(toml_str).expect("should parse empty activate_hook");
+        assert_eq!(config.tui.activate_hook, None);
+    }
+
+    #[test]
+    fn empty_reopen_hook_becomes_none() {
+        let toml_str = r#"
+[tui]
+reopen_hook = ""
+"#;
+        let config: Config = toml::from_str(toml_str).expect("should parse empty reopen_hook");
+        assert_eq!(config.tui.reopen_hook, None);
     }
 }

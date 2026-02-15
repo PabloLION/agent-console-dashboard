@@ -141,13 +141,25 @@ fn test_handle_key_unknown_returns_none() {
 }
 
 #[test]
-fn test_handle_enter_opens_detail() {
+fn test_handle_enter_fires_activate_hook() {
     let mut app = make_app_with_sessions(3);
-    // Enter now fires the hook (same as double-click), not OpenDetail
+    app.activate_hook = Some("echo test".to_string());
     let action = handle_key_event(&mut app, make_key(KeyCode::Enter, KeyModifiers::NONE));
-    // With no hook configured, it returns None and shows a status message
     assert_eq!(action, Action::None);
     assert!(app.status_message.is_some());
+    let (msg, _) = app.status_message.as_ref().expect("msg");
+    assert_eq!(msg, "Hook executed");
+}
+
+#[test]
+fn test_handle_enter_no_hook_shows_message() {
+    let mut app = make_app_with_sessions(3);
+    app.activate_hook = None;
+    let action = handle_key_event(&mut app, make_key(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(action, Action::None);
+    assert!(app.status_message.is_some());
+    let (msg, _) = app.status_message.as_ref().expect("msg");
+    assert!(msg.contains("activate_hook"));
 }
 
 #[test]
@@ -158,11 +170,43 @@ fn test_handle_enter_no_selection_returns_none() {
 }
 
 #[test]
-fn test_handle_r_resurrects_closed_session() {
+fn test_handle_enter_closed_session_fires_reopen_hook() {
     let mut app = make_app_with_sessions(1);
     app.sessions[0].status = crate::Status::Closed;
+    app.reopen_hook = Some("echo reopen".to_string());
+    let action = handle_key_event(&mut app, make_key(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(action, Action::None);
+    assert!(app.status_message.is_some());
+    let (msg, _) = app.status_message.as_ref().expect("msg");
+    assert_eq!(msg, "Hook executed");
+    // Session should be updated to Attention locally
+    assert_eq!(app.sessions[0].status, crate::Status::Attention);
+}
+
+#[test]
+fn test_handle_r_fires_reopen_hook() {
+    let mut app = make_app_with_sessions(1);
+    app.sessions[0].status = crate::Status::Closed;
+    app.reopen_hook = Some("echo reopen".to_string());
     let action = handle_key_event(&mut app, make_key(KeyCode::Char('r'), KeyModifiers::NONE));
-    assert_eq!(action, Action::Resurrect("session-0".to_string()));
+    assert_eq!(action, Action::None);
+    assert!(app.status_message.is_some());
+    let (msg, _) = app.status_message.as_ref().expect("msg");
+    assert_eq!(msg, "Hook executed");
+    // Session should be updated to Attention locally
+    assert_eq!(app.sessions[0].status, crate::Status::Attention);
+}
+
+#[test]
+fn test_handle_r_on_closed_session_no_hook() {
+    let mut app = make_app_with_sessions(1);
+    app.sessions[0].status = crate::Status::Closed;
+    app.reopen_hook = None;
+    let action = handle_key_event(&mut app, make_key(KeyCode::Char('r'), KeyModifiers::NONE));
+    assert_eq!(action, Action::None);
+    assert!(app.status_message.is_some());
+    let (msg, _) = app.status_message.as_ref().expect("msg");
+    assert!(msg.contains("reopen_hook"));
 }
 
 #[test]
@@ -170,6 +214,8 @@ fn test_handle_r_on_working_session_returns_none() {
     let mut app = make_app_with_sessions(1);
     let action = handle_key_event(&mut app, make_key(KeyCode::Char('r'), KeyModifiers::NONE));
     assert_eq!(action, Action::None);
+    // No status message should be set for non-closed sessions
+    assert!(app.status_message.is_none());
 }
 
 #[test]
