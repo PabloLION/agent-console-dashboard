@@ -37,7 +37,7 @@ use crate::daemon::store::SessionStore;
 use crate::daemon::usage::UsageFetcher;
 
 use super::handlers::{
-    handle_dump_command, handle_get_command, handle_list_command, handle_resurrect_command,
+    handle_dump_command, handle_get_command, handle_list_command, handle_reopen_command,
     handle_rm_command, handle_set_command, handle_status_command, handle_stop_command,
     handle_sub_command, DaemonState,
 };
@@ -400,7 +400,7 @@ async fn handle_client(
             "RM" => handle_rm_command(&cmd, &state.store).await,
             "LIST" => handle_list_command(&state.store).await,
             "GET" => handle_get_command(&cmd, &state.store).await,
-            "RESURRECT" => handle_resurrect_command(&cmd, &state.store).await,
+            "REOPEN" => handle_reopen_command(&cmd, &state.store).await,
             "STATUS" => handle_status_command(state).await,
             "DUMP" => handle_dump_command(state).await,
             "STOP" => handle_stop_command(&cmd, state).await,

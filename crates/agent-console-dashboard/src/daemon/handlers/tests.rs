@@ -195,3 +195,133 @@ async fn test_stop_with_inactive_session_returns_ok_without_confirmation() {
         "inactive sessions should not require confirmation"
     );
 }
+
+// =============================================================================
+// REOPEN command tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_reopen_command_success() {
+    let state = create_test_state();
+
+    // Create and close a session
+    state
+        .store
+        .get_or_create_session(
+            "reopen-test".to_string(),
+            AgentType::ClaudeCode,
+            Some(std::path::PathBuf::from("/tmp")),
+            None,
+            Status::Working,
+            0,
+        )
+        .await;
+    state.store.close_session("reopen-test").await;
+
+    let cmd = IpcCommand {
+        version: 1,
+        cmd: "REOPEN".to_string(),
+        session_id: Some("reopen-test".to_string()),
+        status: None,
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    };
+
+    let response = handle_reopen_command(&cmd, &state.store).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+
+    if !parsed.ok {
+        eprintln!("Error response: {:?}", parsed.error);
+    }
+    assert!(parsed.ok);
+    assert!(parsed.data.is_some());
+
+    // Verify session is active with status=Attention
+    let session = state.store.get("reopen-test").await;
+    assert!(session.is_some());
+    let session = session.unwrap();
+    assert_eq!(session.status, Status::Attention);
+    assert!(!session.closed);
+}
+
+#[tokio::test]
+async fn test_reopen_command_not_found() {
+    let state = create_test_state();
+
+    let cmd = IpcCommand {
+        version: 1,
+        cmd: "REOPEN".to_string(),
+        session_id: Some("nonexistent".to_string()),
+        status: None,
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    };
+
+    let response = handle_reopen_command(&cmd, &state.store).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+
+    assert!(!parsed.ok);
+    assert!(parsed.error.is_some());
+    assert!(parsed.error.unwrap().contains("SESSION_NOT_FOUND"));
+}
+
+#[tokio::test]
+async fn test_reopen_command_already_active() {
+    let state = create_test_state();
+
+    // Create, close, and reopen a session
+    state
+        .store
+        .get_or_create_session(
+            "reopen-active".to_string(),
+            AgentType::ClaudeCode,
+            Some(std::path::PathBuf::from("/tmp")),
+            None,
+            Status::Working,
+            0,
+        )
+        .await;
+    state.store.close_session("reopen-active").await;
+    state.store.reopen_session("reopen-active").await.unwrap();
+
+    // Try to reopen again (should fail)
+    let cmd = IpcCommand {
+        version: 1,
+        cmd: "REOPEN".to_string(),
+        session_id: Some("reopen-active".to_string()),
+        status: None,
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    };
+
+    let response = handle_reopen_command(&cmd, &state.store).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+
+    assert!(!parsed.ok);
+    assert!(parsed.error.is_some());
+}
+
+#[tokio::test]
+async fn test_reopen_command_missing_session_id() {
+    let state = create_test_state();
+
+    let cmd = IpcCommand {
+        version: 1,
+        cmd: "REOPEN".to_string(),
+        session_id: None,
+        status: None,
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    };
+
+    let response = handle_reopen_command(&cmd, &state.store).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+
+    assert!(!parsed.ok);
+    assert!(parsed.error.is_some());
+    assert!(parsed.error.unwrap().contains("REOPEN requires session_id"));
+}

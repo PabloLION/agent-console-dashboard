@@ -12,7 +12,7 @@ impl SessionStore {
     ///
     /// This method sets the session's `closed` flag to `true` and updates its
     /// status to `Status::Closed`. The session remains in the store and can
-    /// be queried or potentially resurrected later.
+    /// be queried or potentially reopened later.
     ///
     /// # Arguments
     ///
@@ -121,7 +121,7 @@ impl SessionStore {
 
     /// Removes a closed session by its session ID.
     ///
-    /// Used during resurrection to remove the session from the closed queue.
+    /// Used during reopen to remove the session from the closed queue.
     /// Returns `Some(ClosedSession)` if found and removed, `None` otherwise.
     pub async fn remove_closed(&self, session_id: &str) -> Option<ClosedSession> {
         let mut closed = self.closed.write().await;

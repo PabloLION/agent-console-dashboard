@@ -16,9 +16,9 @@ pub const IPC_VERSION: u32 = 1;
 pub struct IpcCommand {
     /// Protocol version (must be [`IPC_VERSION`]).
     pub version: u32,
-    /// Command name (SET, LIST, GET, RM, SUB, STATUS, DUMP, RESURRECT, STOP).
+    /// Command name (SET, LIST, GET, RM, SUB, STATUS, DUMP, REOPEN, STOP).
     pub cmd: String,
-    /// Session identifier (for SET, GET, RM, RESURRECT).
+    /// Session identifier (for SET, GET, RM, REOPEN).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
     /// Session status string (for SET).
