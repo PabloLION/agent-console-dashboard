@@ -39,7 +39,7 @@ async fn close_session_without_working_dir_not_resumable() {
     let store = SessionStore::new();
 
     // Create a session without working_dir
-    let mut session = crate::Session::new(
+    let session = crate::Session::new(
         "s2".to_string(),
         AgentType::ClaudeCode,
         None, // No working dir
