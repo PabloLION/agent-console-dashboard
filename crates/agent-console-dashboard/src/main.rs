@@ -11,8 +11,8 @@ use agent_console_dashboard::{daemon::run_daemon, tui::app::App, DaemonConfig, S
 use clap::{Parser, Subcommand};
 use commands::{
     is_daemon_running, run_claude_hook_async, run_config_edit_command, run_daemon_stop_command,
-    run_dump_command, run_install_command, run_set_command, run_status_command,
-    run_uninstall_command, HookInput,
+    run_dump_command, run_install_command, run_status_command, run_uninstall_command,
+    run_update_command, HookInput,
 };
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -36,44 +36,16 @@ enum Commands {
         socket: PathBuf,
     },
 
-    /// Check daemon health status
-    Status {
-        /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
-        socket: PathBuf,
-    },
-
-    /// Dump full daemon state as JSON
-    Dump {
-        /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
-        socket: PathBuf,
-        /// Output format (only json supported in v0)
-        #[arg(long, default_value = "json")]
-        format: String,
-    },
-
     /// Manage configuration file
     Config {
         #[command(subcommand)]
         action: ConfigAction,
     },
 
-    /// Set session status (used by hooks)
-    Set {
-        /// Session ID
-        session_id: String,
-        /// Status (working, attention, question, closed)
-        status: String,
-        /// Working directory
-        #[arg(long)]
-        working_dir: Option<PathBuf>,
-        /// Session priority for sorting (higher = ranked higher)
-        #[arg(long)]
-        priority: Option<u64>,
-        /// Socket path for IPC communication
-        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
-        socket: PathBuf,
+    /// Session management
+    Session {
+        #[command(subcommand)]
+        command: SessionCommands,
     },
 
     /// Daemon management
@@ -96,6 +68,28 @@ enum Commands {
 
     /// Remove ACD hooks from Claude Code settings
     Uninstall,
+}
+
+/// Session management subcommands
+#[derive(Subcommand)]
+enum SessionCommands {
+    /// Update session fields (status, priority, working directory)
+    Update {
+        /// Session ID
+        id: String,
+        /// Status (working, attention, question, closed)
+        #[arg(long)]
+        status: Option<String>,
+        /// Session priority for sorting (higher = ranked higher)
+        #[arg(long)]
+        priority: Option<u64>,
+        /// Working directory
+        #[arg(long)]
+        working_dir: Option<PathBuf>,
+        /// Socket path for IPC communication
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
+        socket: PathBuf,
+    },
 }
 
 /// Daemon management subcommands
@@ -127,6 +121,21 @@ enum DaemonCommands {
         /// Run daemon in background (detach from terminal)
         #[arg(short, long)]
         detach: bool,
+    },
+    /// Check daemon health status
+    Status {
+        /// Socket path for IPC communication
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
+        socket: PathBuf,
+    },
+    /// Dump full daemon state as JSON
+    Dump {
+        /// Socket path for IPC communication
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
+        socket: PathBuf,
+        /// Output format (only json supported in v0)
+        #[arg(long, default_value = "json")]
+        format: String,
     },
 }
 
@@ -172,19 +181,6 @@ fn main() -> ExitCode {
                 eprintln!("TUI error: {}", e);
                 return ExitCode::FAILURE;
             }
-        }
-        Commands::Status { socket } => {
-            return run_status_command(&socket);
-        }
-        Commands::Dump { socket, format } => {
-            if format != "json" {
-                eprintln!(
-                    "Error: format '{}' not yet implemented, only 'json' is supported",
-                    format
-                );
-                return ExitCode::FAILURE;
-            }
-            return run_dump_command(&socket);
         }
         Commands::Config { action } => {
             use agent_console_dashboard::config::{default, loader::ConfigLoader, xdg};
@@ -240,21 +236,23 @@ fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         }
-        Commands::Set {
-            session_id,
-            status,
-            working_dir,
-            priority,
-            socket,
-        } => {
-            return run_set_command(
-                &socket,
-                &session_id,
-                &status,
-                working_dir.as_deref(),
+        Commands::Session { command } => match command {
+            SessionCommands::Update {
+                id,
+                status,
                 priority,
-            );
-        }
+                working_dir,
+                socket,
+            } => {
+                return run_update_command(
+                    &socket,
+                    &id,
+                    status.as_deref(),
+                    working_dir.as_deref(),
+                    priority,
+                );
+            }
+        },
         Commands::Daemon { command } => match command {
             DaemonCommands::Start { socket, detach } => {
                 // Check if daemon is already running
@@ -297,6 +295,19 @@ fn main() -> ExitCode {
                     eprintln!("Error: failed to start daemon during restart: {}", e);
                     return ExitCode::FAILURE;
                 }
+            }
+            DaemonCommands::Status { socket } => {
+                return run_status_command(&socket);
+            }
+            DaemonCommands::Dump { socket, format } => {
+                if format != "json" {
+                    eprintln!(
+                        "Error: format '{}' not yet implemented, only 'json' is supported",
+                        format
+                    );
+                    return ExitCode::FAILURE;
+                }
+                return run_dump_command(&socket);
             }
         },
         Commands::ClaudeHook { status, socket } => {
