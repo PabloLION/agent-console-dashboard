@@ -360,7 +360,6 @@ fn test_dump_with_custom_socket() {
     }
 }
 
-
 // -- Config subcommand --------------------------------------------------
 
 #[test]

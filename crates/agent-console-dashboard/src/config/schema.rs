@@ -425,7 +425,10 @@ activate_hook = "open {working_dir}"
 reopen_hook = "zellij action new-tab -c {working_dir}"
 "#;
         let config: Config = toml::from_str(toml_str).expect("should parse reopen_hook");
-        assert_eq!(config.tui.reopen_hook, "zellij action new-tab -c {working_dir}");
+        assert_eq!(
+            config.tui.reopen_hook,
+            "zellij action new-tab -c {working_dir}"
+        );
     }
 
     #[test]

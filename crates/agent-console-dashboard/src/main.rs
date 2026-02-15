@@ -11,8 +11,8 @@ use agent_console_dashboard::{daemon::run_daemon, tui::app::App, DaemonConfig, S
 use clap::{Parser, Subcommand};
 use commands::{
     is_daemon_running, run_claude_hook_async, run_config_edit_command, run_daemon_stop_command,
-    run_dump_command, run_install_command, run_set_command,
-    run_status_command, run_uninstall_command, HookInput,
+    run_dump_command, run_install_command, run_set_command, run_status_command,
+    run_uninstall_command, HookInput,
 };
 use std::path::PathBuf;
 use std::process::ExitCode;

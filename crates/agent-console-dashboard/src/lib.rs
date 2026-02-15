@@ -33,9 +33,6 @@ pub mod tui;
 /// Widget system for composable dashboard UI components.
 pub mod widgets;
 
-/// Terminal execution module for running commands in panes/terminals.
-pub mod terminal;
-
 /// Client module for daemon communication with lazy-start capability.
 pub mod client;
 
