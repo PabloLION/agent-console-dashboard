@@ -1,6 +1,6 @@
 //! CLI argument parsing tests.
 
-use crate::{Cli, Commands, ConfigAction, DaemonCommands};
+use crate::{Cli, Commands, ConfigAction, DaemonCommands, SessionCommands};
 use clap::{CommandFactory, Parser};
 use std::path::PathBuf;
 
@@ -304,13 +304,16 @@ fn test_claude_hook_closed_parses() {
     }
 }
 
-// -- Dump subcommand ------------------------------------------------
+// -- Daemon dump subcommand ------------------------------------------------
 
 #[test]
-fn test_dump_subcommand_parses() {
-    let cli = Cli::try_parse_from(["agent-console-dashboard", "dump"]).expect("dump should parse");
+fn test_daemon_dump_subcommand_parses() {
+    let cli =
+        Cli::try_parse_from(["agent-console-dashboard", "daemon", "dump"]).expect("daemon dump should parse");
     match cli.command {
-        Commands::Dump { socket, format } => {
+        Commands::Daemon {
+            command: DaemonCommands::Dump { socket, format },
+        } => {
             assert_eq!(socket, PathBuf::from("/tmp/agent-console-dashboard.sock"));
             assert_eq!(format, "json");
         }
@@ -319,11 +322,19 @@ fn test_dump_subcommand_parses() {
 }
 
 #[test]
-fn test_dump_with_format_json() {
-    let cli = Cli::try_parse_from(["agent-console-dashboard", "dump", "--format", "json"])
-        .expect("dump --format json should parse");
+fn test_daemon_dump_with_format_json() {
+    let cli = Cli::try_parse_from([
+        "agent-console-dashboard",
+        "daemon",
+        "dump",
+        "--format",
+        "json",
+    ])
+    .expect("daemon dump --format json should parse");
     match cli.command {
-        Commands::Dump { format, .. } => {
+        Commands::Daemon {
+            command: DaemonCommands::Dump { format, .. },
+        } => {
             assert_eq!(format, "json");
         }
         _ => panic!("unexpected command variant"),
@@ -331,12 +342,20 @@ fn test_dump_with_format_json() {
 }
 
 #[test]
-fn test_dump_with_format_text_parses() {
+fn test_daemon_dump_with_format_text_parses() {
     // CLI accepts any string for format; validation happens at runtime
-    let cli = Cli::try_parse_from(["agent-console-dashboard", "dump", "--format", "text"])
-        .expect("dump --format text should parse");
+    let cli = Cli::try_parse_from([
+        "agent-console-dashboard",
+        "daemon",
+        "dump",
+        "--format",
+        "text",
+    ])
+    .expect("daemon dump --format text should parse");
     match cli.command {
-        Commands::Dump { format, .. } => {
+        Commands::Daemon {
+            command: DaemonCommands::Dump { format, .. },
+        } => {
             assert_eq!(format, "text");
         }
         _ => panic!("unexpected command variant"),
@@ -344,20 +363,249 @@ fn test_dump_with_format_text_parses() {
 }
 
 #[test]
-fn test_dump_with_custom_socket() {
+fn test_daemon_dump_with_custom_socket() {
     let cli = Cli::try_parse_from([
         "agent-console-dashboard",
+        "daemon",
         "dump",
         "--socket",
         "/custom/dump.sock",
     ])
-    .expect("dump --socket should parse");
+    .expect("daemon dump --socket should parse");
     match cli.command {
-        Commands::Dump { socket, .. } => {
+        Commands::Daemon {
+            command: DaemonCommands::Dump { socket, .. },
+        } => {
             assert_eq!(socket, PathBuf::from("/custom/dump.sock"));
         }
         _ => panic!("unexpected command variant"),
     }
+}
+
+// -- Daemon status subcommand ------------------------------------------------
+
+#[test]
+fn test_daemon_status_subcommand_parses() {
+    let cli = Cli::try_parse_from(["agent-console-dashboard", "daemon", "status"])
+        .expect("daemon status should parse");
+    match cli.command {
+        Commands::Daemon {
+            command: DaemonCommands::Status { socket },
+        } => {
+            assert_eq!(socket, PathBuf::from("/tmp/agent-console-dashboard.sock"));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_daemon_status_with_custom_socket() {
+    let cli = Cli::try_parse_from([
+        "agent-console-dashboard",
+        "daemon",
+        "status",
+        "--socket",
+        "/custom/status.sock",
+    ])
+    .expect("daemon status --socket should parse");
+    match cli.command {
+        Commands::Daemon {
+            command: DaemonCommands::Status { socket },
+        } => {
+            assert_eq!(socket, PathBuf::from("/custom/status.sock"));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+// -- Session update subcommand ------------------------------------------------
+
+#[test]
+fn test_session_update_with_status() {
+    let cli = Cli::try_parse_from([
+        "agent-console-dashboard",
+        "session",
+        "update",
+        "test-id",
+        "--status",
+        "working",
+    ])
+    .expect("session update with status should parse");
+    match cli.command {
+        Commands::Session {
+            command:
+                SessionCommands::Update {
+                    id,
+                    status,
+                    priority,
+                    working_dir,
+                    socket,
+                },
+        } => {
+            assert_eq!(id, "test-id");
+            assert_eq!(status, Some("working".to_string()));
+            assert_eq!(priority, None);
+            assert_eq!(working_dir, None);
+            assert_eq!(socket, PathBuf::from("/tmp/agent-console-dashboard.sock"));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_session_update_with_priority() {
+    let cli = Cli::try_parse_from([
+        "agent-console-dashboard",
+        "session",
+        "update",
+        "test-id",
+        "--priority",
+        "5",
+    ])
+    .expect("session update with priority should parse");
+    match cli.command {
+        Commands::Session {
+            command:
+                SessionCommands::Update {
+                    id,
+                    status,
+                    priority,
+                    ..
+                },
+        } => {
+            assert_eq!(id, "test-id");
+            assert_eq!(status, None);
+            assert_eq!(priority, Some(5));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_session_update_with_working_dir() {
+    let cli = Cli::try_parse_from([
+        "agent-console-dashboard",
+        "session",
+        "update",
+        "test-id",
+        "--working-dir",
+        "/path/to/dir",
+    ])
+    .expect("session update with working-dir should parse");
+    match cli.command {
+        Commands::Session {
+            command:
+                SessionCommands::Update {
+                    id,
+                    status,
+                    priority,
+                    working_dir,
+                    ..
+                },
+        } => {
+            assert_eq!(id, "test-id");
+            assert_eq!(status, None);
+            assert_eq!(priority, None);
+            assert_eq!(working_dir, Some(PathBuf::from("/path/to/dir")));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_session_update_with_all_fields() {
+    let cli = Cli::try_parse_from([
+        "agent-console-dashboard",
+        "session",
+        "update",
+        "test-id",
+        "--status",
+        "attention",
+        "--priority",
+        "10",
+        "--working-dir",
+        "/my/project",
+    ])
+    .expect("session update with all fields should parse");
+    match cli.command {
+        Commands::Session {
+            command:
+                SessionCommands::Update {
+                    id,
+                    status,
+                    priority,
+                    working_dir,
+                    socket,
+                },
+        } => {
+            assert_eq!(id, "test-id");
+            assert_eq!(status, Some("attention".to_string()));
+            assert_eq!(priority, Some(10));
+            assert_eq!(working_dir, Some(PathBuf::from("/my/project")));
+            assert_eq!(socket, PathBuf::from("/tmp/agent-console-dashboard.sock"));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_session_update_with_custom_socket() {
+    let cli = Cli::try_parse_from([
+        "agent-console-dashboard",
+        "session",
+        "update",
+        "test-id",
+        "--status",
+        "working",
+        "--socket",
+        "/custom/session.sock",
+    ])
+    .expect("session update with custom socket should parse");
+    match cli.command {
+        Commands::Session {
+            command: SessionCommands::Update { socket, .. },
+        } => {
+            assert_eq!(socket, PathBuf::from("/custom/session.sock"));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_session_update_no_flags_parses() {
+    // CLI parsing allows no flags; validation happens at runtime
+    let cli = Cli::try_parse_from(["agent-console-dashboard", "session", "update", "test-id"])
+        .expect("session update with no flags should parse");
+    match cli.command {
+        Commands::Session {
+            command:
+                SessionCommands::Update {
+                    id,
+                    status,
+                    priority,
+                    working_dir,
+                    ..
+                },
+        } => {
+            assert_eq!(id, "test-id");
+            assert_eq!(status, None);
+            assert_eq!(priority, None);
+            assert_eq!(working_dir, None);
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_session_without_subcommand_fails() {
+    let result = Cli::try_parse_from(["agent-console-dashboard", "session"]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_session_update_requires_id() {
+    let result = Cli::try_parse_from(["agent-console-dashboard", "session", "update"]);
+    assert!(result.is_err());
 }
 
 // -- Config subcommand --------------------------------------------------

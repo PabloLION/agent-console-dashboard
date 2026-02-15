@@ -61,10 +61,15 @@ fn start_daemon(socket: &Path) -> DaemonGuard {
     panic!("daemon did not create socket within 2 s");
 }
 
-/// Run `acd dump` and parse the JSON output.
+/// Run `acd daemon dump` and parse the JSON output.
 fn dump(socket: &Path) -> serde_json::Value {
     let output = acd_cmd()
-        .args(["dump", "--socket", socket.to_str().expect("valid path")])
+        .args([
+            "daemon",
+            "dump",
+            "--socket",
+            socket.to_str().expect("valid path"),
+        ])
         .output()
         .expect("failed to run dump");
     let stdout = String::from_utf8(output.stdout).expect("valid utf8");
@@ -238,14 +243,16 @@ fn set_closed_marks_session_closed() {
     )
     .success();
 
-    // Close via set command
+    // Close via session update command
     acd_cmd()
         .args([
-            "set",
+            "session",
+            "update",
+            "sess-cl",
+            "--status",
+            "closed",
             "--socket",
             sock.to_str().expect("valid path"),
-            "sess-cl",
-            "closed",
         ])
         .assert()
         .success();
@@ -291,7 +298,12 @@ fn status_command_shows_running() {
     let _daemon = start_daemon(&sock);
 
     acd_cmd()
-        .args(["status", "--socket", sock.to_str().expect("valid path")])
+        .args([
+            "daemon",
+            "status",
+            "--socket",
+            sock.to_str().expect("valid path"),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("running"));
@@ -304,7 +316,12 @@ fn status_command_not_running() {
     // No daemon started
 
     acd_cmd()
-        .args(["status", "--socket", sock.to_str().expect("valid path")])
+        .args([
+            "daemon",
+            "status",
+            "--socket",
+            sock.to_str().expect("valid path"),
+        ])
         .assert()
         .failure()
         .stdout(predicate::str::contains("not running"));

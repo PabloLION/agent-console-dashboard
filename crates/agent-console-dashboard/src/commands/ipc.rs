@@ -1,7 +1,7 @@
 //! IPC command implementations.
 //!
 //! Handles client commands that communicate with the daemon via IPC:
-//! - `set` - Update session status
+//! - `update` - Update session fields (status, priority, working_dir)
 //! - `status` - Check daemon health
 //! - `dump` - Dump full daemon state
 
@@ -11,16 +11,25 @@ use agent_console_dashboard::{
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-/// Connects to daemon, sends SET command as JSON to create/update a session.
-pub(crate) fn run_set_command(
+/// Connects to daemon, sends SET command as JSON to update session fields.
+///
+/// At least one of status, working_dir, or priority should be provided.
+/// If none are provided, prints a warning and returns success.
+pub(crate) fn run_update_command(
     socket: &PathBuf,
     session_id: &str,
-    status: &str,
+    status: Option<&str>,
     working_dir: Option<&std::path::Path>,
     priority: Option<u64>,
 ) -> ExitCode {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;
+
+    // Check if at least one field is provided
+    if status.is_none() && working_dir.is_none() && priority.is_none() {
+        eprintln!("Warning: no fields to update (specify --status, --working-dir, or --priority)");
+        return ExitCode::SUCCESS;
+    }
 
     let stream = match UnixStream::connect(socket) {
         Ok(s) => s,
@@ -33,20 +42,14 @@ pub(crate) fn run_set_command(
     let mut writer = stream.try_clone().expect("failed to clone unix stream");
     let mut reader = BufReader::new(stream);
 
-    let wd = working_dir
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|| {
-            std::env::current_dir()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|_| ".".to_string())
-        });
+    let wd = working_dir.map(|p| p.display().to_string());
 
     let cmd = IpcCommand {
         version: IPC_VERSION,
         cmd: "SET".to_string(),
         session_id: Some(session_id.to_string()),
-        status: Some(status.to_string()),
-        working_dir: Some(wd),
+        status: status.map(|s| s.to_string()),
+        working_dir: wd,
         confirmed: None,
         priority,
     };
