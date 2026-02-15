@@ -152,7 +152,10 @@ After an agent completes an issue:
 3. Orchestrator runs test suite on main
 4. Orchestrator removes worktree and branch (`git worktree remove`,
    `git branch -d`)
-5. Close the beads issue
+5. Close the beads issue with
+   `bd close <id> --reason="<summary>. Commit: <hash>"` — the commit hash is the
+   merge commit (or direct commit for non-worktree work). Never close an issue
+   before its work is committed and merged.
 
 ### Fresh worktree per dispatch
 
