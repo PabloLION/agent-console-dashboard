@@ -52,8 +52,9 @@ pub struct TuiConfig {
     /// Render tick rate as a human-readable duration (e.g. `"250ms"`).
     /// Hot-reloadable: No (restart required).
     pub tick_rate: String,
-    /// Shell command to execute on double-click.
+    /// Shell command to execute on double-click (activate action).
     ///
+    /// Fires when double-clicking a non-closed session.
     /// Supports placeholder substitution:
     /// - `{session_id}` — the session's identifier
     /// - `{working_dir}` — the session's working directory
@@ -62,7 +63,18 @@ pub struct TuiConfig {
     /// Executed via `sh -c` in a fire-and-forget manner.
     /// Empty string means double-click has no effect.
     /// Hot-reloadable: Yes.
-    pub double_click_hook: String,
+    pub activate_hook: String,
+    /// Shell command to execute on double-click of a closed session.
+    ///
+    /// Supports placeholder substitution:
+    /// - `{session_id}` — the session's identifier
+    /// - `{working_dir}` — the session's working directory
+    /// - `{status}` — the session's current status (always "closed")
+    ///
+    /// Executed via `sh -c` in a fire-and-forget manner.
+    /// Empty string means double-click has no effect.
+    /// Hot-reloadable: Yes.
+    pub reopen_hook: String,
 }
 
 impl Default for TuiConfig {
@@ -74,7 +86,8 @@ impl Default for TuiConfig {
                 "api-usage".to_string(),
             ],
             tick_rate: "250ms".to_string(),
-            double_click_hook: String::new(),
+            activate_hook: String::new(),
+            reopen_hook: String::new(),
         }
     }
 }
@@ -384,27 +397,52 @@ log_level = "debug"
     }
 
     #[test]
-    fn default_double_click_hook_is_empty() {
+    fn default_activate_hook_is_empty() {
         let config = Config::default();
-        assert_eq!(config.tui.double_click_hook, "");
+        assert_eq!(config.tui.activate_hook, "");
     }
 
     #[test]
-    fn parse_double_click_hook() {
+    fn default_reopen_hook_is_empty() {
+        let config = Config::default();
+        assert_eq!(config.tui.reopen_hook, "");
+    }
+
+    #[test]
+    fn parse_activate_hook() {
         let toml_str = r#"
 [tui]
-double_click_hook = "open {working_dir}"
+activate_hook = "open {working_dir}"
 "#;
-        let config: Config = toml::from_str(toml_str).expect("should parse double_click_hook");
-        assert_eq!(config.tui.double_click_hook, "open {working_dir}");
+        let config: Config = toml::from_str(toml_str).expect("should parse activate_hook");
+        assert_eq!(config.tui.activate_hook, "open {working_dir}");
     }
 
     #[test]
-    fn double_click_hook_roundtrip() {
+    fn parse_reopen_hook() {
+        let toml_str = r#"
+[tui]
+reopen_hook = "zellij action new-tab -c {working_dir}"
+"#;
+        let config: Config = toml::from_str(toml_str).expect("should parse reopen_hook");
+        assert_eq!(config.tui.reopen_hook, "zellij action new-tab -c {working_dir}");
+    }
+
+    #[test]
+    fn activate_hook_roundtrip() {
         let mut config = Config::default();
-        config.tui.double_click_hook = "echo {session_id}".to_string();
+        config.tui.activate_hook = "echo {session_id}".to_string();
         let toml_str = toml::to_string(&config).expect("serialization should succeed");
         let parsed: Config = toml::from_str(&toml_str).expect("roundtrip should parse");
-        assert_eq!(parsed.tui.double_click_hook, "echo {session_id}");
+        assert_eq!(parsed.tui.activate_hook, "echo {session_id}");
+    }
+
+    #[test]
+    fn reopen_hook_roundtrip() {
+        let mut config = Config::default();
+        config.tui.reopen_hook = "zellij action new-tab".to_string();
+        let toml_str = toml::to_string(&config).expect("serialization should succeed");
+        let parsed: Config = toml::from_str(&toml_str).expect("roundtrip should parse");
+        assert_eq!(parsed.tui.reopen_hook, "zellij action new-tab");
     }
 }
