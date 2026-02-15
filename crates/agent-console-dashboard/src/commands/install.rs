@@ -137,6 +137,7 @@ pub(crate) fn run_install_command() -> ExitCode {
 
 /// Remove all ACD-managed hooks from ~/.claude/settings.json.
 pub(crate) fn run_uninstall_command() -> ExitCode {
+    // Step 1: Remove hooks
     let definitions = acd_hook_definitions();
     let mut removed = 0u32;
     let mut skipped = 0u32;
@@ -171,6 +172,38 @@ pub(crate) fn run_uninstall_command() -> ExitCode {
             eprintln!("  Error: {}", err);
         }
         return ExitCode::FAILURE;
+    }
+
+    // Step 2: Stop daemon if running
+    let socket_path = agent_console_dashboard::config::xdg::socket_path();
+    if crate::commands::daemon::is_daemon_running(&socket_path) {
+        // Stop with force=true (no confirmation prompt during uninstall)
+        let stop_result = crate::commands::daemon::run_daemon_stop_command(&socket_path, true);
+        if stop_result == ExitCode::SUCCESS {
+            println!("  Stopped daemon");
+        } else {
+            eprintln!("  Warning: failed to stop daemon");
+        }
+    } else {
+        println!("  Daemon not running (skipped)");
+    }
+
+    // Step 3: Remove socket file
+    if socket_path.exists() {
+        match std::fs::remove_file(&socket_path) {
+            Ok(()) => println!("  Removed socket: {}", socket_path.display()),
+            Err(e) => eprintln!("  Warning: failed to remove socket: {}", e),
+        }
+    } else {
+        println!("  Socket not found (skipped)");
+    }
+
+    // Step 4: Print config path (do not delete)
+    let config_path = agent_console_dashboard::config::xdg::config_path();
+    if config_path.exists() {
+        println!();
+        println!("  Config file preserved at: {}", config_path.display());
+        println!("  To remove: rm {}", config_path.display());
     }
 
     if removed > 0 {
