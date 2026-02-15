@@ -120,36 +120,22 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
             Action::None
         }
         KeyCode::Enter => {
-            // Enter on focused session fires the double-click hook (same as double-click)
+            // Enter on focused session fires the appropriate hook (activate or reopen)
             if let Some(idx) = app.selected_index {
-                if let Some(session) = app.sessions.get(idx) {
-                    if app.double_click_hook.is_some() {
-                        let session_clone = session.clone();
-                        app.execute_double_click_hook(&session_clone);
-                        return Action::None;
-                    } else {
-                        // No hook configured — show hint message
-                        app.status_message = Some((
-                            "Set tui.double_click_hook in config to enable Enter action"
-                                .to_string(),
-                            std::time::Instant::now() + std::time::Duration::from_secs(3),
-                        ));
-                        return Action::None;
-                    }
-                }
+                app.execute_hook(idx);
             }
             Action::None
         }
         KeyCode::Char('r') => {
-            if let Some(session) = app.selected_session() {
-                if session.status == crate::Status::Closed {
-                    Action::Resurrect(session.session_id.clone())
-                } else {
-                    Action::None
+            // 'r' on closed session fires reopen_hook
+            if let Some(idx) = app.selected_index {
+                if let Some(session) = app.sessions.get(idx) {
+                    if session.status == crate::Status::Closed {
+                        app.execute_hook(idx);
+                    }
                 }
-            } else {
-                Action::None
             }
+            Action::None
         }
         KeyCode::Char('d') => {
             if let Some(session) = app.selected_session() {
