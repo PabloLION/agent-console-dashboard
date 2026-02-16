@@ -6,6 +6,7 @@
 use crate::tui::app::App;
 use crate::tui::views::dashboard::render_session_list;
 use crate::tui::views::detail::{render_detail_placeholder, render_inline_detail};
+use crate::widgets::{api_usage::ApiUsageWidget, Widget, WidgetContext};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
@@ -90,6 +91,7 @@ pub fn render_dashboard(frame: &mut Frame, app: &mut App) {
     }
 
     // Footer (with optional status message overlay)
+    // When status message is active, it overrides the entire footer
     let footer_text = if let Some((ref msg, expiry)) = app.status_message {
         if Instant::now() < expiry {
             Line::from(vec![Span::styled(
@@ -97,19 +99,75 @@ pub fn render_dashboard(frame: &mut Frame, app: &mut App) {
                 Style::default().fg(Color::Yellow),
             )])
         } else {
-            Line::from(vec![Span::styled(
-                FOOTER_TEXT,
-                Style::default().fg(Color::DarkGray),
-            )])
+            render_footer_normal(&app.sessions, app.usage.as_ref(), chunks[3].width as usize)
         }
     } else {
-        Line::from(vec![Span::styled(
-            FOOTER_TEXT,
-            Style::default().fg(Color::DarkGray),
-        )])
+        render_footer_normal(&app.sessions, app.usage.as_ref(), chunks[3].width as usize)
     };
     let footer = Paragraph::new(footer_text);
     frame.render_widget(footer, chunks[3]);
+}
+
+/// Renders the normal footer layout: keybinding hints left, API usage right.
+///
+/// The footer is split into two parts:
+/// - LEFT: keybinding hints (DarkGray)
+/// - RIGHT: API usage widget in SHORT format (width < 30 to force SHORT)
+///
+/// If the terminal is too narrow to fit both, only hints are shown.
+fn render_footer_normal(
+    sessions: &[crate::Session],
+    usage: Option<&claude_usage::UsageData>,
+    footer_width: usize,
+) -> Line<'static> {
+    let hints_text = FOOTER_TEXT;
+    let hints_len = hints_text.len();
+
+    // Create widget context (usage may be None, which shows "Quota: --")
+    let mut ctx = WidgetContext::new(sessions);
+    if let Some(u) = usage {
+        ctx = ctx.with_usage(u);
+    }
+    let api_widget = ApiUsageWidget::new();
+
+    // Render with width < 30 to force SHORT format
+    // The SHORT format needs minimum 15 chars (widget.min_width())
+    let api_usage_line = api_widget.render(25, &ctx);
+    let api_usage_text = api_usage_line.to_string();
+    let api_usage_len = api_usage_text.len();
+
+    // Check if we have enough space for both hints and API usage
+    // Need: hints_len + 2 (spacing) + api_usage_len
+    let min_width = hints_len + 2 + api_usage_len;
+
+    if footer_width < min_width {
+        // Not enough space — only show hints
+        return Line::from(vec![Span::styled(
+            hints_text,
+            Style::default().fg(Color::DarkGray),
+        )]);
+    }
+
+    // Calculate padding to position API usage on the right
+    let padding_len = footer_width.saturating_sub(hints_len).saturating_sub(api_usage_len);
+
+    // Build footer: hints (left) + padding + API usage (right)
+    // Convert api_usage_line spans to owned Spans with cloned content
+    let mut spans = vec![Span::styled(
+        hints_text,
+        Style::default().fg(Color::DarkGray),
+    )];
+    spans.push(Span::raw(" ".repeat(padding_len)));
+
+    // Clone api_usage_line spans to owned Spans
+    for span in api_usage_line.spans {
+        spans.push(Span::styled(
+            span.content.to_string(),
+            span.style,
+        ));
+    }
+
+    Line::from(spans)
 }
 
 #[cfg(test)]
@@ -305,7 +363,7 @@ mod tests {
 
     // --- Full Dashboard Integration Tests (acd-211) ---
 
-    use crate::tui::test_utils::{find_row_with_text, render_dashboard_to_buffer, row_contains};
+    use crate::tui::test_utils::{find_row_with_text, render_dashboard_to_buffer, row_contains, row_text};
 
     #[test]
     fn test_full_dashboard_render_with_mixed_statuses() {
@@ -460,6 +518,165 @@ mod tests {
         assert!(
             row_contains(&buffer, buffer.area().height - 1, "[q] Quit"),
             "Footer should be visible with many sessions"
+        );
+    }
+
+    // --- Footer layout tests (acd-0i4i) ---
+
+    #[test]
+    fn test_footer_shows_api_usage_short_format() {
+        use claude_usage::{UsageData, UsagePeriod};
+        let mut app = make_app_with_sessions(3);
+        app.usage = Some(UsageData {
+            five_hour: UsagePeriod {
+                utilization: 8.0,
+                resets_at: None,
+            },
+            seven_day: UsagePeriod {
+                utilization: 77.0,
+                resets_at: None,
+            },
+            seven_day_sonnet: None,
+            extra_usage: None,
+        });
+
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
+        let footer_row = buffer.area().height - 1;
+
+        // Verify SHORT format is present: [5h:8% 7d:77%]
+        assert!(
+            row_contains(&buffer, footer_row, "[5h:8%"),
+            "Footer should contain SHORT format start"
+        );
+        assert!(
+            row_contains(&buffer, footer_row, "7d:77%]"),
+            "Footer should contain SHORT format end"
+        );
+    }
+
+    #[test]
+    fn test_footer_layout_hints_left_usage_right() {
+        use claude_usage::{UsageData, UsagePeriod};
+        let mut app = make_app_with_sessions(3);
+        app.usage = Some(UsageData {
+            five_hour: UsagePeriod {
+                utilization: 8.0,
+                resets_at: None,
+            },
+            seven_day: UsagePeriod {
+                utilization: 77.0,
+                resets_at: None,
+            },
+            seven_day_sonnet: None,
+            extra_usage: None,
+        });
+
+        let buffer = render_dashboard_to_buffer(&mut app, 100, 24);
+        let footer_row = buffer.area().height - 1;
+        let footer_text = row_text(&buffer, footer_row);
+
+        // Find positions of hints and usage
+        let hints_pos = footer_text
+            .find("[j/k]")
+            .expect("hints should be in footer");
+        let usage_pos = footer_text
+            .find("[5h:8%")
+            .expect("usage should be in footer");
+
+        // Usage should be to the right of hints
+        assert!(
+            usage_pos > hints_pos,
+            "API usage should be positioned right of hints"
+        );
+    }
+
+    #[test]
+    fn test_footer_no_usage_shows_placeholder() {
+        let mut app = make_app_with_sessions(3);
+        app.usage = None; // No usage data
+
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
+        let footer_row = buffer.area().height - 1;
+
+        // When usage is None, widget should show "Quota: --"
+        assert!(
+            row_contains(&buffer, footer_row, "Quota: --"),
+            "Footer should show quota placeholder when usage unavailable"
+        );
+    }
+
+    #[test]
+    fn test_footer_narrow_terminal_shows_only_hints() {
+        use claude_usage::{UsageData, UsagePeriod};
+        let mut app = make_app_with_sessions(3);
+        app.usage = Some(UsageData {
+            five_hour: UsagePeriod {
+                utilization: 8.0,
+                resets_at: None,
+            },
+            seven_day: UsagePeriod {
+                utilization: 77.0,
+                resets_at: None,
+            },
+            seven_day_sonnet: None,
+            extra_usage: None,
+        });
+
+        // Very narrow terminal — not enough space for both hints and usage
+        let buffer = render_dashboard_to_buffer(&mut app, 50, 24);
+        let footer_row = buffer.area().height - 1;
+        let footer_text = row_text(&buffer, footer_row);
+
+        // Hints should still be there
+        assert!(
+            footer_text.contains("[j/k]"),
+            "Footer should show hints on narrow terminal"
+        );
+
+        // Usage should NOT be there (not enough space)
+        assert!(
+            !footer_text.contains("[5h:8%"),
+            "Footer should not show usage on narrow terminal"
+        );
+    }
+
+    #[test]
+    fn test_footer_status_message_overrides_entire_footer() {
+        use claude_usage::{UsageData, UsagePeriod};
+        let mut app = make_app_with_sessions(3);
+        app.usage = Some(UsageData {
+            five_hour: UsagePeriod {
+                utilization: 8.0,
+                resets_at: None,
+            },
+            seven_day: UsagePeriod {
+                utilization: 77.0,
+                resets_at: None,
+            },
+            seven_day_sonnet: None,
+            extra_usage: None,
+        });
+        app.status_message = Some((
+            "Test message".to_string(),
+            Instant::now() + std::time::Duration::from_secs(10),
+        ));
+
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
+        let footer_row = buffer.area().height - 1;
+        let footer_text = row_text(&buffer, footer_row);
+
+        // Status message should override everything
+        assert!(
+            footer_text.contains("Test message"),
+            "Footer should show status message"
+        );
+        assert!(
+            !footer_text.contains("[j/k]"),
+            "Footer should not show hints when status message active"
+        );
+        assert!(
+            !footer_text.contains("[5h:8%"),
+            "Footer should not show usage when status message active"
         );
     }
 }
