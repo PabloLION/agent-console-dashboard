@@ -172,8 +172,7 @@ pub(crate) fn compute_directory_display_names(
 ///
 /// Responsive breakpoints:
 /// - `<40` cols: symbol + session ID only
-/// - `40-80` cols: symbol + directory (flex) + session ID (40) + status (14) + elapsed (16)
-/// - `>80` cols: symbol + directory (flex) + session ID (40) + status (14) + elapsed (16)
+/// - `>=40` cols: symbol + directory (flex) + status (14) + priority (12) + elapsed (16) + session ID (40)
 ///
 /// If `is_highlighted` is true and the session is inactive or closed, uses black text for readability
 /// against the dark gray highlight background.
@@ -221,10 +220,10 @@ pub fn format_session_line<'a>(
             Span::styled(name, dim),
         ])
     } else {
-        // Standard/Wide: directory (flex) + session ID (40) + status (14) + time elapsed (16)
+        // Standard/Wide: directory (flex) + status (14) + priority (12) + time elapsed (16) + session ID (40)
         // Highlight marker (▶ + space, 2 chars) is reserved by HighlightSpacing::Always.
-        // Fixed = highlight (2) + session_id (40) + status (14) + time_elapsed (16) = 72
-        let fixed_width = 2 + 40 + 14 + 16;
+        // Fixed = highlight (2) + status (14) + priority (12) + time_elapsed (16) + session_id (40) = 84
+        let fixed_width = 2 + 14 + 12 + 16 + 40;
         let dir_width = (width as usize).saturating_sub(fixed_width).max(1);
 
         let work_dir_text = truncate_string(dir_display, dir_width);
@@ -241,9 +240,10 @@ pub fn format_session_line<'a>(
 
         Line::from(vec![
             work_dir_span,
-            Span::styled(format!("{:<40}", name), dim),
             Span::styled(format!("{:<14}", status_text), Style::default().fg(color)),
+            Span::styled(format!("{:<12}", session.priority), dim),
             Span::styled(format!("{:<16}", elapsed), dim),
+            Span::styled(format!("{:<40}", name), dim),
         ])
     }
 }
@@ -252,8 +252,7 @@ pub fn format_session_line<'a>(
 ///
 /// Returns a header row with column titles aligned to their respective columns.
 /// Narrow mode has no headers. Standard and wide modes share the same column
-/// structure (directory, session ID, status, elapsed) with wider directory in
-/// wide mode.
+/// structure (directory, status, priority, time elapsed, session ID).
 pub fn format_header_line(width: u16) -> Line<'static> {
     let header_style = Style::default()
         .fg(Color::Cyan)
@@ -263,16 +262,17 @@ pub fn format_header_line(width: u16) -> Line<'static> {
         // Narrow: no headers
         Line::from(vec![])
     } else {
-        // Standard/Wide: 2 (highlight space) + Directory (flex) + Session ID (40) + Status (14) + Time Elapsed (16)
-        let fixed_width = 2 + 40 + 14 + 16;
+        // Standard/Wide: 2 (highlight space) + Directory (flex) + Status (14) + Priority (12) + Time Elapsed (16) + Session ID (40)
+        let fixed_width = 2 + 14 + 12 + 16 + 40;
         let dir_width = (width as usize).saturating_sub(fixed_width).max(1);
 
         Line::from(vec![
             Span::styled("  ", header_style), // Aligns with highlight marker space
             Span::styled(format!("{:<dir_width$}", "Directory"), header_style),
-            Span::styled(format!("{:<40}", "Session ID"), header_style),
             Span::styled(format!("{:<14}", "Status"), header_style),
+            Span::styled(format!("{:<12}", "Priority"), header_style),
             Span::styled(format!("{:<16}", "Time Elapsed"), header_style),
+            Span::styled(format!("{:<40}", "Session ID"), header_style),
         ])
     }
 }
@@ -287,21 +287,23 @@ pub(crate) fn format_ruler_line(width: u16) -> Line<'static> {
         return Line::from(vec![]);
     }
 
-    let fixed_width: usize = 2 + 40 + 14 + 16;
+    let fixed_width: usize = 2 + 14 + 12 + 16 + 40;
     let dir_width = (width as usize).saturating_sub(fixed_width).max(1);
 
-    // Show column widths as labels: "dir:XX | id:40 | stat:14 | time:16"
+    // Show column widths as labels: "dir:XX | stat:14 | prio:12 | time:16 | id:40"
     let dir_label = format!("{:<dir_width$}", format!("dir:{dir_width}"));
-    let id_label = format!("{:<40}", "id:40");
     let status_label = format!("{:<14}", "stat:14");
+    let priority_label = format!("{:<12}", "prio:12");
     let elapsed_label = format!("{:<16}", "time:16");
+    let id_label = format!("{:<40}", "id:40");
 
     Line::from(vec![
         Span::styled("  ", style),
         Span::styled(dir_label, style),
-        Span::styled(id_label, style),
         Span::styled(status_label, style),
+        Span::styled(priority_label, style),
         Span::styled(elapsed_label, style),
+        Span::styled(id_label, style),
     ])
 }
 

@@ -205,7 +205,8 @@ fn test_error_working_dir_renders_red() {
         Status::Working,
         None,
     )];
-    let buffer = render_session_list_to_buffer(&sessions, None, 80, 10);
+    // Use width 100 to ensure all columns fit (fixed width is 84 + at least 1 for directory = 85 minimum)
+    let buffer = render_session_list_to_buffer(&sessions, None, 100, 10);
     let row = find_row_with_text(&buffer, "error-test").expect("should find session");
     assert_text_fg_in_row(&buffer, row, "<error>", Color::Red);
 }
@@ -307,17 +308,12 @@ fn test_header_row_absent_in_narrow_mode() {
 fn test_format_ruler_line_standard_width() {
     let line = format_ruler_line(100);
     let spans: Vec<&str> = line.spans.iter().map(|s| s.content.as_ref()).collect();
-    assert_eq!(spans.len(), 5);
+    assert_eq!(spans.len(), 6);
     assert!(spans[1].contains("dir:"), "should show dir width label");
-    assert!(spans[2].contains("id:40"), "should show id width label");
-    assert!(
-        spans[3].contains("stat:14"),
-        "should show status width label"
-    );
-    assert!(
-        spans[4].contains("time:16"),
-        "should show elapsed width label"
-    );
+    assert!(spans[2].contains("stat:14"), "should show status width label");
+    assert!(spans[3].contains("prio:12"), "should show priority width label");
+    assert!(spans[4].contains("time:16"), "should show elapsed width label");
+    assert!(spans[5].contains("id:40"), "should show id width label");
 }
 
 #[test]
