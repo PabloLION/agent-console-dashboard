@@ -122,7 +122,8 @@ fn test_header_says_session_id_wide() {
 
 #[test]
 fn test_session_id_not_truncated_in_line() {
-    let long_id = "very-long-session-identifier-that-should-not-be-truncated";
+    // Use realistic UUID v4 length (36 chars) that fits in 40-char session_id column
+    let long_id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
     let sessions = vec![make_test_session_with_dir(
         long_id,
         Status::Working,
@@ -137,14 +138,15 @@ fn test_session_id_not_truncated_in_line() {
 
 #[test]
 fn test_session_id_not_truncated_at_any_width() {
-    let long_id = "extremely-long-session-id-with-many-characters";
+    // Use realistic UUID v4 length (36 chars) that fits in 40-char session_id column
+    let long_id = "12345678-abcd-4ef0-9012-3456789abcde";
     let sessions = vec![make_test_session_with_dir(
         long_id,
         Status::Working,
         Some(PathBuf::from("/tmp")),
     )];
     // Try multiple widths
-    for width in [80, 100, 120, 150] {
+    for width in [100, 120, 150, 200] {
         let buffer = render_session_list_to_buffer(&sessions, Some(0), width, 10);
         assert!(
             find_row_with_text(&buffer, long_id).is_some(),

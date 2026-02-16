@@ -12,8 +12,8 @@ fn test_format_session_line_unknown_working_dir_shows_error_standard() {
     session.status = Status::Working;
     let line = format_session_line(&session, 100, "<error>", false);
 
-    // Should have 4 spans: work_dir (error), session ID, status, elapsed
-    assert_eq!(line.spans.len(), 4);
+    // Should have 5 spans: work_dir (error), status, priority, elapsed, session ID
+    assert_eq!(line.spans.len(), 5);
 
     // The work_dir span (index 0) should contain "<error>" and be styled with red
     let work_dir_span = &line.spans[0];
@@ -39,8 +39,8 @@ fn test_format_session_line_unknown_working_dir_shows_error_wide() {
     session.status = Status::Attention;
     let line = format_session_line(&session, 100, "<error>", false);
 
-    // Should have 4 spans: work_dir (error), session ID, status, elapsed
-    assert_eq!(line.spans.len(), 4);
+    // Should have 5 spans: work_dir (error), status, priority, elapsed, session ID
+    assert_eq!(line.spans.len(), 5);
 
     // The work_dir span (index 0) should contain "<error>" and be styled with red
     let work_dir_span = &line.spans[0];
@@ -65,8 +65,8 @@ fn test_format_session_line_normal_path_unchanged() {
     );
     let line = format_session_line(&session, 100, "project", false);
 
-    // Should have 4 spans
-    assert_eq!(line.spans.len(), 4);
+    // Should have 5 spans
+    assert_eq!(line.spans.len(), 5);
 
     // The work_dir span (index 0) should contain the path, not "<error>"
     let work_dir_span = &line.spans[0];
@@ -99,20 +99,11 @@ fn test_column_alignment_standard_width() {
     );
     let line = format_session_line(&session, 100, "project", false);
 
-    // Should have 4 spans: workdir, session ID, status, elapsed
-    assert_eq!(line.spans.len(), 4);
+    // Should have 5 spans: workdir, status, priority, elapsed, session ID
+    assert_eq!(line.spans.len(), 5);
 
-    // Session ID (index 1) should be left-aligned with width 40
-    let session_id_span = &line.spans[1];
-    assert_eq!(
-        session_id_span.content.len(),
-        40,
-        "Session ID should have width 40, got: '{}'",
-        session_id_span.content
-    );
-
-    // Status (index 2) should be left-aligned with width 14
-    let status_span = &line.spans[2];
+    // Status (index 1) should be left-aligned with width 14
+    let status_span = &line.spans[1];
     assert_eq!(
         status_span.content.len(),
         14,
@@ -123,6 +114,20 @@ fn test_column_alignment_standard_width() {
         !status_span.content.starts_with(' '),
         "Status should be left-aligned, got: '{}'",
         status_span.content
+    );
+
+    // Priority (index 2) should be left-aligned with width 12
+    let priority_span = &line.spans[2];
+    assert_eq!(
+        priority_span.content.len(),
+        12,
+        "Priority should have width 12, got: '{}'",
+        priority_span.content
+    );
+    assert!(
+        !priority_span.content.starts_with(' '),
+        "Priority should be left-aligned, got: '{}'",
+        priority_span.content
     );
 
     // Elapsed (index 3) should be left-aligned with width 16
@@ -138,6 +143,15 @@ fn test_column_alignment_standard_width() {
         "Elapsed should be left-aligned, got: '{}'",
         elapsed_span.content
     );
+
+    // Session ID (index 4) should be left-aligned with width 40
+    let session_id_span = &line.spans[4];
+    assert_eq!(
+        session_id_span.content.len(),
+        40,
+        "Session ID should have width 40, got: '{}'",
+        session_id_span.content
+    );
 }
 
 #[test]
@@ -149,20 +163,24 @@ fn test_column_alignment_wide_width() {
     );
     let line = format_session_line(&session, 120, "project", false);
 
-    // Should have 4 spans: workdir, session ID, status, elapsed
-    assert_eq!(line.spans.len(), 4);
+    // Should have 5 spans: workdir, status, priority, elapsed, session ID
+    assert_eq!(line.spans.len(), 5);
 
-    // Session ID (index 1) should be left-aligned with width 40
-    let session_id_span = &line.spans[1];
-    assert_eq!(session_id_span.content.len(), 40);
-
-    // Status (index 2) should be left-aligned with width 14
-    let status_span = &line.spans[2];
+    // Status (index 1) should be left-aligned with width 14
+    let status_span = &line.spans[1];
     assert_eq!(status_span.content.len(), 14);
+
+    // Priority (index 2) should be left-aligned with width 12
+    let priority_span = &line.spans[2];
+    assert_eq!(priority_span.content.len(), 12);
 
     // Elapsed (index 3) should be left-aligned with width 16
     let elapsed_span = &line.spans[3];
     assert_eq!(elapsed_span.content.len(), 16);
+
+    // Session ID (index 4) should be left-aligned with width 40
+    let session_id_span = &line.spans[4];
+    assert_eq!(session_id_span.content.len(), 40);
 }
 
 #[test]
@@ -202,11 +220,11 @@ fn test_header_narrow_mode_no_header() {
 #[test]
 fn test_header_standard_mode() {
     let line = format_header_line(60);
-    // Standard mode: symbol space + Directory + Session ID + Status + Elapsed = 5 spans
+    // Standard mode: symbol space + Directory + Status + Priority + Elapsed + Session ID = 6 spans
     assert_eq!(
         line.spans.len(),
-        5,
-        "Standard mode should have 5 header spans"
+        6,
+        "Standard mode should have 6 header spans"
     );
 
     // Verify header contains expected column titles
@@ -223,6 +241,10 @@ fn test_header_standard_mode() {
     assert!(
         full_text.contains("Status"),
         "Header should contain 'Status'"
+    );
+    assert!(
+        full_text.contains("Priority"),
+        "Header should contain 'Priority'"
     );
     assert!(
         full_text.contains("Directory"),
@@ -250,8 +272,8 @@ fn test_header_standard_mode() {
 #[test]
 fn test_header_wide_mode_same_columns_wider_directory() {
     let line = format_header_line(100);
-    // Wide mode: same 5 spans as standard (symbol space + Directory + Session ID + Status + Elapsed)
-    assert_eq!(line.spans.len(), 5, "Wide mode should have 5 header spans");
+    // Wide mode: same 6 spans as standard (symbol space + Directory + Status + Priority + Elapsed + Session ID)
+    assert_eq!(line.spans.len(), 6, "Wide mode should have 6 header spans");
 
     // Verify header contains expected column titles
     let full_text = line
@@ -267,6 +289,10 @@ fn test_header_wide_mode_same_columns_wider_directory() {
     assert!(
         full_text.contains("Status"),
         "Header should contain 'Status'"
+    );
+    assert!(
+        full_text.contains("Priority"),
+        "Header should contain 'Priority'"
     );
     assert!(
         full_text.contains("Directory"),
@@ -301,20 +327,20 @@ fn test_header_labels_are_left_aligned() {
         dir_span.content
     );
 
-    // Session ID (index 2): check left-aligned (starts with "S", not space)
-    let id_span = &line.spans[2];
-    assert!(
-        id_span.content.starts_with('S'),
-        "Session ID header should be left-aligned, got: '{}'",
-        id_span.content
-    );
-
-    // Status (index 3): check left-aligned (starts with "S", not space)
-    let status_span = &line.spans[3];
+    // Status (index 2): check left-aligned (starts with "S", not space)
+    let status_span = &line.spans[2];
     assert!(
         status_span.content.starts_with('S'),
         "Status header should be left-aligned, got: '{}'",
         status_span.content
+    );
+
+    // Priority (index 3): check left-aligned (starts with "P", not space)
+    let priority_span = &line.spans[3];
+    assert!(
+        priority_span.content.starts_with('P'),
+        "Priority header should be left-aligned, got: '{}'",
+        priority_span.content
     );
 
     // Time Elapsed (index 4): check left-aligned (starts with "T", not space)
@@ -323,6 +349,14 @@ fn test_header_labels_are_left_aligned() {
         elapsed_span.content.starts_with('T'),
         "Time Elapsed header should be left-aligned, got: '{}'",
         elapsed_span.content
+    );
+
+    // Session ID (index 5): check left-aligned (starts with "S", not space)
+    let id_span = &line.spans[5];
+    assert!(
+        id_span.content.starts_with('S'),
+        "Session ID header should be left-aligned, got: '{}'",
+        id_span.content
     );
 }
 
@@ -337,10 +371,10 @@ fn test_header_alignment_matches_data() {
     );
     let data_line = format_session_line(&session, 100, "test", false);
 
-    // Header has 5 spans (padding + 4 columns), data has 4 spans (columns only).
+    // Header has 6 spans (padding + 5 columns), data has 5 spans (columns only).
     // The header "  " padding aligns with ratatui's highlight symbol space.
-    assert_eq!(header.spans.len(), 5, "Header should have 5 spans");
-    assert_eq!(data_line.spans.len(), 4, "Data should have 4 spans");
+    assert_eq!(header.spans.len(), 6, "Header should have 6 spans");
+    assert_eq!(data_line.spans.len(), 5, "Data should have 5 spans");
 
     // Verify column widths match (header offset +1 for padding span)
     // Directory: header[1] == data[0]
@@ -349,15 +383,19 @@ fn test_header_alignment_matches_data() {
         data_line.spans[0].content.len()
     );
 
-    // Session ID: header[2] == data[1], both fixed 40
-    assert_eq!(header.spans[2].content.len(), 40);
-    assert_eq!(data_line.spans[1].content.len(), 40);
+    // Status: header[2] == data[1], both fixed 14
+    assert_eq!(header.spans[2].content.len(), 14);
+    assert_eq!(data_line.spans[1].content.len(), 14);
 
-    // Status: header[3] == data[2], both fixed 14
-    assert_eq!(header.spans[3].content.len(), 14);
-    assert_eq!(data_line.spans[2].content.len(), 14);
+    // Priority: header[3] == data[2], both fixed 12
+    assert_eq!(header.spans[3].content.len(), 12);
+    assert_eq!(data_line.spans[2].content.len(), 12);
 
     // Time Elapsed: header[4] == data[3], both fixed 16
     assert_eq!(header.spans[4].content.len(), 16);
     assert_eq!(data_line.spans[3].content.len(), 16);
+
+    // Session ID: header[5] == data[4], both fixed 40
+    assert_eq!(header.spans[5].content.len(), 40);
+    assert_eq!(data_line.spans[4].content.len(), 40);
 }

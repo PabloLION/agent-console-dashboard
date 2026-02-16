@@ -102,12 +102,17 @@ See [Q94](../archive/planning/6-open-questions.md),
 
 ### Column layout
 
-Full TUI columns: directory (flex), session_id (40), status (14), time elapsed
-(16). Directory fills remaining width after fixed columns and highlight marker
-(2 chars). Status width is 14 (even number: max label "attention" is 9 chars + 5
-padding). Session ID is 40 (UUID 36 chars + 4 padding). Time Elapsed is 16
-(HH:MM:SS 8 + 8 padding). Narrow mode (< 40 cols) shows only symbol + session
-ID, no columnar layout.
+Full TUI columns (in order): Directory (flex), Status (14), Priority (12), Time
+Elapsed (16), Session ID (40). Directory fills remaining width after fixed
+columns and highlight marker (2 chars). Status width is 14 (max label
+"attention" is 9 chars + 5 padding). Priority width is 12 (u64 display + 4
+padding, default 0). Session ID is 40 (UUID 36 chars + 4 padding). Time Elapsed
+is 16 (HH:MM:SS 8 + 8 padding). Narrow mode (< 40 cols) shows only symbol +
+session ID, no columnar layout.
+
+Column order rationale: sort-key columns (Status, Priority, Time Elapsed) appear
+in sort precedence order. Directory is first as the primary visual identifier.
+Session ID is last.
 
 Cell content alignment: all columns left-aligned, trailing padding. Highlight
 marker (▶ + space, 2 chars) always reserved via `HighlightSpacing::Always`, even
@@ -253,6 +258,6 @@ Priority differentiates within the same status group.
 | Focus on terminal refocus | Restore previous selection                  | [Q102](../archive/planning/6-open-questions.md) |
 | Name conflicts            | Parent folder or session ID suffix          | [Q41](../archive/planning/6-open-questions.md)  |
 | Long name truncation      | Abbreviate parents, truncate middle         | [Q42](../archive/planning/6-open-questions.md)  |
-| Column widths (Full TUI)  | dir=flex, id=40, status=14, time elapsed=16 | —                                               |
+| Column widths (Full TUI)  | dir=flex, status=14, priority=12, time elapsed=16, id=40 | —                                   |
 | Cell content alignment    | Left-aligned, trailing padding              | —                                               |
 | Highlight marker          | ▶ (filled triangle), always show spacing    | —                                               |

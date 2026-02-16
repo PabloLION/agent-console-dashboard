@@ -122,16 +122,16 @@ fn test_format_session_line_narrow() {
 fn test_format_session_line_standard() {
     let session = make_session("my-session", Status::Attention);
     let line = format_session_line(&session, 60, "project", false);
-    // Should have 4 spans (workdir, session ID, status, elapsed) — highlight handled by List widget
-    assert_eq!(line.spans.len(), 4);
+    // Should have 5 spans (workdir, status, priority, elapsed, session ID) — highlight handled by List widget
+    assert_eq!(line.spans.len(), 5);
 }
 
 #[test]
 fn test_format_session_line_wide() {
     let session = make_session("my-session", Status::Question);
     let line = format_session_line(&session, 100, "project", false);
-    // Wide has same 4 spans as standard (workdir, session ID, status, elapsed)
-    assert_eq!(line.spans.len(), 4);
+    // Wide has same 5 spans as standard (workdir, status, priority, elapsed, session ID)
+    assert_eq!(line.spans.len(), 5);
 }
 
 #[test]
@@ -164,8 +164,8 @@ fn test_format_session_line_shows_full_session_id() {
     let session = make_session(long_id, Status::Working);
     let line = format_session_line(&session, 80, "project", false);
 
-    // Session ID span is index 1 (highlight handled by List widget)
-    let name_span = &line.spans[1];
+    // Session ID span is index 4 (directory, status, priority, elapsed, session_id)
+    let name_span = &line.spans[4];
     assert!(
         name_span.content.contains(long_id),
         "Session ID should not be truncated, got: '{}'",
