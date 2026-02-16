@@ -79,3 +79,31 @@ Test pattern:
 - `test_version_shown_in_header_row()` checks row 0
 - `test_version_not_in_footer_row()` verifies absence in footer
 - Use `row_contains(&buffer, row_index, text)` from test_utils
+
+## Detail Panel History Display (acd-2olq)
+
+History section shows per-state duration, NOT "time ago" for each transition.
+
+Implementation pattern (detail/mod.rs):
+
+- Most recent transition (index 0 in reversed list): duration =
+  `now - timestamp` (dynamic, updates each tick)
+- Older transitions: duration = `transition.duration` (fixed, historical)
+- Format: reuses `super::dashboard::format_duration_secs()` for consistency
+- Display: `duration_str  from → to` (same arrow format as before)
+
+Key files:
+
+- `crates/agent-console-dashboard/src/tui/views/detail/mod.rs` — rendering
+- `crates/agent-console-dashboard/src/tui/views/detail/tests/unit.rs` — duration
+  tests
+- `crates/agent-console-dashboard/src/tui/views/detail/tests/rendering.rs` —
+  integration tests
+
+StateTransition struct:
+
+- `timestamp: Instant` — when the transition occurred
+- `from: Status` — previous status
+- `to: Status` — new status
+- `duration: Duration` — time spent in the previous state (ignored for most
+  recent)

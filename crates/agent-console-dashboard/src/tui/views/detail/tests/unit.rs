@@ -1,7 +1,6 @@
 use super::*;
 use std::time::Instant;
 
-
 #[test]
 fn test_status_color_mapping() {
     assert_eq!(status_color_for(Status::Working), Color::Green);

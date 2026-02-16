@@ -299,6 +299,5 @@ fn status_color_for(status: Status) -> Color {
     }
 }
 
-
 #[cfg(test)]
 mod tests;
