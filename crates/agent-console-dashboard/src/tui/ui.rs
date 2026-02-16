@@ -149,7 +149,9 @@ fn render_footer_normal(
     }
 
     // Calculate padding to position API usage on the right
-    let padding_len = footer_width.saturating_sub(hints_len).saturating_sub(api_usage_len);
+    let padding_len = footer_width
+        .saturating_sub(hints_len)
+        .saturating_sub(api_usage_len);
 
     // Build footer: hints (left) + padding + API usage (right)
     // Convert api_usage_line spans to owned Spans with cloned content
@@ -161,10 +163,7 @@ fn render_footer_normal(
 
     // Clone api_usage_line spans to owned Spans
     for span in api_usage_line.spans {
-        spans.push(Span::styled(
-            span.content.to_string(),
-            span.style,
-        ));
+        spans.push(Span::styled(span.content.to_string(), span.style));
     }
 
     Line::from(spans)
@@ -363,7 +362,9 @@ mod tests {
 
     // --- Full Dashboard Integration Tests (acd-211) ---
 
-    use crate::tui::test_utils::{find_row_with_text, render_dashboard_to_buffer, row_contains, row_text};
+    use crate::tui::test_utils::{
+        find_row_with_text, render_dashboard_to_buffer, row_contains, row_text,
+    };
 
     #[test]
     fn test_full_dashboard_render_with_mixed_statuses() {
