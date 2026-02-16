@@ -134,6 +134,29 @@ pub(super) async fn handle_get_command(cmd: &IpcCommand, store: &SessionStore) -
     }
 }
 
+/// Handles the DELETE command.
+///
+/// Expects `cmd.session_id`. Removes the session from the store completely
+/// (unlike RM which only marks as closed). Returns the deleted session snapshot
+/// on success, or an error if the session was not found.
+pub(super) async fn handle_delete_command(cmd: &IpcCommand, store: &SessionStore) -> String {
+    let session_id = match &cmd.session_id {
+        Some(id) => id,
+        None => return IpcResponse::error("DELETE requires session_id").to_json_line(),
+    };
+
+    match store.remove(session_id).await {
+        Some(session) => {
+            let info = SessionSnapshot::from(&session);
+            IpcResponse::success(Some(
+                serde_json::to_value(&info).expect("failed to serialize SessionSnapshot"),
+            ))
+            .to_json_line()
+        }
+        None => IpcResponse::error(format!("session not found: {}", session_id)).to_json_line(),
+    }
+}
+
 /// Handles the SUB command.
 ///
 /// Subscribes to session updates and usage updates, sending JSON notifications.
