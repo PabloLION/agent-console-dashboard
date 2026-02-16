@@ -192,6 +192,11 @@ Each agent must:
 3. Make atomic commits (one logical change per commit)
 4. Run tests and linting before committing
 5. Update persistent memory with new discoveries
+6. Write tests that verify the change:
+   - **Bug fixes**: add tests that reproduce the bug and confirm the fix
+   - **New features**: add tests that verify the feature works as specified
+   - Investigate if existing tests should have caught the issue — if so, add
+     coverage for the gap
 
 ## Research vs Code Agents
 

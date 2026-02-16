@@ -310,9 +310,18 @@ fn test_format_ruler_line_standard_width() {
     let spans: Vec<&str> = line.spans.iter().map(|s| s.content.as_ref()).collect();
     assert_eq!(spans.len(), 6);
     assert!(spans[1].contains("dir:"), "should show dir width label");
-    assert!(spans[2].contains("stat:14"), "should show status width label");
-    assert!(spans[3].contains("prio:12"), "should show priority width label");
-    assert!(spans[4].contains("time:16"), "should show elapsed width label");
+    assert!(
+        spans[2].contains("stat:14"),
+        "should show status width label"
+    );
+    assert!(
+        spans[3].contains("prio:12"),
+        "should show priority width label"
+    );
+    assert!(
+        spans[4].contains("time:16"),
+        "should show elapsed width label"
+    );
     assert!(spans[5].contains("id:40"), "should show id width label");
 }
 
