@@ -7,7 +7,7 @@ use crate::tui::app::App;
 use crate::tui::views::dashboard::render_session_list;
 use crate::tui::views::detail::{render_detail_placeholder, render_inline_detail};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     text::{Line, Span},
     widgets::Paragraph,
@@ -21,7 +21,7 @@ const HEADER_TEXT: &str = "Agent Console Dashboard";
 /// Footer text showing available keybindings.
 const FOOTER_TEXT: &str = "[j/k] Navigate  [Enter] Hook  [r] Resurrect  [q] Quit";
 
-/// Version string shown in the bottom-right corner.
+/// Version string shown in the header (right-aligned).
 const VERSION_TEXT: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 
 /// Renders the full dashboard layout: header, session list, detail panel, and footer.
@@ -29,7 +29,7 @@ const VERSION_TEXT: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 /// The detail panel is always visible below the session list. It shows information
 /// about the currently focused session, or a hint message when no session is focused.
 /// Layout regions:
-/// - Header: 1 line showing the application title
+/// - Header: 1 line showing the application title and version
 /// - Session list: flexible height (min 3 rows) showing all sessions
 /// - Detail panel: fixed height (12 lines) showing focused session info or hint
 /// - Footer: 1 line showing keybinding hints
@@ -51,11 +51,21 @@ pub fn render_dashboard(frame: &mut Frame, app: &mut App) {
         ])
         .split(area);
 
-    // Header
-    let header = Paragraph::new(Line::from(vec![Span::styled(
-        HEADER_TEXT,
-        Style::default().fg(Color::Cyan),
-    )]));
+    // Header with title (left) and version (right-aligned)
+    let header_width = chunks[0].width as usize;
+    let title_len = HEADER_TEXT.len();
+    let version_len = VERSION_TEXT.len();
+
+    // Calculate padding to position version at the right
+    // Format: "[title]...[version]"
+    let available_space = header_width.saturating_sub(title_len);
+    let padding_len = available_space.saturating_sub(version_len);
+
+    let header = Paragraph::new(Line::from(vec![
+        Span::styled(HEADER_TEXT, Style::default().fg(Color::Cyan)),
+        Span::raw(" ".repeat(padding_len)),
+        Span::styled(VERSION_TEXT, Style::default().fg(Color::DarkGray)),
+    ]));
     frame.render_widget(header, chunks[0]);
 
     // Session list - capture inner area for mouse click detection
@@ -100,14 +110,6 @@ pub fn render_dashboard(frame: &mut Frame, app: &mut App) {
     };
     let footer = Paragraph::new(footer_text);
     frame.render_widget(footer, chunks[3]);
-
-    // Version string in the bottom-right corner (overlays footer area)
-    let version = Paragraph::new(Line::from(vec![Span::styled(
-        VERSION_TEXT,
-        Style::default().fg(Color::DarkGray),
-    )]))
-    .alignment(Alignment::Right);
-    frame.render_widget(version, chunks[3]);
 }
 
 #[cfg(test)]
@@ -224,13 +226,24 @@ mod tests {
     }
 
     #[test]
-    fn test_version_shown_in_footer_row() {
+    fn test_version_shown_in_header_row() {
+        let mut app = make_app_with_sessions(3);
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
+        // Header is row 0
+        assert!(
+            row_contains(&buffer, 0, VERSION_TEXT),
+            "Header row should contain version string"
+        );
+    }
+
+    #[test]
+    fn test_version_not_in_footer_row() {
         let mut app = make_app_with_sessions(3);
         let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
         let footer_row = buffer.area().height - 1;
         assert!(
-            row_contains(&buffer, footer_row, VERSION_TEXT),
-            "Footer row should contain version string"
+            !row_contains(&buffer, footer_row, VERSION_TEXT),
+            "Footer row should NOT contain version string (moved to header)"
         );
     }
 
