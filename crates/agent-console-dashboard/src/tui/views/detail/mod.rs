@@ -228,10 +228,19 @@ fn build_detail_lines<'a>(
         let reversed: Vec<_> = session.history.iter().rev().collect();
         let visible = &reversed[start..end];
 
-        for transition in visible {
-            let ts = format_transition_time(transition.timestamp, now);
+        for (idx, transition) in visible.iter().enumerate() {
+            // Calculate duration in this state
+            let duration_secs = if idx == 0 {
+                // Most recent transition - duration from then until now (dynamic)
+                now.duration_since(transition.timestamp).as_secs()
+            } else {
+                // Historical transition - use the duration stored in the StateTransition
+                transition.duration.as_secs()
+            };
+
+            let duration_str = super::dashboard::format_duration_secs(duration_secs);
             lines.push(Line::from(vec![
-                Span::raw(format!("  {}  ", ts)),
+                Span::raw(format!("  {}  ", duration_str)),
                 Span::styled(
                     format!("{}", transition.from),
                     Style::default().fg(status_color_for(transition.from)),
@@ -290,14 +299,6 @@ fn status_color_for(status: Status) -> Color {
     }
 }
 
-/// Formats a transition timestamp relative to now as a human-readable "ago" string.
-///
-/// Since `Instant` doesn't map to wall-clock time, we display "Xm Ys ago"
-/// as a relative offset from now.
-fn format_transition_time(timestamp: Instant, now: Instant) -> String {
-    let ago = now.duration_since(timestamp).as_secs();
-    format!("{} ago", super::dashboard::format_duration_secs(ago))
-}
 
 #[cfg(test)]
 mod tests;
