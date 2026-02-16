@@ -74,9 +74,12 @@ clear and unambiguous. Otherwise, it is **not ready**.
 - Not-ready issues: label as `needs-design`, discuss with user
 
 For every issue presented, report a **numerical confidence percentage** (0-100%)
-that the issue is actionable as-written. If below 100%, list every doubt that
-reduces confidence. This applies to the confidence table and to each issue in
-the pre-dispatch protocol.
+that the issue is actionable as-written. Always list every doubt that reduces
+confidence, explaining what specifically accounts for the gap to 100%. For
+example, at 90% confidence, explain what the missing 10% represents — which
+unknowns, ambiguities, or risks reduce confidence. At 100%, state "No doubts
+from orchestrator" explicitly. This applies to the confidence table and to each
+issue in the pre-dispatch protocol.
 
 ### Pre-Dispatch Protocol (per issue)
 
@@ -89,7 +92,9 @@ doubts. The user may have doubts of their own. Never skip showing an issue.
    the next issue. If a doubt references another issue, run `bd show` for that
    related issue inline (right where the doubt is stated). If no doubts, state
    "No doubts from orchestrator" explicitly.
-2. Wait for user's explicit go-ahead
+2. Invite the user to raise their own doubts: "Do you have any questions or
+   concerns about this issue?" Then wait for the user's explicit go-ahead. Do
+   not dispatch until the user gives a clear signal.
 3. If user wants changes: update the issue first, then re-present
 4. When a doubt is cleared or a design decision is made, update the issue
    description or notes (`bd update <id> --description/--notes`) so the agent
