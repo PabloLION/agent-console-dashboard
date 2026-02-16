@@ -103,8 +103,15 @@ doubts. The user may have doubts of their own. Never skip showing an issue.
 
 ### Lookahead
 
-When showing an issue for review, also show the next issue that needs review in
-the same message. For each issue, include: full issue details, all doubts (even
+Always keep **two issues visible** in the conversation: one for dispatch
+decision, one as lookahead. Present them **sequentially** (not batched tool
+calls): run `bd show` for the first issue, print its doubts immediately after,
+then run `bd show` for the second issue and print its doubts. This preserves the
+issue → doubts → issue → doubts flow. After user approves and the issue is
+dispatched, immediately present the next issue for approval with a new lookahead
+— never leave the user with zero issues to review.
+
+For each issue shown, include: full issue details (`bd show`), all doubts (even
 minor ones), and whether it reaches 95% confidence. Raise every doubt you can
 identify — if it's negligible, the user will skip it.
 

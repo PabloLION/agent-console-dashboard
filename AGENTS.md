@@ -73,6 +73,22 @@ complete until `git push` succeeds.
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 
+## Naming Conventions
+
+### Layout Modes
+
+Call the current full TUI view **"large layout"** for now. A naming refactor is
+tracked in acd-zcjx — do not bikeshed names until that issue is addressed.
+
+### API Usage Widget Modes
+
+Two modes only (renamed):
+
+- **short** (was "compact"): `[5h:8% 7d:77%]`
+- **long** (was "full", redefined): time elapsed + quota (see acd-elrc)
+
+The old "full" mode is dropped.
+
 ## Terminology
 
 @docs/terminology.md

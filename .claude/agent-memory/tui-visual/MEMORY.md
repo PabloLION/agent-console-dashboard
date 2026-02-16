@@ -62,3 +62,20 @@ Always update `docs/design/ui.md` when changing column layout:
 
 - "Column layout" section (detailed explanation)
 - Decision table at bottom (column widths row)
+
+## Header and Footer Layout (acd-mq6y)
+
+Version display moved from footer bottom-right to header right-aligned.
+
+Header rendering pattern (ui.rs):
+
+- Calculate padding: `header_width - title_len - version_len`
+- Three-span Line: title (Cyan) + padding (spaces) + version (DarkGray)
+- Version uses `env!("CARGO_PKG_VERSION")` at compile time
+- Footer bottom-right now reserved for API usage (acd-0i4i, future work)
+
+Test pattern:
+
+- `test_version_shown_in_header_row()` checks row 0
+- `test_version_not_in_footer_row()` verifies absence in footer
+- Use `row_contains(&buffer, row_index, text)` from test_utils
