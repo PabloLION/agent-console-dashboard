@@ -242,7 +242,11 @@ pub fn format_session_line<'a>(
             work_dir_span,
             Span::styled(
                 format!("{:<14}", status_text),
-                if should_dim { dim } else { Style::default().fg(color) },
+                if should_dim {
+                    dim
+                } else {
+                    Style::default().fg(color)
+                },
             ),
             Span::styled(format!("{:<12}", session.priority), dim),
             Span::styled(format!("{:<16}", elapsed), dim),

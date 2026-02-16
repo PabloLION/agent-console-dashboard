@@ -406,7 +406,8 @@ fn test_working_session_not_dimmed() {
 
 #[test]
 fn test_inactive_session_all_columns_same_color() {
-    let session = make_inactive_session("inactive-test", INACTIVE_SESSION_THRESHOLD.as_secs() + 100);
+    let session =
+        make_inactive_session("inactive-test", INACTIVE_SESSION_THRESHOLD.as_secs() + 100);
     let sessions = vec![session];
     let buffer = render_session_list_to_buffer(&sessions, None, 100, 10);
     let row = find_row_with_text(&buffer, "inactive-test").expect("should find session");

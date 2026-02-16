@@ -107,3 +107,24 @@ StateTransition struct:
 - `to: Status` — new status
 - `duration: Duration` — time spent in the previous state (ignored for most
   recent)
+
+## Color Consistency for Inactive/Closed Sessions (acd-kmvh)
+
+All columns in inactive/closed session rows must use the same `dim` style
+variable for consistent coloring.
+
+Pattern in `format_session_line()`:
+
+- Create `dim` style with appropriate text color (Black for highlighted,
+  DarkGray otherwise)
+- Apply `dim` style to ALL text columns: directory, status, priority, elapsed,
+  session_id
+- The `color` variable is for status symbols only, NOT for text columns
+- Narrow mode: symbol uses `color`, session_id uses `dim` (correct)
+
+Test pattern (tests/buffer.rs):
+
+- Use `assert_text_fg_in_row()` to check each column's color
+- Test all columns for both inactive and closed sessions
+- Test both highlighted (Black text) and non-highlighted (DarkGray text) states
+- Verify directory, status, priority, elapsed, session_id all have same color
