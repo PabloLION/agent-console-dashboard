@@ -240,7 +240,10 @@ pub fn format_session_line<'a>(
 
         Line::from(vec![
             work_dir_span,
-            Span::styled(format!("{:<14}", status_text), Style::default().fg(color)),
+            Span::styled(
+                format!("{:<14}", status_text),
+                if should_dim { dim } else { Style::default().fg(color) },
+            ),
             Span::styled(format!("{:<12}", session.priority), dim),
             Span::styled(format!("{:<16}", elapsed), dim),
             Span::styled(format!("{:<40}", name), dim),

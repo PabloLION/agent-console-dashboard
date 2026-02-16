@@ -401,3 +401,67 @@ fn test_working_session_not_dimmed() {
         "working session should not be dimmed"
     );
 }
+
+// --- Story acd-kmvh: All columns should have consistent color for inactive/closed sessions ---
+
+#[test]
+fn test_inactive_session_all_columns_same_color() {
+    let session = make_inactive_session("inactive-test", INACTIVE_SESSION_THRESHOLD.as_secs() + 100);
+    let sessions = vec![session];
+    let buffer = render_session_list_to_buffer(&sessions, None, 100, 10);
+    let row = find_row_with_text(&buffer, "inactive-test").expect("should find session");
+
+    // All text in the row (directory, status, priority, elapsed, session_id) should be DarkGray
+    assert_text_fg_in_row(&buffer, row, "test", Color::DarkGray); // directory
+    assert_text_fg_in_row(&buffer, row, "inactive", Color::DarkGray); // status
+    assert_text_fg_in_row(&buffer, row, "0", Color::DarkGray); // priority
+    assert_text_fg_in_row(&buffer, row, "inactive-test", Color::DarkGray); // session_id
+}
+
+#[test]
+fn test_closed_session_all_columns_same_color() {
+    let sessions = vec![make_test_session_with_dir(
+        "closed-test",
+        Status::Closed,
+        Some(PathBuf::from("/tmp/testdir")),
+    )];
+    let buffer = render_session_list_to_buffer(&sessions, None, 100, 10);
+    let row = find_row_with_text(&buffer, "closed-test").expect("should find session");
+
+    // All text in the row (directory, status, priority, elapsed, session_id) should be DarkGray
+    assert_text_fg_in_row(&buffer, row, "testdir", Color::DarkGray); // directory
+    assert_text_fg_in_row(&buffer, row, "closed", Color::DarkGray); // status
+    assert_text_fg_in_row(&buffer, row, "0", Color::DarkGray); // priority
+    assert_text_fg_in_row(&buffer, row, "closed-test", Color::DarkGray); // session_id
+}
+
+#[test]
+fn test_inactive_session_highlighted_all_columns_black() {
+    let session = make_inactive_session("inactive-hl", INACTIVE_SESSION_THRESHOLD.as_secs() + 100);
+    let sessions = vec![session];
+    let buffer = render_session_list_to_buffer(&sessions, Some(0), 100, 10);
+    let row = find_row_with_text(&buffer, "inactive-hl").expect("should find session");
+
+    // When highlighted, all text should be Black (for readability against DarkGray background)
+    assert_text_fg_in_row(&buffer, row, "test", Color::Black); // directory
+    assert_text_fg_in_row(&buffer, row, "inactive", Color::Black); // status
+    assert_text_fg_in_row(&buffer, row, "0", Color::Black); // priority
+    assert_text_fg_in_row(&buffer, row, "inactive-hl", Color::Black); // session_id
+}
+
+#[test]
+fn test_closed_session_highlighted_all_columns_black() {
+    let sessions = vec![make_test_session_with_dir(
+        "closed-hl",
+        Status::Closed,
+        Some(PathBuf::from("/tmp/closeddir")),
+    )];
+    let buffer = render_session_list_to_buffer(&sessions, Some(0), 100, 10);
+    let row = find_row_with_text(&buffer, "closed-hl").expect("should find session");
+
+    // When highlighted, all text should be Black (for readability against DarkGray background)
+    assert_text_fg_in_row(&buffer, row, "closeddir", Color::Black); // directory
+    assert_text_fg_in_row(&buffer, row, "closed", Color::Black); // status
+    assert_text_fg_in_row(&buffer, row, "0", Color::Black); // priority
+    assert_text_fg_in_row(&buffer, row, "closed-hl", Color::Black); // session_id
+}
