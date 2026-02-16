@@ -7,6 +7,7 @@ Shell scripts for common development tasks. All scripts use `#!/bin/sh` and
 
 | Script | Description | Usage |
 | --- | --- | --- |
+| `install.sh` | Install acd binary with pre-flight checks | `./scripts/install.sh` |
 | `test.sh` | Run full test suite | `./scripts/test.sh` |
 | `lint.sh` | Check formatting + clippy (read-only) | `./scripts/lint.sh` |
 | `fmt.sh` | Auto-fix formatting | `./scripts/fmt.sh` |
