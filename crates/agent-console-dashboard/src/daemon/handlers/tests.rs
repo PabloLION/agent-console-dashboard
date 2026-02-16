@@ -325,3 +325,248 @@ async fn test_reopen_command_missing_session_id() {
     assert!(parsed.error.is_some());
     assert!(parsed.error.unwrap().contains("REOPEN requires session_id"));
 }
+
+// =============================================================================
+// DELETE command tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_delete_command_success() {
+    let state = create_test_state();
+
+    // Create a session
+    state
+        .store
+        .get_or_create_session(
+            "delete-test".to_string(),
+            AgentType::ClaudeCode,
+            Some(std::path::PathBuf::from("/tmp")),
+            None,
+            Status::Working,
+            0,
+        )
+        .await;
+
+    // Verify session exists before deletion
+    assert!(state.store.get("delete-test").await.is_some());
+
+    let cmd = IpcCommand {
+        version: 1,
+        cmd: "DELETE".to_string(),
+        session_id: Some("delete-test".to_string()),
+        status: None,
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    };
+
+    let response = handle_delete_command(&cmd, &state.store).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+
+    assert!(parsed.ok);
+    assert!(parsed.data.is_some());
+
+    // Verify session is completely gone from the store
+    let session = state.store.get("delete-test").await;
+    assert!(session.is_none(), "session should be completely removed");
+}
+
+#[tokio::test]
+async fn test_delete_command_not_found() {
+    let state = create_test_state();
+
+    let cmd = IpcCommand {
+        version: 1,
+        cmd: "DELETE".to_string(),
+        session_id: Some("nonexistent".to_string()),
+        status: None,
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    };
+
+    let response = handle_delete_command(&cmd, &state.store).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+
+    assert!(!parsed.ok);
+    assert!(parsed.error.is_some());
+    assert!(parsed.error.unwrap().contains("session not found"));
+}
+
+#[tokio::test]
+async fn test_delete_command_missing_session_id() {
+    let state = create_test_state();
+
+    let cmd = IpcCommand {
+        version: 1,
+        cmd: "DELETE".to_string(),
+        session_id: None,
+        status: None,
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    };
+
+    let response = handle_delete_command(&cmd, &state.store).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+
+    assert!(!parsed.ok);
+    assert!(parsed.error.is_some());
+    assert!(parsed.error.unwrap().contains("DELETE requires session_id"));
+}
+
+#[tokio::test]
+async fn test_delete_command_returns_snapshot() {
+    let state = create_test_state();
+
+    // Create a session with specific attributes
+    state
+        .store
+        .get_or_create_session(
+            "snapshot-test".to_string(),
+            AgentType::ClaudeCode,
+            Some(std::path::PathBuf::from("/tmp/test-dir")),
+            None,
+            Status::Attention,
+            42,
+        )
+        .await;
+
+    let cmd = IpcCommand {
+        version: 1,
+        cmd: "DELETE".to_string(),
+        session_id: Some("snapshot-test".to_string()),
+        status: None,
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    };
+
+    let response = handle_delete_command(&cmd, &state.store).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+
+    assert!(parsed.ok);
+    assert!(parsed.data.is_some());
+
+    // Verify the returned snapshot has correct attributes
+    let snapshot: SessionSnapshot =
+        serde_json::from_value(parsed.data.unwrap()).expect("failed to parse snapshot");
+
+    assert_eq!(snapshot.session_id, "snapshot-test");
+    assert_eq!(snapshot.status, "attention");
+    assert_eq!(snapshot.priority, 42);
+    assert_eq!(snapshot.working_dir, Some("/tmp/test-dir".to_string()));
+}
+
+#[tokio::test]
+async fn test_delete_command_other_sessions_unaffected() {
+    let state = create_test_state();
+
+    // Create three sessions
+    state
+        .store
+        .get_or_create_session(
+            "session-1".to_string(),
+            AgentType::ClaudeCode,
+            Some(std::path::PathBuf::from("/tmp")),
+            None,
+            Status::Working,
+            0,
+        )
+        .await;
+
+    state
+        .store
+        .get_or_create_session(
+            "session-2".to_string(),
+            AgentType::ClaudeCode,
+            Some(std::path::PathBuf::from("/tmp")),
+            None,
+            Status::Attention,
+            0,
+        )
+        .await;
+
+    state
+        .store
+        .get_or_create_session(
+            "session-3".to_string(),
+            AgentType::ClaudeCode,
+            Some(std::path::PathBuf::from("/tmp")),
+            None,
+            Status::Question,
+            0,
+        )
+        .await;
+
+    // Delete session-2
+    let cmd = IpcCommand {
+        version: 1,
+        cmd: "DELETE".to_string(),
+        session_id: Some("session-2".to_string()),
+        status: None,
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    };
+
+    let response = handle_delete_command(&cmd, &state.store).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+
+    assert!(parsed.ok);
+
+    // Verify session-2 is gone
+    assert!(state.store.get("session-2").await.is_none());
+
+    // Verify session-1 and session-3 are still present
+    let session1 = state.store.get("session-1").await;
+    assert!(session1.is_some());
+    assert_eq!(session1.unwrap().status, Status::Working);
+
+    let session3 = state.store.get("session-3").await;
+    assert!(session3.is_some());
+    assert_eq!(session3.unwrap().status, Status::Question);
+}
+
+#[tokio::test]
+async fn test_delete_closed_session() {
+    let state = create_test_state();
+
+    // Create and close a session
+    state
+        .store
+        .get_or_create_session(
+            "closed-delete-test".to_string(),
+            AgentType::ClaudeCode,
+            Some(std::path::PathBuf::from("/tmp")),
+            None,
+            Status::Working,
+            0,
+        )
+        .await;
+    state.store.close_session("closed-delete-test").await;
+
+    // Verify session is closed
+    let session = state.store.get("closed-delete-test").await;
+    assert!(session.is_some());
+    assert!(session.unwrap().closed);
+
+    // Delete the closed session
+    let cmd = IpcCommand {
+        version: 1,
+        cmd: "DELETE".to_string(),
+        session_id: Some("closed-delete-test".to_string()),
+        status: None,
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    };
+
+    let response = handle_delete_command(&cmd, &state.store).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+
+    assert!(parsed.ok);
+
+    // Verify session is completely removed
+    assert!(state.store.get("closed-delete-test").await.is_none());
+}
