@@ -117,6 +117,18 @@ fn main() {
                         }
                     ]
                 }
+            ],
+            "PreCompact": [
+                {
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "acd claude-hook working",
+                            "timeout": 10
+                        }
+                    ]
+                }
             ]
             // Experiment (acd-ws6): PostToolUse commented out to test if
             // PreToolUse alone provides accurate status transitions.

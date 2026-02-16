@@ -5,11 +5,11 @@ use crate::commands::install::acd_hook_definitions;
 #[test]
 fn test_acd_hook_definitions_has_seven_entries() {
     let defs = acd_hook_definitions();
-    // 7 hooks: PostToolUse removed for experiment (acd-ws6)
+    // 8 hooks: PostToolUse removed for experiment (acd-ws6), PreCompact added (acd-wdaj)
     assert_eq!(
         defs.len(),
-        7,
-        "should define 7 hooks (PostToolUse removed for experiment)"
+        8,
+        "should define 8 hooks (PostToolUse removed for experiment, PreCompact added)"
     );
 }
 

@@ -30,6 +30,7 @@ pub(crate) fn acd_hook_definitions() -> Vec<(claude_hooks::HookEvent, &'static s
         // or elicitation_dialog. Without it, status stays "attention" while
         // Claude is actively working.
         (HookEvent::PreToolUse, "acd claude-hook working", None),
+        (HookEvent::PreCompact, "acd claude-hook working", None),
         // Experiment (acd-ws6): PostToolUse removed to test if PreToolUse alone
         // provides accurate status transitions. Restore when experiment concludes.
         // (HookEvent::PostToolUse, "acd claude-hook working", None),
