@@ -608,6 +608,54 @@ fn test_session_update_requires_id() {
     assert!(result.is_err());
 }
 
+#[test]
+fn test_session_delete_parses() {
+    let cli = Cli::try_parse_from([
+        "agent-console-dashboard",
+        "session",
+        "delete",
+        "test-session-id",
+    ])
+    .expect("session delete should parse");
+    match cli.command {
+        Commands::Session {
+            command: SessionCommands::Delete { session_id, socket },
+        } => {
+            assert_eq!(session_id, "test-session-id");
+            assert_eq!(socket, PathBuf::from("/tmp/agent-console-dashboard.sock"));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_session_delete_with_custom_socket() {
+    let cli = Cli::try_parse_from([
+        "agent-console-dashboard",
+        "session",
+        "delete",
+        "test-id",
+        "--socket",
+        "/custom/delete.sock",
+    ])
+    .expect("session delete with custom socket should parse");
+    match cli.command {
+        Commands::Session {
+            command: SessionCommands::Delete { session_id, socket },
+        } => {
+            assert_eq!(session_id, "test-id");
+            assert_eq!(socket, PathBuf::from("/custom/delete.sock"));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_session_delete_requires_id() {
+    let result = Cli::try_parse_from(["agent-console-dashboard", "session", "delete"]);
+    assert!(result.is_err());
+}
+
 // -- Config subcommand --------------------------------------------------
 
 #[test]
