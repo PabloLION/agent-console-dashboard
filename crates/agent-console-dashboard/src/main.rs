@@ -11,8 +11,8 @@ use agent_console_dashboard::{daemon::run_daemon, tui::app::App, DaemonConfig, S
 use clap::{Parser, Subcommand};
 use commands::{
     is_daemon_running, run_claude_hook_async, run_config_edit_command, run_daemon_stop_command,
-    run_dump_command, run_install_command, run_status_command, run_uninstall_command,
-    run_update_command, HookInput,
+    run_delete_command, run_dump_command, run_install_command, run_status_command,
+    run_uninstall_command, run_update_command, HookInput,
 };
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -86,6 +86,14 @@ enum SessionCommands {
         /// Working directory
         #[arg(long)]
         working_dir: Option<PathBuf>,
+        /// Socket path for IPC communication
+        #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
+        socket: PathBuf,
+    },
+    /// Delete a session by ID
+    Delete {
+        /// Session ID
+        session_id: String,
         /// Socket path for IPC communication
         #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
         socket: PathBuf,
@@ -251,6 +259,9 @@ fn main() -> ExitCode {
                     working_dir.as_deref(),
                     priority,
                 );
+            }
+            SessionCommands::Delete { session_id, socket } => {
+                return run_delete_command(&socket, &session_id);
             }
         },
         Commands::Daemon { command } => match command {

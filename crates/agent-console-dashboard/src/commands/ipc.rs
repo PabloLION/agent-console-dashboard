@@ -2,11 +2,12 @@
 //!
 //! Handles client commands that communicate with the daemon via IPC:
 //! - `update` - Update session fields (status, priority, working_dir)
+//! - `delete` - Delete a session by ID
 //! - `status` - Check daemon health
 //! - `dump` - Dump full daemon state
 
 use agent_console_dashboard::{
-    format_uptime, DaemonDump, HealthStatus, IpcCommand, IpcResponse, IPC_VERSION,
+    format_uptime, DaemonDump, HealthStatus, IpcCommand, IpcResponse, SessionSnapshot, IPC_VERSION,
 };
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -69,6 +70,84 @@ pub(crate) fn run_update_command(
 
     match serde_json::from_str::<IpcResponse>(response.trim()) {
         Ok(resp) if resp.ok => ExitCode::SUCCESS,
+        Ok(resp) => {
+            eprintln!(
+                "Error: {}",
+                resp.error.unwrap_or_else(|| "unknown error".to_string())
+            );
+            ExitCode::FAILURE
+        }
+        Err(e) => {
+            eprintln!("Error: failed to parse daemon response: {}", e);
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Connects to daemon, sends DELETE command to remove a session.
+///
+/// On success, prints the deleted SessionSnapshot to stdout as JSON.
+/// On failure, prints error message to stderr.
+pub(crate) fn run_delete_command(socket: &PathBuf, session_id: &str) -> ExitCode {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixStream;
+
+    let stream = match UnixStream::connect(socket) {
+        Ok(s) => s,
+        Err(_) => {
+            eprintln!("Error: daemon not running (cannot connect to {:?})", socket);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut writer = stream.try_clone().expect("failed to clone unix stream");
+    let mut reader = BufReader::new(stream);
+
+    let cmd = IpcCommand {
+        version: IPC_VERSION,
+        cmd: "DELETE".to_string(),
+        session_id: Some(session_id.to_string()),
+        status: None,
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    };
+    let json = serde_json::to_string(&cmd).expect("failed to serialize DELETE command");
+    let line = format!("{}\n", json);
+
+    if writer.write_all(line.as_bytes()).is_err() || writer.flush().is_err() {
+        eprintln!("Error: failed to send DELETE command");
+        return ExitCode::FAILURE;
+    }
+
+    let mut response = String::new();
+    if reader.read_line(&mut response).is_err() {
+        eprintln!("Error: failed to read daemon response");
+        return ExitCode::FAILURE;
+    }
+
+    match serde_json::from_str::<IpcResponse>(response.trim()) {
+        Ok(resp) if resp.ok => {
+            if let Some(data) = resp.data {
+                // Parse as SessionSnapshot and print to stdout
+                match serde_json::from_value::<SessionSnapshot>(data.clone()) {
+                    Ok(snapshot) => {
+                        println!(
+                            "{}",
+                            serde_json::to_string(&snapshot)
+                                .expect("failed to re-serialize SessionSnapshot")
+                        );
+                        return ExitCode::SUCCESS;
+                    }
+                    Err(e) => {
+                        eprintln!("Error: failed to parse deleted session data: {}", e);
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
+            eprintln!("Error: unexpected response - no session data in DELETE response");
+            ExitCode::FAILURE
+        }
         Ok(resp) => {
             eprintln!(
                 "Error: {}",
