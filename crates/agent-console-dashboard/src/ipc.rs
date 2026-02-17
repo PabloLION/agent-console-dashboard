@@ -8,6 +8,73 @@ use std::time::Instant;
 /// compatibility.
 pub const IPC_VERSION: u32 = 1;
 
+/// IPC command kind enum.
+///
+/// Represents all supported daemon IPC commands. Used to replace hardcoded
+/// string literals throughout the codebase while maintaining wire format
+/// compatibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IpcCommandKind {
+    /// Update or create a session (SET).
+    Set,
+    /// Get a specific session by ID (GET).
+    Get,
+    /// Remove a session field (RM).
+    Rm,
+    /// Delete a session entirely (DELETE).
+    Delete,
+    /// Subscribe to live updates (SUB).
+    Sub,
+    /// List all sessions (LIST).
+    List,
+    /// Dump full daemon state (DUMP).
+    Dump,
+    /// Get daemon health status (STATUS).
+    Status,
+    /// Stop the daemon (STOP).
+    Stop,
+    /// Reopen a closed session (REOPEN).
+    Reopen,
+}
+
+impl std::fmt::Display for IpcCommandKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            IpcCommandKind::Set => "SET",
+            IpcCommandKind::Get => "GET",
+            IpcCommandKind::Rm => "RM",
+            IpcCommandKind::Delete => "DELETE",
+            IpcCommandKind::Sub => "SUB",
+            IpcCommandKind::List => "LIST",
+            IpcCommandKind::Dump => "DUMP",
+            IpcCommandKind::Status => "STATUS",
+            IpcCommandKind::Stop => "STOP",
+            IpcCommandKind::Reopen => "REOPEN",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl std::str::FromStr for IpcCommandKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "SET" => Ok(IpcCommandKind::Set),
+            "GET" => Ok(IpcCommandKind::Get),
+            "RM" => Ok(IpcCommandKind::Rm),
+            "DELETE" => Ok(IpcCommandKind::Delete),
+            "SUB" => Ok(IpcCommandKind::Sub),
+            "LIST" => Ok(IpcCommandKind::List),
+            "DUMP" => Ok(IpcCommandKind::Dump),
+            "STATUS" => Ok(IpcCommandKind::Status),
+            "STOP" => Ok(IpcCommandKind::Stop),
+            "REOPEN" => Ok(IpcCommandKind::Reopen),
+            _ => Err(format!("unknown command: {}", s)),
+        }
+    }
+}
+
 /// Incoming command from a client to the daemon.
 ///
 /// Every message is a single JSON line:
@@ -309,6 +376,70 @@ impl SessionUpdate {
             session_id,
             status,
             elapsed_seconds,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_command_kind_display() {
+        assert_eq!(IpcCommandKind::Set.to_string(), "SET");
+        assert_eq!(IpcCommandKind::Get.to_string(), "GET");
+        assert_eq!(IpcCommandKind::Rm.to_string(), "RM");
+        assert_eq!(IpcCommandKind::Delete.to_string(), "DELETE");
+        assert_eq!(IpcCommandKind::Sub.to_string(), "SUB");
+        assert_eq!(IpcCommandKind::List.to_string(), "LIST");
+        assert_eq!(IpcCommandKind::Dump.to_string(), "DUMP");
+        assert_eq!(IpcCommandKind::Status.to_string(), "STATUS");
+        assert_eq!(IpcCommandKind::Stop.to_string(), "STOP");
+        assert_eq!(IpcCommandKind::Reopen.to_string(), "REOPEN");
+    }
+
+    #[test]
+    fn test_command_kind_from_str() {
+        assert_eq!("SET".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Set);
+        assert_eq!("set".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Set);
+        assert_eq!("Get".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Get);
+        assert_eq!("RM".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Rm);
+        assert_eq!("delete".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Delete);
+        assert_eq!("SUB".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Sub);
+        assert_eq!("list".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::List);
+        assert_eq!("DUMP".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Dump);
+        assert_eq!("status".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Status);
+        assert_eq!("STOP".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Stop);
+        assert_eq!("reopen".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Reopen);
+    }
+
+    #[test]
+    fn test_command_kind_from_str_unknown() {
+        let result = "UNKNOWN".parse::<IpcCommandKind>();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "unknown command: UNKNOWN");
+    }
+
+    #[test]
+    fn test_command_kind_wire_format_compatibility() {
+        // Ensure Display output matches the existing wire format strings
+        // This test ensures we maintain backward compatibility
+        let commands = vec![
+            (IpcCommandKind::Set, "SET"),
+            (IpcCommandKind::Get, "GET"),
+            (IpcCommandKind::Rm, "RM"),
+            (IpcCommandKind::Delete, "DELETE"),
+            (IpcCommandKind::Sub, "SUB"),
+            (IpcCommandKind::List, "LIST"),
+            (IpcCommandKind::Dump, "DUMP"),
+            (IpcCommandKind::Status, "STATUS"),
+            (IpcCommandKind::Stop, "STOP"),
+            (IpcCommandKind::Reopen, "REOPEN"),
+        ];
+
+        for (kind, expected_wire_format) in commands {
+            assert_eq!(kind.to_string(), expected_wire_format);
+            assert_eq!(expected_wire_format.parse::<IpcCommandKind>().unwrap(), kind);
         }
     }
 }

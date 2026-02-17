@@ -1,5 +1,6 @@
 use super::*;
 use crate::daemon::store::SessionStore;
+use crate::IpcCommandKind;
 use tokio::sync::broadcast;
 
 fn create_test_state() -> DaemonState {
@@ -19,7 +20,7 @@ async fn test_stop_no_active_sessions_returns_ok() {
     let state = create_test_state();
     let cmd = IpcCommand {
         version: 1,
-        cmd: "STOP".to_string(),
+        cmd: IpcCommandKind::Stop.to_string(),
         session_id: None,
         status: None,
         working_dir: None,
@@ -56,7 +57,7 @@ async fn test_stop_with_active_sessions_requires_confirmation() {
 
     let cmd = IpcCommand {
         version: 1,
-        cmd: "STOP".to_string(),
+        cmd: IpcCommandKind::Stop.to_string(),
         session_id: None,
         status: None,
         working_dir: None,
@@ -92,7 +93,7 @@ async fn test_stop_with_confirmation_returns_ok() {
 
     let cmd = IpcCommand {
         version: 1,
-        cmd: "STOP".to_string(),
+        cmd: IpcCommandKind::Stop.to_string(),
         session_id: None,
         status: None,
         working_dir: None,
@@ -129,7 +130,7 @@ async fn test_stop_with_closed_sessions_returns_ok() {
 
     let cmd = IpcCommand {
         version: 1,
-        cmd: "STOP".to_string(),
+        cmd: IpcCommandKind::Stop.to_string(),
         session_id: None,
         status: None,
         working_dir: None,
@@ -177,7 +178,7 @@ async fn test_stop_with_inactive_session_returns_ok_without_confirmation() {
 
     let cmd = IpcCommand {
         version: 1,
-        cmd: "STOP".to_string(),
+        cmd: IpcCommandKind::Stop.to_string(),
         session_id: None,
         status: None,
         working_dir: None,
@@ -220,7 +221,7 @@ async fn test_reopen_command_success() {
 
     let cmd = IpcCommand {
         version: 1,
-        cmd: "REOPEN".to_string(),
+        cmd: IpcCommandKind::Reopen.to_string(),
         session_id: Some("reopen-test".to_string()),
         status: None,
         working_dir: None,
@@ -251,7 +252,7 @@ async fn test_reopen_command_not_found() {
 
     let cmd = IpcCommand {
         version: 1,
-        cmd: "REOPEN".to_string(),
+        cmd: IpcCommandKind::Reopen.to_string(),
         session_id: Some("nonexistent".to_string()),
         status: None,
         working_dir: None,
@@ -289,7 +290,7 @@ async fn test_reopen_command_already_active() {
     // Try to reopen again (should fail)
     let cmd = IpcCommand {
         version: 1,
-        cmd: "REOPEN".to_string(),
+        cmd: IpcCommandKind::Reopen.to_string(),
         session_id: Some("reopen-active".to_string()),
         status: None,
         working_dir: None,
@@ -310,7 +311,7 @@ async fn test_reopen_command_missing_session_id() {
 
     let cmd = IpcCommand {
         version: 1,
-        cmd: "REOPEN".to_string(),
+        cmd: IpcCommandKind::Reopen.to_string(),
         session_id: None,
         status: None,
         working_dir: None,
@@ -352,7 +353,7 @@ async fn test_delete_command_success() {
 
     let cmd = IpcCommand {
         version: 1,
-        cmd: "DELETE".to_string(),
+        cmd: IpcCommandKind::Delete.to_string(),
         session_id: Some("delete-test".to_string()),
         status: None,
         working_dir: None,
@@ -377,7 +378,7 @@ async fn test_delete_command_not_found() {
 
     let cmd = IpcCommand {
         version: 1,
-        cmd: "DELETE".to_string(),
+        cmd: IpcCommandKind::Delete.to_string(),
         session_id: Some("nonexistent".to_string()),
         status: None,
         working_dir: None,
@@ -399,7 +400,7 @@ async fn test_delete_command_missing_session_id() {
 
     let cmd = IpcCommand {
         version: 1,
-        cmd: "DELETE".to_string(),
+        cmd: IpcCommandKind::Delete.to_string(),
         session_id: None,
         status: None,
         working_dir: None,
@@ -434,7 +435,7 @@ async fn test_delete_command_returns_snapshot() {
 
     let cmd = IpcCommand {
         version: 1,
-        cmd: "DELETE".to_string(),
+        cmd: IpcCommandKind::Delete.to_string(),
         session_id: Some("snapshot-test".to_string()),
         status: None,
         working_dir: None,
@@ -502,7 +503,7 @@ async fn test_delete_command_other_sessions_unaffected() {
     // Delete session-2
     let cmd = IpcCommand {
         version: 1,
-        cmd: "DELETE".to_string(),
+        cmd: IpcCommandKind::Delete.to_string(),
         session_id: Some("session-2".to_string()),
         status: None,
         working_dir: None,
@@ -554,7 +555,7 @@ async fn test_delete_closed_session() {
     // Delete the closed session
     let cmd = IpcCommand {
         version: 1,
-        cmd: "DELETE".to_string(),
+        cmd: IpcCommandKind::Delete.to_string(),
         session_id: Some("closed-delete-test".to_string()),
         status: None,
         working_dir: None,

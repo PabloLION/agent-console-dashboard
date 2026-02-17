@@ -3,7 +3,9 @@
 //! Handles the `claude-hook` command that receives JSON from stdin and communicates
 //! with the daemon to update session status.
 
-use agent_console_dashboard::{client::connect_with_lazy_start, IpcCommand, Status, IPC_VERSION};
+use agent_console_dashboard::{
+    client::connect_with_lazy_start, IpcCommand, IpcCommandKind, Status, IPC_VERSION,
+};
 use std::process::ExitCode;
 
 /// JSON payload from Claude Code hook stdin.
@@ -92,7 +94,7 @@ pub(crate) async fn run_claude_hook_async(
 
     let cmd = IpcCommand {
         version: IPC_VERSION,
-        cmd: "SET".to_string(),
+        cmd: IpcCommandKind::Set.to_string(),
         session_id: Some(input.session_id.clone()),
         status: Some(status.to_string()),
         working_dir: Some(input.cwd.clone()),

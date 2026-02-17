@@ -5,7 +5,7 @@
 //! messages.
 
 use crate::client::connect_with_lazy_start;
-use crate::{IpcCommand, IpcNotification, IpcResponse, SessionSnapshot, IPC_VERSION};
+use crate::{IpcCommand, IpcCommandKind, IpcNotification, IpcResponse, SessionSnapshot, IPC_VERSION};
 use claude_usage::UsageData;
 use std::path::Path;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -34,7 +34,7 @@ pub async fn subscribe_to_daemon(
     // Send LIST command as JSON
     let list_cmd = IpcCommand {
         version: IPC_VERSION,
-        cmd: "LIST".to_string(),
+        cmd: IpcCommandKind::List.to_string(),
         session_id: None,
         status: None,
         working_dir: None,
@@ -71,7 +71,7 @@ pub async fn subscribe_to_daemon(
     // Send SUB command as JSON
     let sub_cmd = IpcCommand {
         version: IPC_VERSION,
-        cmd: "SUB".to_string(),
+        cmd: IpcCommandKind::Sub.to_string(),
         session_id: None,
         status: None,
         working_dir: None,
