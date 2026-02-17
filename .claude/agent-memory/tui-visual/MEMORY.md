@@ -128,3 +128,32 @@ Test pattern (tests/buffer.rs):
 - Test all columns for both inactive and closed sessions
 - Test both highlighted (Black text) and non-highlighted (DarkGray text) states
 - Verify directory, status, priority, elapsed, session_id all have same color
+
+## API Usage Widget Long Mode (acd-elrc)
+
+Long mode format: `5h: 42% / 75% | 7d: 77% / 50% | Period: used / elapsed`
+
+Implementation pattern (widgets/api_usage.rs):
+
+- Each window shows `<period>: <used%> / <elapsed%>`
+- Uses `UsagePeriod::time_elapsed_percent(period_hours)` from claude-usage crate
+- 5h window: `time_elapsed_percent(5)`, 7d window:
+  `time_elapsed_percent(7 * 24)`
+- Legend "Period: used / elapsed" is dimmed:
+  `Style::default().fg(Color::DarkGray).add_modifier(Modifier::DIM)`
+- Same dim pattern as inactive/closed sessions for visual consistency
+- Utilization values are color-coded (green/yellow/red), elapsed values are
+  plain
+- Width threshold: >= 30 uses long mode, < 30 uses compact `[5h:8% 7d:77%]`
+
+Span structure (10 spans): 0. "5h: " (raw)
+
+1. "42%" (colored, utilization)
+2. " / " (raw)
+3. "75%" (raw, elapsed)
+4. " | 7d: " (raw)
+5. "77%" (colored, utilization)
+6. " / " (raw)
+7. "50%" (raw, elapsed)
+8. " | " (raw)
+9. "Period: used / elapsed" (dimmed legend)

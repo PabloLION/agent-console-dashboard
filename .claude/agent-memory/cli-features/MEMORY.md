@@ -123,3 +123,18 @@ Pattern: Use `agent_console_dashboard::` prefix for library imports from binary
 crate, not `crate::`. The binary crate (`src/main.rs`) imports from the library
 crate. Use graceful failures (warnings) for daemon stop and socket removal to
 avoid blocking uninstall on missing resources.
+
+### Adding Session Subcommands (acd-tmk9)
+
+When adding a new session subcommand (like `acd session delete`):
+
+1. Add variant to `SessionCommands` enum in `src/main.rs` with clap attributes
+2. Add function import to `use commands::...` in `src/main.rs`
+3. Add match arm in `Commands::Session` handler in `src/main.rs`
+4. Implement handler function in `src/commands/ipc.rs`
+5. Add CLI parsing tests in `src/cli_tests/cli.rs`
+
+Example: `acd session delete <session_id>` sends DELETE IPC command, returns
+SessionSnapshot JSON on success. Pattern follows other IPC commands (update,
+dump, status) - connect to socket, send IpcCommand, parse IpcResponse, handle
+data payload.

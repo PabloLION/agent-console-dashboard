@@ -5,7 +5,9 @@
 //! messages.
 
 use crate::client::connect_with_lazy_start;
-use crate::{IpcCommand, IpcCommandKind, IpcNotification, IpcResponse, SessionSnapshot, IPC_VERSION};
+use crate::{
+    IpcCommand, IpcCommandKind, IpcNotification, IpcResponse, SessionSnapshot, IPC_VERSION,
+};
 use claude_usage::UsageData;
 use std::path::Path;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};

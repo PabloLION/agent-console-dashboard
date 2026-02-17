@@ -400,17 +400,47 @@ mod tests {
 
     #[test]
     fn test_command_kind_from_str() {
-        assert_eq!("SET".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Set);
-        assert_eq!("set".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Set);
-        assert_eq!("Get".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Get);
+        assert_eq!(
+            "SET".parse::<IpcCommandKind>().unwrap(),
+            IpcCommandKind::Set
+        );
+        assert_eq!(
+            "set".parse::<IpcCommandKind>().unwrap(),
+            IpcCommandKind::Set
+        );
+        assert_eq!(
+            "Get".parse::<IpcCommandKind>().unwrap(),
+            IpcCommandKind::Get
+        );
         assert_eq!("RM".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Rm);
-        assert_eq!("delete".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Delete);
-        assert_eq!("SUB".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Sub);
-        assert_eq!("list".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::List);
-        assert_eq!("DUMP".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Dump);
-        assert_eq!("status".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Status);
-        assert_eq!("STOP".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Stop);
-        assert_eq!("reopen".parse::<IpcCommandKind>().unwrap(), IpcCommandKind::Reopen);
+        assert_eq!(
+            "delete".parse::<IpcCommandKind>().unwrap(),
+            IpcCommandKind::Delete
+        );
+        assert_eq!(
+            "SUB".parse::<IpcCommandKind>().unwrap(),
+            IpcCommandKind::Sub
+        );
+        assert_eq!(
+            "list".parse::<IpcCommandKind>().unwrap(),
+            IpcCommandKind::List
+        );
+        assert_eq!(
+            "DUMP".parse::<IpcCommandKind>().unwrap(),
+            IpcCommandKind::Dump
+        );
+        assert_eq!(
+            "status".parse::<IpcCommandKind>().unwrap(),
+            IpcCommandKind::Status
+        );
+        assert_eq!(
+            "STOP".parse::<IpcCommandKind>().unwrap(),
+            IpcCommandKind::Stop
+        );
+        assert_eq!(
+            "reopen".parse::<IpcCommandKind>().unwrap(),
+            IpcCommandKind::Reopen
+        );
     }
 
     #[test]
@@ -439,7 +469,10 @@ mod tests {
 
         for (kind, expected_wire_format) in commands {
             assert_eq!(kind.to_string(), expected_wire_format);
-            assert_eq!(expected_wire_format.parse::<IpcCommandKind>().unwrap(), kind);
+            assert_eq!(
+                expected_wire_format.parse::<IpcCommandKind>().unwrap(),
+                kind
+            );
         }
     }
 }
