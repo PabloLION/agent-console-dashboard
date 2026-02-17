@@ -455,6 +455,35 @@ impl App {
                         Action::ScrollHistoryUp => {
                             self.scroll_history_up();
                         }
+                        Action::CopySessionId(session_id) => {
+                            match arboard::Clipboard::new() {
+                                Ok(mut clipboard) => {
+                                    match clipboard.set_text(&session_id) {
+                                        Ok(()) => {
+                                            tracing::debug!("copied session ID to clipboard: {}", session_id);
+                                            self.status_message = Some((
+                                                "Copied session ID".to_string(),
+                                                Instant::now() + Duration::from_secs(2),
+                                            ));
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!("failed to copy to clipboard: {}", e);
+                                            self.status_message = Some((
+                                                format!("Copy failed: {}", e),
+                                                Instant::now() + Duration::from_secs(3),
+                                            ));
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::warn!("failed to initialize clipboard: {}", e);
+                                    self.status_message = Some((
+                                        format!("Clipboard init failed: {}", e),
+                                        Instant::now() + Duration::from_secs(3),
+                                    ));
+                                }
+                            }
+                        }
                         Action::None => {}
                     }
                     true // Input events always render immediately

@@ -249,6 +249,31 @@ fn test_handle_esc_returns_back() {
 }
 
 #[test]
+fn test_handle_s_copies_session_id_when_selected() {
+    let mut app = make_app_with_sessions(1);
+    app.selected_index = Some(0);
+    let action = handle_key_event(&mut app, make_key(KeyCode::Char('s'), KeyModifiers::NONE));
+    assert_eq!(action, Action::CopySessionId("session-0".to_string()));
+}
+
+#[test]
+fn test_handle_s_returns_none_when_no_selection() {
+    let mut app = make_app_with_sessions(1);
+    app.selected_index = None;
+    let action = handle_key_event(&mut app, make_key(KeyCode::Char('s'), KeyModifiers::NONE));
+    assert_eq!(action, Action::None);
+}
+
+#[test]
+fn test_handle_capital_s_copies_session_id() {
+    let mut app = make_app_with_sessions(1);
+    app.selected_index = Some(0);
+    let action = handle_key_event(&mut app, make_key(KeyCode::Char('S'), KeyModifiers::SHIFT));
+    // 'S' with shift should work the same as 's'
+    assert_eq!(action, Action::CopySessionId("session-0".to_string()));
+}
+
+#[test]
 fn test_handle_key_navigation_integration() {
     let mut app = make_app_with_sessions(5);
     // Navigate down 3 times
