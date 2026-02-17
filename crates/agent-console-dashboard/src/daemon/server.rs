@@ -358,7 +358,7 @@ async fn handle_client(
     stream: UnixStream,
     state: &DaemonState,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use crate::{IpcCommand, IpcResponse};
+    use crate::{IpcCommand, IpcCommandKind, IpcResponse};
 
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
@@ -394,22 +394,31 @@ async fn handle_client(
             }
         };
 
-        let command = cmd.cmd.to_uppercase();
-        let response = match command.as_str() {
-            "SET" => handle_set_command(&cmd, &state.store).await,
-            "RM" => handle_rm_command(&cmd, &state.store).await,
-            "LIST" => handle_list_command(&state.store).await,
-            "GET" => handle_get_command(&cmd, &state.store).await,
-            "DELETE" => handle_delete_command(&cmd, &state.store).await,
-            "REOPEN" => handle_reopen_command(&cmd, &state.store).await,
-            "STATUS" => handle_status_command(state).await,
-            "DUMP" => handle_dump_command(state).await,
-            "STOP" => handle_stop_command(&cmd, state).await,
-            "SUB" => {
+        // Parse command string to enum
+        let command_kind = match cmd.cmd.parse::<IpcCommandKind>() {
+            Ok(kind) => kind,
+            Err(e) => {
+                let resp = IpcResponse::error(e).to_json_line();
+                writer.write_all(resp.as_bytes()).await?;
+                writer.flush().await?;
+                continue;
+            }
+        };
+
+        let response = match command_kind {
+            IpcCommandKind::Set => handle_set_command(&cmd, &state.store).await,
+            IpcCommandKind::Rm => handle_rm_command(&cmd, &state.store).await,
+            IpcCommandKind::List => handle_list_command(&state.store).await,
+            IpcCommandKind::Get => handle_get_command(&cmd, &state.store).await,
+            IpcCommandKind::Delete => handle_delete_command(&cmd, &state.store).await,
+            IpcCommandKind::Reopen => handle_reopen_command(&cmd, &state.store).await,
+            IpcCommandKind::Status => handle_status_command(state).await,
+            IpcCommandKind::Dump => handle_dump_command(state).await,
+            IpcCommandKind::Stop => handle_stop_command(&cmd, state).await,
+            IpcCommandKind::Sub => {
                 handle_sub_command(&state.store, state.usage_fetcher.as_ref(), &mut writer).await?;
                 break;
             }
-            _ => IpcResponse::error(format!("unknown command: {}", cmd.cmd)).to_json_line(),
         };
 
         writer.write_all(response.as_bytes()).await?;

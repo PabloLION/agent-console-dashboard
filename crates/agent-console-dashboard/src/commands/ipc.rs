@@ -7,7 +7,8 @@
 //! - `dump` - Dump full daemon state
 
 use agent_console_dashboard::{
-    format_uptime, DaemonDump, HealthStatus, IpcCommand, IpcResponse, SessionSnapshot, IPC_VERSION,
+    format_uptime, DaemonDump, HealthStatus, IpcCommand, IpcCommandKind, IpcResponse,
+    SessionSnapshot, IPC_VERSION,
 };
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -47,7 +48,7 @@ pub(crate) fn run_update_command(
 
     let cmd = IpcCommand {
         version: IPC_VERSION,
-        cmd: "SET".to_string(),
+        cmd: IpcCommandKind::Set.to_string(),
         session_id: Some(session_id.to_string()),
         status: status.map(|s| s.to_string()),
         working_dir: wd,
@@ -105,7 +106,7 @@ pub(crate) fn run_delete_command(socket: &PathBuf, session_id: &str) -> ExitCode
 
     let cmd = IpcCommand {
         version: IPC_VERSION,
-        cmd: "DELETE".to_string(),
+        cmd: IpcCommandKind::Delete.to_string(),
         session_id: Some(session_id.to_string()),
         status: None,
         working_dir: None,
@@ -183,7 +184,7 @@ pub(crate) fn run_status_command(socket: &PathBuf) -> ExitCode {
 
     let cmd = IpcCommand {
         version: IPC_VERSION,
-        cmd: "STATUS".to_string(),
+        cmd: IpcCommandKind::Status.to_string(),
         session_id: None,
         status: None,
         working_dir: None,
@@ -270,7 +271,7 @@ pub(crate) fn run_dump_command(socket: &PathBuf) -> ExitCode {
 
     let cmd = IpcCommand {
         version: IPC_VERSION,
-        cmd: "DUMP".to_string(),
+        cmd: IpcCommandKind::Dump.to_string(),
         session_id: None,
         status: None,
         working_dir: None,

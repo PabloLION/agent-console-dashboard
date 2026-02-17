@@ -4,7 +4,7 @@
 //! - `stop` - Send stop command to running daemon (with confirmation)
 //! - `is_daemon_running` - Check if daemon is reachable
 
-use agent_console_dashboard::{IpcCommand, IpcResponse, IPC_VERSION};
+use agent_console_dashboard::{IpcCommand, IpcCommandKind, IpcResponse, IPC_VERSION};
 use std::process::ExitCode;
 
 /// Checks if daemon is already running by attempting to connect to the socket.
@@ -42,7 +42,7 @@ pub(crate) fn run_daemon_stop_command(socket: &std::path::Path, force: bool) -> 
     // Send initial STOP command (without confirmation)
     let cmd = IpcCommand {
         version: IPC_VERSION,
-        cmd: "STOP".to_string(),
+        cmd: IpcCommandKind::Stop.to_string(),
         session_id: None,
         status: None,
         working_dir: None,
@@ -101,7 +101,7 @@ pub(crate) fn run_daemon_stop_command(socket: &std::path::Path, force: bool) -> 
                         // Send STOP with confirmation
                         let cmd_confirmed = IpcCommand {
                             version: IPC_VERSION,
-                            cmd: "STOP".to_string(),
+                            cmd: IpcCommandKind::Stop.to_string(),
                             session_id: None,
                             status: None,
                             working_dir: None,
