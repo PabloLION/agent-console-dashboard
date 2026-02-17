@@ -278,6 +278,10 @@ fn build_detail_lines<'a>(
             actions.len() - 1,
             Span::styled("[C]lose  ", Style::default().fg(Color::Red)),
         );
+        actions.insert(
+            actions.len() - 1,
+            Span::styled("[S] Copy ID  ", Style::default().fg(Color::Cyan)),
+        );
         lines.push(Line::from(actions));
     }
 

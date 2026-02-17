@@ -36,6 +36,7 @@ claude-usage = { path = "../claude-usage" }
 serde_json = "1"
 sysinfo = "0.33"
 humantime = "2"
+arboard = "3"
 
 [build-dependencies]
 serde_json = "1"

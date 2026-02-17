@@ -88,6 +88,8 @@ pub enum Action {
     ScrollHistoryDown,
     /// Scroll history up in detail view.
     ScrollHistoryUp,
+    /// Copy session ID to clipboard.
+    CopySessionId(String),
 }
 
 /// Handles a key event by dispatching to the appropriate app method or action.
@@ -137,6 +139,14 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
             }
             Action::None
         }
+        KeyCode::Char('s') | KeyCode::Char('S') => {
+            // 's' copies session ID when session is selected
+            if let Some(session) = app.selected_session() {
+                Action::CopySessionId(session.session_id.clone())
+            } else {
+                Action::None
+            }
+        }
         KeyCode::Char('d') => {
             if let Some(session) = app.selected_session() {
                 Action::Remove(session.session_id.clone())
@@ -175,6 +185,13 @@ fn handle_detail_key(app: &App, key: KeyEvent, session_index: usize) -> Action {
         KeyCode::Char('c') | KeyCode::Char('C') => {
             if let Some(session) = app.sessions.get(session_index) {
                 Action::Remove(session.session_id.clone())
+            } else {
+                Action::None
+            }
+        }
+        KeyCode::Char('s') | KeyCode::Char('S') => {
+            if let Some(session) = app.sessions.get(session_index) {
+                Action::CopySessionId(session.session_id.clone())
             } else {
                 Action::None
             }

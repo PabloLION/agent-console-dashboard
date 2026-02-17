@@ -20,7 +20,7 @@ use std::time::Instant;
 const HEADER_TEXT: &str = "Agent Console Dashboard";
 
 /// Footer text showing available keybindings.
-const FOOTER_TEXT: &str = "[j/k] Navigate  [Enter] Hook  [r] Resurrect  [q] Quit";
+const FOOTER_TEXT: &str = "[j/k] Navigate  [Enter] Hook  [s] Copy ID  [r] Resurrect  [q] Quit";
 
 /// Version string shown in the header (right-aligned).
 const VERSION_TEXT: &str = concat!("v", env!("CARGO_PKG_VERSION"));
@@ -310,6 +310,7 @@ mod tests {
         assert!(FOOTER_TEXT.contains("[q] Quit"));
         assert!(FOOTER_TEXT.contains("[r] Resurrect"));
         assert!(FOOTER_TEXT.contains("[Enter] Hook"));
+        assert!(FOOTER_TEXT.contains("[s] Copy ID"));
     }
 
     // --- Detail view (inline panel) tests ---
@@ -541,7 +542,8 @@ mod tests {
             extra_usage: None,
         });
 
-        let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
+        // Width must be large enough for hints (67) + spacing (2) + usage (~15) = 84+
+        let buffer = render_dashboard_to_buffer(&mut app, 100, 24);
         let footer_row = buffer.area().height - 1;
 
         // Verify SHORT format is present: [5h:8% 7d:77%]
