@@ -6,7 +6,9 @@
 use crate::tui::app::{App, LayoutMode, TWO_LINE_LAYOUT_HEIGHT_THRESHOLD};
 use crate::tui::views::dashboard::render_session_list;
 use crate::tui::views::detail::{render_detail_placeholder, render_inline_detail};
-use crate::widgets::{api_usage::ApiUsageWidget, session_status::SessionStatusWidget, Widget, WidgetContext};
+use crate::widgets::{
+    api_usage::ApiUsageWidget, session_status::SessionStatusWidget, Widget, WidgetContext,
+};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
@@ -54,7 +56,12 @@ pub fn render_dashboard(frame: &mut Frame, app: &mut App) {
 }
 
 /// Renders the Large layout mode: header, session list, detail panel, footer.
-fn render_large_layout(frame: &mut Frame, app: &mut App, area: ratatui::prelude::Rect, now: Instant) {
+fn render_large_layout(
+    frame: &mut Frame,
+    app: &mut App,
+    area: ratatui::prelude::Rect,
+    now: Instant,
+) {
     // Detail panel is always visible
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -123,7 +130,12 @@ fn render_large_layout(frame: &mut Frame, app: &mut App, area: ratatui::prelude:
 }
 
 /// Renders the TwoLine layout mode: session chips (line 1), API usage (line 2).
-fn render_two_line_layout(frame: &mut Frame, app: &mut App, area: ratatui::prelude::Rect, now: Instant) {
+fn render_two_line_layout(
+    frame: &mut Frame,
+    app: &mut App,
+    area: ratatui::prelude::Rect,
+    now: Instant,
+) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -143,19 +155,7 @@ fn render_two_line_layout(frame: &mut Frame, app: &mut App, area: ratatui::prelu
     let session_widget = SessionStatusWidget::new();
     let session_line = session_widget.render(chunks[0].width, &ctx);
 
-    // Wrap session chips with selection brackets if a session is selected
-    let session_line = if let Some(selected_idx) = app.selected_index {
-        if let Some(session) = app.sessions.get(selected_idx) {
-            // Find the selected session's name in the rendered line and add brackets
-            // For now, just render the line as-is
-            // TODO: properly wrap selected session with brackets
-            session_line
-        } else {
-            session_line
-        }
-    } else {
-        session_line
-    };
+    // TODO(acd-6wg6): wrap selected session chip with [brackets]
 
     let session_paragraph = Paragraph::new(session_line);
     frame.render_widget(session_paragraph, chunks[0]);
