@@ -119,7 +119,7 @@ fn test_mouse_header_click_from_detail_view_returns_to_dashboard() {
 
 #[test]
 fn test_initial_state_no_selection() {
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
+    let app = App::new(PathBuf::from("/tmp/test.sock"), None);
     assert_eq!(app.selected_index, None);
 }
 
@@ -228,25 +228,25 @@ fn test_mouse_right_click_ignored() {
 
 #[test]
 fn test_last_click_initialized_to_none() {
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
+    let app = App::new(PathBuf::from("/tmp/test.sock"), None);
     assert!(app.last_click.is_none());
 }
 
 #[test]
 fn test_activate_hook_default_none() {
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
+    let app = App::new(PathBuf::from("/tmp/test.sock"), None);
     assert!(app.activate_hook.is_none());
 }
 
 #[test]
 fn test_reopen_hook_default_none() {
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
+    let app = App::new(PathBuf::from("/tmp/test.sock"), None);
     assert!(app.reopen_hook.is_none());
 }
 
 #[test]
 fn test_status_message_default_none() {
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
+    let app = App::new(PathBuf::from("/tmp/test.sock"), None);
     assert!(app.status_message.is_none());
 }
 
@@ -316,7 +316,7 @@ fn test_double_click_closed_session_no_reopen_hook() {
 
 #[test]
 fn test_expire_status_message_clears_expired() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     app.status_message = Some((
         "old message".to_string(),
         Instant::now() - Duration::from_secs(1),
@@ -330,7 +330,7 @@ fn test_expire_status_message_clears_expired() {
 
 #[test]
 fn test_expire_status_message_keeps_fresh() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     app.status_message = Some((
         "fresh message".to_string(),
         Instant::now() + Duration::from_secs(10),

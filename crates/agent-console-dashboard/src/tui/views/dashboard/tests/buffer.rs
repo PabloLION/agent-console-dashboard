@@ -10,7 +10,7 @@ use crate::tui::test_utils::{
 #[test]
 fn test_dashboard_buffer_contains_header_text() {
     use crate::tui::app::App;
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
     assert!(
         find_row_with_text(&buffer, "Agent Console Dashboard").is_some(),
@@ -21,7 +21,7 @@ fn test_dashboard_buffer_contains_header_text() {
 #[test]
 fn test_dashboard_buffer_contains_footer_keybindings() {
     use crate::tui::app::App;
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
     let last_row = buffer.area().height - 1;
     assert!(
@@ -33,7 +33,7 @@ fn test_dashboard_buffer_contains_footer_keybindings() {
 #[test]
 fn test_dashboard_buffer_contains_session_border() {
     use crate::tui::app::App;
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
     assert!(
         find_row_with_text(&buffer, "Sessions").is_some(),
@@ -44,7 +44,7 @@ fn test_dashboard_buffer_contains_session_border() {
 #[test]
 fn test_dashboard_buffer_shows_session_names() {
     use crate::tui::app::App;
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     app.sessions.push(make_test_session_with_dir(
         "test-session-id",
         Status::Working,
@@ -61,7 +61,7 @@ fn test_dashboard_buffer_shows_session_names() {
 #[test]
 fn test_dashboard_empty_renders_without_session_text() {
     use crate::tui::app::App;
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
     for row in 0..buffer.area().height {
         let text = row_text(&buffer, row);
@@ -75,7 +75,7 @@ fn test_dashboard_empty_renders_without_session_text() {
 #[test]
 fn test_dashboard_selected_session_has_highlight() {
     use crate::tui::app::App;
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     app.sessions.push(make_test_session_with_dir(
         "highlighted",
         Status::Working,
@@ -90,7 +90,7 @@ fn test_dashboard_selected_session_has_highlight() {
 #[test]
 fn test_dashboard_selected_session_has_arrow_symbol() {
     use crate::tui::app::App;
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     app.sessions.push(make_test_session_with_dir(
         "with-arrow",
         Status::Working,

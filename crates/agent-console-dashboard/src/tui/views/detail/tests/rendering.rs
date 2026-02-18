@@ -9,7 +9,7 @@ use std::time::Instant;
 
 #[test]
 fn test_detail_renders_below_session_list_not_centered() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     app.sessions.push(make_test_session_with_dir(
         "test-session",
         Status::Working,
@@ -31,7 +31,7 @@ fn test_detail_renders_below_session_list_not_centered() {
 
 #[test]
 fn test_detail_section_shows_session_status() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     let mut session = make_test_session_with_dir(
         "status-test",
         Status::Attention,
@@ -57,7 +57,7 @@ fn test_detail_section_shows_session_status() {
 
 #[test]
 fn test_detail_section_shows_working_directory() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     app.sessions.push(make_test_session_with_dir(
         "dir-test",
         Status::Working,
@@ -81,7 +81,7 @@ fn test_detail_section_shows_working_directory() {
 
 #[test]
 fn test_detail_section_shows_session_id() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     app.sessions.push(make_test_session_with_dir(
         "unique-session-id-12345",
         Status::Working,

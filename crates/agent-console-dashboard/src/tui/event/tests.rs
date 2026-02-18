@@ -13,7 +13,7 @@ fn make_key(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
 }
 
 fn make_app_with_sessions(count: usize) -> App {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     for i in 0..count {
         app.sessions.push(Session::new(
             format!("session-{}", i),
@@ -164,7 +164,7 @@ fn test_handle_enter_no_hook_shows_message() {
 
 #[test]
 fn test_handle_enter_no_selection_returns_none() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     let action = handle_key_event(&mut app, make_key(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(action, Action::None);
 }
