@@ -29,6 +29,25 @@ use tokio::sync::mpsc;
 /// User input events (keyboard, mouse) bypass this throttle and render immediately.
 const ELAPSED_TIME_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
+/// Terminal height threshold for TwoLine layout mode.
+///
+/// When terminal height is less than this value, TwoLine mode is automatically
+/// selected. Otherwise, Large mode is used.
+pub const TWO_LINE_LAYOUT_HEIGHT_THRESHOLD: u16 = 5;
+
+/// Layout mode for the TUI rendering.
+///
+/// Controls how the dashboard renders based on available screen space:
+/// - `Large`: Full multi-line layout with header, session list, detail panel, footer
+/// - `TwoLine`: Compact layout with session chips (line 1) and API usage (line 2)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutMode {
+    /// Full dashboard layout with session list and detail panel.
+    Large,
+    /// Compact two-line layout for narrow terminals.
+    TwoLine,
+}
+
 /// Active view state for the TUI.
 ///
 /// Deprecated: detail panel is now always visible. This enum is kept for
@@ -87,6 +106,11 @@ pub struct App {
     /// Updated during each render pass. Used by mouse click detection to accurately
     /// map click coordinates to session indices. None if the list hasn't been rendered yet.
     pub session_list_inner_area: Option<Rect>,
+    /// Current layout mode (Large or TwoLine).
+    ///
+    /// Auto-detected based on terminal height during render. TwoLine mode is used
+    /// when height < TWO_LINE_LAYOUT_HEIGHT_THRESHOLD.
+    pub layout_mode: LayoutMode,
 }
 
 impl App {
@@ -108,6 +132,7 @@ impl App {
             status_message: None,
             last_elapsed_render: Instant::now(),
             session_list_inner_area: None,
+            layout_mode: LayoutMode::Large,
         }
     }
 

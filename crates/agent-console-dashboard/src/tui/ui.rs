@@ -3,10 +3,10 @@
 //! Provides the top-level `render_dashboard` function that composes
 //! the header, session list, and footer into a cohesive layout.
 
-use crate::tui::app::App;
+use crate::tui::app::{App, LayoutMode, TWO_LINE_LAYOUT_HEIGHT_THRESHOLD};
 use crate::tui::views::dashboard::render_session_list;
 use crate::tui::views::detail::{render_detail_placeholder, render_inline_detail};
-use crate::widgets::{api_usage::ApiUsageWidget, Widget, WidgetContext};
+use crate::widgets::{api_usage::ApiUsageWidget, session_status::SessionStatusWidget, Widget, WidgetContext};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
@@ -29,11 +29,10 @@ const VERSION_TEXT: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 ///
 /// The detail panel is always visible below the session list. It shows information
 /// about the currently focused session, or a hint message when no session is focused.
-/// Layout regions:
-/// - Header: 1 line showing the application title and version
-/// - Session list: flexible height (min 3 rows) showing all sessions
-/// - Detail panel: fixed height (12 lines) showing focused session info or hint
-/// - Footer: 1 line showing keybinding hints
+///
+/// Layout modes:
+/// - Large (height >= 5): Header, session list, detail panel, footer
+/// - TwoLine (height < 5): Session chips (line 1), API usage (line 2)
 ///
 /// Updates `app.session_list_inner_area` with the inner Rect of the session list
 /// for accurate mouse click detection.
@@ -41,6 +40,21 @@ pub fn render_dashboard(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
     let now = Instant::now();
 
+    // Auto-detect layout mode based on terminal height
+    app.layout_mode = if area.height < TWO_LINE_LAYOUT_HEIGHT_THRESHOLD {
+        LayoutMode::TwoLine
+    } else {
+        LayoutMode::Large
+    };
+
+    match app.layout_mode {
+        LayoutMode::Large => render_large_layout(frame, app, area, now),
+        LayoutMode::TwoLine => render_two_line_layout(frame, app, area, now),
+    }
+}
+
+/// Renders the Large layout mode: header, session list, detail panel, footer.
+fn render_large_layout(frame: &mut Frame, app: &mut App, area: ratatui::prelude::Rect, now: Instant) {
     // Detail panel is always visible
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -106,6 +120,54 @@ pub fn render_dashboard(frame: &mut Frame, app: &mut App) {
     };
     let footer = Paragraph::new(footer_text);
     frame.render_widget(footer, chunks[3]);
+}
+
+/// Renders the TwoLine layout mode: session chips (line 1), API usage (line 2).
+fn render_two_line_layout(frame: &mut Frame, app: &mut App, area: ratatui::prelude::Rect, now: Instant) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // session chips
+            Constraint::Length(1), // API usage
+        ])
+        .split(area);
+
+    // Line 1: Session chips (horizontal)
+    let mut ctx = WidgetContext::new(&app.sessions);
+    ctx.now = now;
+    ctx.selected_index = app.selected_index;
+    if let Some(ref usage) = app.usage {
+        ctx = ctx.with_usage(usage);
+    }
+
+    let session_widget = SessionStatusWidget::new();
+    let session_line = session_widget.render(chunks[0].width, &ctx);
+
+    // Wrap session chips with selection brackets if a session is selected
+    let session_line = if let Some(selected_idx) = app.selected_index {
+        if let Some(session) = app.sessions.get(selected_idx) {
+            // Find the selected session's name in the rendered line and add brackets
+            // For now, just render the line as-is
+            // TODO: properly wrap selected session with brackets
+            session_line
+        } else {
+            session_line
+        }
+    } else {
+        session_line
+    };
+
+    let session_paragraph = Paragraph::new(session_line);
+    frame.render_widget(session_paragraph, chunks[0]);
+
+    // Line 2: API usage
+    let api_widget = ApiUsageWidget::new();
+    let api_line = api_widget.render(chunks[1].width, &ctx);
+    let api_paragraph = Paragraph::new(api_line);
+    frame.render_widget(api_paragraph, chunks[1]);
+
+    // Clear session_list_inner_area since there's no clickable list in TwoLine mode
+    app.session_list_inner_area = None;
 }
 
 /// Renders the normal footer layout: keybinding hints left, API usage right.
@@ -681,5 +743,90 @@ mod tests {
             !footer_text.contains("[5h:8%"),
             "Footer should not show usage when status message active"
         );
+    }
+
+    // --- Layout mode tests ---
+
+    #[test]
+    fn test_layout_mode_auto_detects_large_for_height_5() {
+        let mut app = make_app_with_sessions(3);
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 5);
+        // Height 5 should use Large mode (threshold is < 5)
+        assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::Large);
+        // Should have header
+        assert!(
+            find_row_with_text(&buffer, "Agent Console Dashboard").is_some(),
+            "Large mode should show header"
+        );
+    }
+
+    #[test]
+    fn test_layout_mode_auto_detects_two_line_for_height_4() {
+        let mut app = make_app_with_sessions(3);
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 4);
+        // Height 4 should use TwoLine mode
+        assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::TwoLine);
+        // Should NOT have header
+        assert!(
+            find_row_with_text(&buffer, "Agent Console Dashboard").is_none(),
+            "TwoLine mode should not show header"
+        );
+    }
+
+    #[test]
+    fn test_two_line_layout_shows_session_chips() {
+        let mut app = make_app_with_sessions(3);
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 2);
+        // Line 0 should have session chips
+        let line0 = row_text(&buffer, 0);
+        assert!(
+            line0.contains("session-"),
+            "Line 0 should contain session chips"
+        );
+    }
+
+    #[test]
+    fn test_two_line_layout_shows_api_usage() {
+        use claude_usage::{UsageData, UsagePeriod};
+        let mut app = make_app_with_sessions(3);
+        app.usage = Some(UsageData {
+            five_hour: UsagePeriod {
+                utilization: 42.0,
+                resets_at: None,
+            },
+            seven_day: UsagePeriod {
+                utilization: 77.0,
+                resets_at: None,
+            },
+            seven_day_sonnet: None,
+            extra_usage: None,
+        });
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 2);
+        // Line 1 should have API usage
+        let line1 = row_text(&buffer, 1);
+        assert!(
+            line1.contains("42%") || line1.contains("77%"),
+            "Line 1 should contain API usage: {}",
+            line1
+        );
+    }
+
+    #[test]
+    fn test_two_line_layout_no_panic_with_no_sessions() {
+        let mut app = make_app();
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 2);
+        assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::TwoLine);
+        // Should render without panic
+        let line0 = row_text(&buffer, 0);
+        assert!(
+            line0.contains("no sessions") || line0.is_empty() || line0.trim().is_empty(),
+            "Should handle empty sessions gracefully"
+        );
+    }
+
+    #[test]
+    fn test_layout_mode_threshold_is_5() {
+        use crate::tui::app::TWO_LINE_LAYOUT_HEIGHT_THRESHOLD;
+        assert_eq!(TWO_LINE_LAYOUT_HEIGHT_THRESHOLD, 5);
     }
 }
