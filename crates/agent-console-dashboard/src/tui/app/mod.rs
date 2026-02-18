@@ -116,6 +116,11 @@ pub struct App {
     /// When Some(mode), forces that layout mode and skips auto-detection.
     /// When None, auto-detects from terminal height (existing behavior).
     pub layout_mode_override: Option<LayoutMode>,
+    /// Horizontal scroll offset for compact two-line layout.
+    ///
+    /// Tracks which session chip is leftmost in the viewport. Only used in TwoLine
+    /// layout mode for horizontal pagination. Zero-indexed into the sessions list.
+    pub compact_scroll_offset: usize,
 }
 
 impl App {
@@ -147,6 +152,7 @@ impl App {
             session_list_inner_area: None,
             layout_mode: LayoutMode::Large,
             layout_mode_override,
+            compact_scroll_offset: 0,
         }
     }
 
@@ -186,6 +192,48 @@ impl App {
             self.history_scroll = 0;
         }
         self.selected_index = Some(new_idx);
+    }
+
+    /// Scrolls the compact layout viewport left by one chip.
+    ///
+    /// Only applicable in TwoLine layout mode. Decrements compact_scroll_offset
+    /// down to zero (left boundary).
+    pub fn scroll_compact_left(&mut self) {
+        self.compact_scroll_offset = self.compact_scroll_offset.saturating_sub(1);
+    }
+
+    /// Scrolls the compact layout viewport right by one chip.
+    ///
+    /// Only applicable in TwoLine layout mode. Increments compact_scroll_offset
+    /// up to the maximum valid offset (sessions.len() - 1).
+    pub fn scroll_compact_right(&mut self) {
+        if !self.sessions.is_empty() {
+            let max_offset = self.sessions.len().saturating_sub(1);
+            if self.compact_scroll_offset < max_offset {
+                self.compact_scroll_offset += 1;
+            }
+        }
+    }
+
+    /// Ensures the selected session chip is visible in the compact layout viewport.
+    ///
+    /// Adjusts compact_scroll_offset to bring the selected session into view if needed.
+    /// This is called automatically when selection changes via j/k or mouse click.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_visible` - Maximum count of chips that fit in the current viewport
+    pub fn ensure_selected_visible_compact(&mut self, max_visible: usize) {
+        if let Some(idx) = self.selected_index {
+            // If selected is before viewport, scroll left to show it
+            if idx < self.compact_scroll_offset {
+                self.compact_scroll_offset = idx;
+            }
+            // If selected is after viewport, scroll right to show it
+            else if idx >= self.compact_scroll_offset + max_visible {
+                self.compact_scroll_offset = (idx + 1).saturating_sub(max_visible);
+            }
+        }
     }
 
     /// Returns a reference to the currently selected session, if any.

@@ -6,12 +6,10 @@
 use crate::tui::app::{App, LayoutMode, TWO_LINE_LAYOUT_HEIGHT_THRESHOLD};
 use crate::tui::views::dashboard::render_session_list;
 use crate::tui::views::detail::{render_detail_placeholder, render_inline_detail};
-use crate::widgets::{
-    api_usage::ApiUsageWidget, session_status::SessionStatusWidget, Widget, WidgetContext,
-};
+use crate::widgets::{api_usage::ApiUsageWidget, Widget, WidgetContext};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
     Frame,
@@ -149,23 +147,28 @@ fn render_two_line_layout(
         ])
         .split(area);
 
-    // Line 1: Session chips (horizontal)
-    let mut ctx = WidgetContext::new(&app.sessions);
-    ctx.now = now;
-    ctx.selected_index = app.selected_index;
-    if let Some(ref usage) = app.usage {
-        ctx = ctx.with_usage(usage);
-    }
+    // Line 1: Session chips with horizontal pagination
+    let session_line = render_compact_session_chips(
+        &app.sessions,
+        app.selected_index,
+        app.compact_scroll_offset,
+        chunks[0].width,
+        now,
+    );
 
-    let session_widget = SessionStatusWidget::new();
-    let session_line = session_widget.render(chunks[0].width, &ctx);
-
-    // TODO(acd-6wg6): wrap selected session chip with [brackets]
+    // Auto-scroll to keep selected chip visible
+    let max_visible = calculate_max_visible_chips(chunks[0].width);
+    app.ensure_selected_visible_compact(max_visible);
 
     let session_paragraph = Paragraph::new(session_line);
     frame.render_widget(session_paragraph, chunks[0]);
 
     // Line 2: API usage
+    let mut ctx = WidgetContext::new(&app.sessions);
+    ctx.now = now;
+    if let Some(ref usage) = app.usage {
+        ctx = ctx.with_usage(usage);
+    }
     let api_widget = ApiUsageWidget::new();
     let api_line = api_widget.render(chunks[1].width, &ctx);
     let api_paragraph = Paragraph::new(api_line);
@@ -231,6 +234,111 @@ fn render_footer_normal(
     // Clone api_usage_line spans to owned Spans
     for span in api_usage_line.spans {
         spans.push(Span::styled(span.content.to_string(), span.style));
+    }
+
+    Line::from(spans)
+}
+
+/// Width reserved for each overflow indicator (`<- N+ ` or ` N+ ->`).
+const OVERFLOW_INDICATOR_WIDTH: usize = 7;
+
+/// Approximate width of a single session chip (symbol + short ID + spacing).
+const CHIP_WIDTH: usize = 15;
+
+/// Calculates the maximum count of session chips that fit in the available width.
+fn calculate_max_visible_chips(available_width: u16) -> usize {
+    let width = available_width as usize;
+    // Reserve space for both overflow indicators
+    let content_width = width.saturating_sub(OVERFLOW_INDICATOR_WIDTH * 2);
+    // Divide by chip width, minimum 1
+    (content_width / CHIP_WIDTH).max(1)
+}
+
+/// Renders session chips with horizontal pagination and overflow indicators.
+///
+/// Shows a viewport window of visible sessions with `<- N+` and `N+ ->` indicators
+/// when more sessions exist beyond the viewport boundaries.
+///
+/// # Arguments
+///
+/// * `sessions` - Full list of sessions to render
+/// * `selected_index` - Index of selected session (if any)
+/// * `scroll_offset` - Index of leftmost visible session
+/// * `available_width` - Terminal width for this line
+/// * `_now` - Current time for elapsed time calculations (unused for now)
+fn render_compact_session_chips(
+    sessions: &[crate::Session],
+    selected_index: Option<usize>,
+    scroll_offset: usize,
+    available_width: u16,
+    _now: Instant,
+) -> Line<'static> {
+    use crate::tui::views::dashboard::{status_color, status_symbol};
+
+    if sessions.is_empty() {
+        return Line::raw("(no sessions)");
+    }
+
+    let max_visible = calculate_max_visible_chips(available_width);
+
+    // Determine visible range
+    let start = scroll_offset.min(sessions.len().saturating_sub(1));
+    let end = (start + max_visible).min(sessions.len());
+    let visible_sessions = &sessions[start..end];
+
+    // Calculate overflow counts
+    let overflow_left = start;
+    let overflow_right = sessions.len().saturating_sub(end);
+
+    let mut spans = vec![];
+
+    // Left overflow indicator
+    if overflow_left > 0 {
+        spans.push(Span::styled(
+            format!("<- {}+ ", overflow_left),
+            Style::default().fg(Color::DarkGray),
+        ));
+    } else {
+        // Padding for alignment when no left overflow
+        spans.push(Span::raw("       "));
+    }
+
+    // Visible chips
+    for (index, session) in visible_sessions.iter().enumerate() {
+        let global_index = start + index;
+        let is_selected = selected_index == Some(global_index);
+
+        let status = session.status;
+        let symbol = status_symbol(status);
+        let color = status_color(status);
+
+        // Short ID: first 8 chars of session_id
+        let short_id: String = session.session_id.chars().take(8).collect();
+
+        // Format chip with brackets if selected
+        let chip_text = if is_selected {
+            format!("[{} {}] ", symbol, short_id)
+        } else {
+            format!(" {} {}  ", symbol, short_id)
+        };
+
+        let style = if is_selected {
+            Style::default().fg(color).add_modifier(Modifier::BOLD)
+        } else if session.status.should_dim() || session.is_inactive(crate::INACTIVE_SESSION_THRESHOLD) {
+            Style::default().fg(Color::DarkGray)
+        } else {
+            Style::default().fg(color)
+        };
+
+        spans.push(Span::styled(chip_text, style));
+    }
+
+    // Right overflow indicator
+    if overflow_right > 0 {
+        spans.push(Span::styled(
+            format!(" {}+ ->", overflow_right),
+            Style::default().fg(Color::DarkGray),
+        ));
     }
 
     Line::from(spans)
@@ -892,11 +1000,227 @@ mod tests {
         ));
 
         // Height 24 should auto-detect to Large
-        let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
+        let _buffer = render_dashboard_to_buffer(&mut app, 80, 24);
         assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::Large);
 
         // Height 4 should auto-detect to TwoLine
-        let buffer = render_dashboard_to_buffer(&mut app, 80, 4);
+        let _buffer = render_dashboard_to_buffer(&mut app, 80, 4);
         assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::TwoLine);
+    }
+
+    // --- Compact layout pagination tests (acd-6wg6) ---
+
+    #[test]
+    fn test_calculate_max_visible_chips_wide_terminal() {
+        // Wide terminal (80 chars): should fit multiple chips
+        // 80 - (7*2 for indicators) = 66 / 15 = 4 chips
+        assert_eq!(calculate_max_visible_chips(80), 4);
+    }
+
+    #[test]
+    fn test_calculate_max_visible_chips_narrow_terminal() {
+        // Narrow terminal (30 chars): should fit at least 1 chip
+        // 30 - 14 = 16 / 15 = 1 chip (minimum)
+        assert_eq!(calculate_max_visible_chips(30), 1);
+    }
+
+    #[test]
+    fn test_calculate_max_visible_chips_minimum() {
+        // Very narrow: should always return at least 1
+        assert_eq!(calculate_max_visible_chips(10), 1);
+        assert_eq!(calculate_max_visible_chips(1), 1);
+    }
+
+    #[test]
+    fn test_render_compact_chips_empty_sessions() {
+        use std::time::Instant;
+        let sessions = vec![];
+        let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
+        assert_eq!(line.to_string(), "(no sessions)");
+    }
+
+    #[test]
+    fn test_render_compact_chips_single_session() {
+        use std::time::Instant;
+        let mut session = Session::new(
+            "test-session-id-1234".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp")),
+        );
+        session.status = Status::Working;
+        let sessions = vec![session];
+
+        let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Should contain status symbol and short ID (first 8 chars)
+        assert!(text.contains("●"), "should contain working symbol");
+        assert!(text.contains("test-ses"), "should contain short ID");
+    }
+
+    #[test]
+    fn test_render_compact_chips_selected_session_has_brackets() {
+        use std::time::Instant;
+        let mut session = Session::new(
+            "selected-session".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp")),
+        );
+        session.status = Status::Attention;
+        let sessions = vec![session];
+
+        let line = render_compact_session_chips(&sessions, Some(0), 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Selected chip should have brackets
+        assert!(text.contains("[○ selected"), "selected chip should have brackets");
+    }
+
+    #[test]
+    fn test_render_compact_chips_overflow_left() {
+        use std::time::Instant;
+        let sessions: Vec<Session> = (0..10)
+            .map(|i| {
+                Session::new(
+                    format!("session-{}", i),
+                    AgentType::ClaudeCode,
+                    Some(PathBuf::from("/tmp")),
+                )
+            })
+            .collect();
+
+        // Scroll to position 5 (5 sessions hidden to the left)
+        let line = render_compact_session_chips(&sessions, None, 5, 80, Instant::now());
+        let text = line.to_string();
+
+        // Should show left overflow indicator with count
+        assert!(text.contains("<- 5+"), "should show left overflow count");
+    }
+
+    #[test]
+    fn test_render_compact_chips_overflow_right() {
+        use std::time::Instant;
+        let sessions: Vec<Session> = (0..10)
+            .map(|i| {
+                Session::new(
+                    format!("session-{}", i),
+                    AgentType::ClaudeCode,
+                    Some(PathBuf::from("/tmp")),
+                )
+            })
+            .collect();
+
+        // At position 0, with 80 width fitting ~4 chips, should have 6 hidden on right
+        let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Should show right overflow indicator
+        assert!(text.contains("+ ->"), "should show right overflow indicator");
+    }
+
+    #[test]
+    fn test_render_compact_chips_no_overflow_when_all_fit() {
+        use std::time::Instant;
+        let sessions: Vec<Session> = (0..3)
+            .map(|i| {
+                Session::new(
+                    format!("session-{}", i),
+                    AgentType::ClaudeCode,
+                    Some(PathBuf::from("/tmp")),
+                )
+            })
+            .collect();
+
+        // Wide terminal (80 chars) should fit all 3 sessions
+        let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Should NOT have overflow indicators with counts
+        assert!(!text.contains("<- 1+"), "should not show left overflow when all fit");
+        assert!(!text.contains("1+ ->"), "should not show right overflow when all fit");
+    }
+
+    #[test]
+    fn test_app_scroll_compact_left() {
+        let mut app = make_app_with_sessions(10);
+        app.compact_scroll_offset = 5;
+
+        app.scroll_compact_left();
+        assert_eq!(app.compact_scroll_offset, 4);
+
+        // Should clamp at 0
+        app.compact_scroll_offset = 0;
+        app.scroll_compact_left();
+        assert_eq!(app.compact_scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_app_scroll_compact_right() {
+        let mut app = make_app_with_sessions(10);
+        app.compact_scroll_offset = 5;
+
+        app.scroll_compact_right();
+        assert_eq!(app.compact_scroll_offset, 6);
+
+        // Should clamp at sessions.len() - 1
+        app.compact_scroll_offset = 9;
+        app.scroll_compact_right();
+        assert_eq!(app.compact_scroll_offset, 9);
+    }
+
+    #[test]
+    fn test_app_ensure_selected_visible_scrolls_left() {
+        let mut app = make_app_with_sessions(10);
+        app.compact_scroll_offset = 5;
+        app.selected_index = Some(3); // Selected is before viewport
+
+        app.ensure_selected_visible_compact(4); // max_visible = 4
+
+        // Should scroll left to show selected session
+        assert_eq!(app.compact_scroll_offset, 3);
+    }
+
+    #[test]
+    fn test_app_ensure_selected_visible_scrolls_right() {
+        let mut app = make_app_with_sessions(10);
+        app.compact_scroll_offset = 0;
+        app.selected_index = Some(8); // Selected is after viewport
+
+        app.ensure_selected_visible_compact(4); // max_visible = 4
+
+        // Should scroll right to show selected session
+        // viewport should be [5, 6, 7, 8] so offset = 5
+        assert_eq!(app.compact_scroll_offset, 5);
+    }
+
+    #[test]
+    fn test_app_ensure_selected_visible_no_scroll_when_visible() {
+        let mut app = make_app_with_sessions(10);
+        app.compact_scroll_offset = 3;
+        app.selected_index = Some(5); // Selected is within viewport [3, 4, 5, 6]
+
+        app.ensure_selected_visible_compact(4); // max_visible = 4
+
+        // Should not change offset
+        assert_eq!(app.compact_scroll_offset, 3);
+    }
+
+    #[test]
+    fn test_two_line_layout_with_pagination() {
+        let mut app = make_app_with_sessions(10);
+        app.selected_index = Some(0);
+
+        // Render in TwoLine mode
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 2);
+
+        assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::TwoLine);
+
+        // Line 0 should contain session chips
+        let line0 = row_text(&buffer, 0);
+        assert!(
+            line0.contains("session-") || line0.contains("●") || line0.contains("○"),
+            "Line 0 should contain session chips: {}",
+            line0
+        );
     }
 }

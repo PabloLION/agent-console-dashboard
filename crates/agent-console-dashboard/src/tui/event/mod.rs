@@ -121,6 +121,14 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
             app.select_previous();
             Action::None
         }
+        KeyCode::Left => {
+            app.scroll_compact_left();
+            Action::None
+        }
+        KeyCode::Right => {
+            app.scroll_compact_right();
+            Action::None
+        }
         KeyCode::Enter => {
             // Enter on focused session fires the appropriate hook (activate or reopen)
             if let Some(idx) = app.selected_index {
