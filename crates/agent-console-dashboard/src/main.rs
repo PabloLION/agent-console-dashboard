@@ -7,8 +7,8 @@
 mod cli_tests;
 mod commands;
 
-use agent_console_dashboard::{daemon::run_daemon, tui::app::App, DaemonConfig, Status};
-use clap::{Parser, Subcommand};
+use agent_console_dashboard::{daemon::run_daemon, tui::app::{App, LayoutMode}, DaemonConfig, Status};
+use clap::{Parser, Subcommand, ValueEnum};
 use commands::{
     is_daemon_running, run_claude_hook_async, run_config_edit_command, run_daemon_stop_command,
     run_delete_command, run_dump_command, run_install_command, run_status_command,
@@ -26,6 +26,25 @@ struct Cli {
     command: Commands,
 }
 
+/// CLI-compatible layout mode values for the --layout flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "lowercase")]
+enum LayoutModeArg {
+    /// Full dashboard layout with session list and detail panel.
+    Large,
+    /// Compact two-line layout for narrow terminals.
+    TwoLine,
+}
+
+impl From<LayoutModeArg> for LayoutMode {
+    fn from(arg: LayoutModeArg) -> Self {
+        match arg {
+            LayoutModeArg::Large => LayoutMode::Large,
+            LayoutModeArg::TwoLine => LayoutMode::TwoLine,
+        }
+    }
+}
+
 /// Available subcommands for the agent-console CLI
 #[derive(Subcommand)]
 enum Commands {
@@ -34,6 +53,9 @@ enum Commands {
         /// Socket path for IPC communication
         #[arg(long, default_value = "/tmp/agent-console-dashboard.sock")]
         socket: PathBuf,
+        /// Layout mode (large or twoline)
+        #[arg(long, value_enum, ignore_case = true)]
+        layout: Option<LayoutModeArg>,
     },
 
     /// Manage configuration file
@@ -172,11 +194,12 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Tui { socket } => {
+        Commands::Tui { socket, layout } => {
             let rt =
                 tokio::runtime::Runtime::new().expect("failed to create tokio runtime for TUI");
             if let Err(e) = rt.block_on(async {
-                let mut app = App::new(socket, None);
+                let layout_mode_override = layout.map(LayoutMode::from);
+                let mut app = App::new(socket, layout_mode_override);
                 // Wire hooks from config if available
                 if let Ok(config) =
                     agent_console_dashboard::config::loader::ConfigLoader::load_default()
