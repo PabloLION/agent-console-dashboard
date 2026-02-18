@@ -52,6 +52,11 @@ multiple domains, break it into smaller issues before dispatching. Each
 sub-issue is assigned to one agent. The original issue becomes a parent or is
 replaced by the sub-issues.
 
+**Domain split rule**: When pre-dispatch review reveals an issue touches
+multiple agent domains (e.g., CLI parsing + TUI wiring), split it into one
+sub-issue per agent domain before dispatching. Do not ask the user which agent
+to use — split proactively and set dependencies between the sub-issues.
+
 ## Sequential Batching
 
 One agent handles multiple issues sequentially. Group issues by:
