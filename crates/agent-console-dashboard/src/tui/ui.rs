@@ -324,7 +324,9 @@ fn render_compact_session_chips(
 
         let style = if is_selected {
             Style::default().fg(color).add_modifier(Modifier::BOLD)
-        } else if session.status.should_dim() || session.is_inactive(crate::INACTIVE_SESSION_THRESHOLD) {
+        } else if session.status.should_dim()
+            || session.is_inactive(crate::INACTIVE_SESSION_THRESHOLD)
+        {
             Style::default().fg(Color::DarkGray)
         } else {
             Style::default().fg(color)
@@ -1073,7 +1075,10 @@ mod tests {
         let text = line.to_string();
 
         // Selected chip should have brackets
-        assert!(text.contains("[○ selected"), "selected chip should have brackets");
+        assert!(
+            text.contains("[○ selected"),
+            "selected chip should have brackets"
+        );
     }
 
     #[test]
@@ -1115,7 +1120,10 @@ mod tests {
         let text = line.to_string();
 
         // Should show right overflow indicator
-        assert!(text.contains("+ ->"), "should show right overflow indicator");
+        assert!(
+            text.contains("+ ->"),
+            "should show right overflow indicator"
+        );
     }
 
     #[test]
@@ -1136,8 +1144,14 @@ mod tests {
         let text = line.to_string();
 
         // Should NOT have overflow indicators with counts
-        assert!(!text.contains("<- 1+"), "should not show left overflow when all fit");
-        assert!(!text.contains("1+ ->"), "should not show right overflow when all fit");
+        assert!(
+            !text.contains("<- 1+"),
+            "should not show left overflow when all fit"
+        );
+        assert!(
+            !text.contains("1+ ->"),
+            "should not show right overflow when all fit"
+        );
     }
 
     #[test]
