@@ -860,8 +860,7 @@ fn test_tui_without_layout_flag() {
 #[test]
 fn test_tui_with_layout_large() {
     // Verify --layout large flag works
-    let cli =
-        Cli::try_parse_from(["agent-console-dashboard", "tui", "--layout", "large"]).unwrap();
+    let cli = Cli::try_parse_from(["agent-console-dashboard", "tui", "--layout", "large"]).unwrap();
     match cli.command {
         Commands::Tui { layout, .. } => {
             assert_eq!(layout, Some(LayoutModeArg::Large));

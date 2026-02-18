@@ -138,3 +138,22 @@ Example: `acd session delete <session_id>` sends DELETE IPC command, returns
 SessionSnapshot JSON on success. Pattern follows other IPC commands (update,
 dump, status) - connect to socket, send IpcCommand, parse IpcResponse, handle
 data payload.
+
+### Adding CLI Flags with ValueEnum (acd-66ij)
+
+When adding a flag that accepts enum values (like `--layout <mode>`):
+
+1. Import `ValueEnum` from clap in `src/main.rs`
+2. Create a CLI-side enum (e.g., `LayoutModeArg`) with `#[derive(ValueEnum)]`
+3. Use `#[value(rename_all = "lowercase")]` for case-insensitive matching
+4. Add `#[arg(long, value_enum, ignore_case = true)]` to the flag field
+5. If mapping to an existing type, implement `From<CliEnum> for TargetType`
+6. Update command handler to map `Option<CliEnum>` → `Option<TargetType>`
+7. Add CLI parsing tests for default, valid values, case insensitivity, invalid
+   values, and help metadata
+
+Pattern: Use a CLI-side enum when the internal type (like `LayoutMode`) lives in
+a library crate and you want to keep CLI concerns separate. The `ValueEnum`
+trait provides automatic help text generation and validation. Case-insensitivity
+requires both `rename_all = "lowercase"` on the enum and `ignore_case = true` on
+the arg attribute.

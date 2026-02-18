@@ -7,7 +7,11 @@
 mod cli_tests;
 mod commands;
 
-use agent_console_dashboard::{daemon::run_daemon, tui::app::{App, LayoutMode}, DaemonConfig, Status};
+use agent_console_dashboard::{
+    daemon::run_daemon,
+    tui::app::{App, LayoutMode},
+    DaemonConfig, Status,
+};
 use clap::{Parser, Subcommand, ValueEnum};
 use commands::{
     is_daemon_running, run_claude_hook_async, run_config_edit_command, run_daemon_stop_command,
