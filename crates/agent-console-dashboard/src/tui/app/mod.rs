@@ -111,11 +111,24 @@ pub struct App {
     /// Auto-detected based on terminal height during render. TwoLine mode is used
     /// when height < TWO_LINE_LAYOUT_HEIGHT_THRESHOLD.
     pub layout_mode: LayoutMode,
+    /// Layout mode override from CLI flag.
+    ///
+    /// When Some(mode), forces that layout mode and skips auto-detection.
+    /// When None, auto-detects from terminal height (existing behavior).
+    pub layout_mode_override: Option<LayoutMode>,
 }
 
 impl App {
-    /// Creates a new App with the given socket path.
-    pub fn new(socket_path: PathBuf) -> Self {
+    /// Creates a new App with the given socket path and optional layout mode override.
+    ///
+    /// # Arguments
+    ///
+    /// * `socket_path` - Path to the daemon socket for IPC
+    /// * `layout_mode_override` - Optional layout mode to force (skips auto-detection)
+    ///
+    /// When `layout_mode_override` is `None`, the layout mode is auto-detected from
+    /// terminal height during render. When `Some(mode)`, that mode is forced.
+    pub fn new(socket_path: PathBuf, layout_mode_override: Option<LayoutMode>) -> Self {
         Self {
             should_quit: false,
             socket_path,
@@ -133,6 +146,7 @@ impl App {
             last_elapsed_render: Instant::now(),
             session_list_inner_area: None,
             layout_mode: LayoutMode::Large,
+            layout_mode_override,
         }
     }
 

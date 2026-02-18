@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn test_app_new() {
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
+    let app = App::new(PathBuf::from("/tmp/test.sock"), None);
     assert!(!app.should_quit);
     assert_eq!(app.socket_path, PathBuf::from("/tmp/test.sock"));
     assert_eq!(app.tick_count, 0);
@@ -15,7 +15,7 @@ fn test_app_new() {
 
 #[test]
 fn test_app_default_state() {
-    let app = App::new(PathBuf::from("/tmp/agent-console.sock"));
+    let app = App::new(PathBuf::from("/tmp/agent-console.sock"), None);
     assert!(!app.should_quit);
     assert_eq!(app.tick_count, 0);
     assert!(app.sessions.is_empty());
@@ -25,7 +25,7 @@ fn test_app_default_state() {
 
 #[test]
 fn test_app_tick_increment() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     assert_eq!(app.tick_count, 0);
     app.tick_count += 1;
     assert_eq!(app.tick_count, 1);
@@ -35,7 +35,7 @@ fn test_app_tick_increment() {
 
 #[test]
 fn test_app_should_quit_toggle() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     assert!(!app.should_quit);
     app.should_quit = true;
     assert!(app.should_quit);
@@ -43,13 +43,13 @@ fn test_app_should_quit_toggle() {
 
 #[test]
 fn test_app_socket_path() {
-    let app = App::new(PathBuf::from("/custom/path.sock"));
+    let app = App::new(PathBuf::from("/custom/path.sock"), None);
     assert_eq!(app.socket_path, PathBuf::from("/custom/path.sock"));
 }
 
 #[test]
 fn test_app_debug_format() {
-    let app = App::new(PathBuf::from("/tmp/debug.sock"));
+    let app = App::new(PathBuf::from("/tmp/debug.sock"), None);
     let debug = format!("{:?}", app);
     assert!(debug.contains("should_quit"));
     assert!(debug.contains("socket_path"));
@@ -64,7 +64,7 @@ fn test_app_debug_format() {
 
 #[test]
 fn test_init_selection_empty() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     app.init_selection();
     assert_eq!(app.selected_index, None);
 }
@@ -96,7 +96,7 @@ fn test_select_next_clamps_at_end() {
 
 #[test]
 fn test_select_next_empty_sessions() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     app.select_next();
     assert_eq!(app.selected_index, None);
 }
@@ -120,7 +120,7 @@ fn test_select_previous_clamps_at_zero() {
 
 #[test]
 fn test_select_previous_empty_sessions() {
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
     app.select_previous();
     assert_eq!(app.selected_index, None);
 }
@@ -138,7 +138,7 @@ fn test_selected_session_returns_correct() {
 
 #[test]
 fn test_selected_session_none_when_empty() {
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
+    let app = App::new(PathBuf::from("/tmp/test.sock"), None);
     assert!(app.selected_session().is_none());
 }
 
@@ -263,7 +263,7 @@ fn test_scroll_history_up_clamps_at_zero() {
 
 #[test]
 fn test_layout_preset_default() {
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
+    let app = App::new(PathBuf::from("/tmp/test.sock"), None);
     assert_eq!(app.layout_preset, 1);
 }
 
@@ -271,7 +271,7 @@ fn test_layout_preset_default() {
 
 #[test]
 fn test_app_usage_starts_none() {
-    let app = App::new(PathBuf::from("/tmp/test.sock"));
+    let app = App::new(PathBuf::from("/tmp/test.sock"), None);
     assert!(app.usage.is_none());
 }
 
@@ -280,7 +280,7 @@ fn test_app_usage_starts_none() {
 #[test]
 fn test_session_sort_by_status_group() {
     use crate::SessionSnapshot;
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
 
     // Create sessions with different statuses
     let attention = SessionSnapshot {
@@ -333,7 +333,7 @@ fn test_session_sort_by_status_group() {
 #[test]
 fn test_session_sort_by_priority() {
     use crate::SessionSnapshot;
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
 
     // Create sessions with same status but different priorities
     let low_priority = SessionSnapshot {
@@ -375,7 +375,7 @@ fn test_session_sort_by_priority() {
 fn test_session_sort_by_elapsed_time() {
     use crate::SessionSnapshot;
     use std::time::Duration;
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
 
     // Create sessions with same status and priority but different elapsed times
     let short = SessionSnapshot {
@@ -416,7 +416,7 @@ fn test_session_sort_by_elapsed_time() {
 #[test]
 fn test_session_sort_combined() {
     use crate::SessionSnapshot;
-    let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+    let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
 
     // Test combined sorting: status → priority → elapsed
     let sessions = vec![

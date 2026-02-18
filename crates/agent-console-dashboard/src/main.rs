@@ -176,7 +176,7 @@ fn main() -> ExitCode {
             let rt =
                 tokio::runtime::Runtime::new().expect("failed to create tokio runtime for TUI");
             if let Err(e) = rt.block_on(async {
-                let mut app = App::new(socket);
+                let mut app = App::new(socket, None);
                 // Wire hooks from config if available
                 if let Ok(config) =
                     agent_console_dashboard::config::loader::ConfigLoader::load_default()

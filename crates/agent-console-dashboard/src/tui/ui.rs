@@ -36,14 +36,19 @@ const VERSION_TEXT: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 /// - Large (height >= 5): Header, session list, detail panel, footer
 /// - TwoLine (height < 5): Session chips (line 1), API usage (line 2)
 ///
+/// When `app.layout_mode_override` is `Some(mode)`, that mode is used regardless of
+/// terminal height. Otherwise, layout mode is auto-detected from terminal height.
+///
 /// Updates `app.session_list_inner_area` with the inner Rect of the session list
 /// for accurate mouse click detection.
 pub fn render_dashboard(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
     let now = Instant::now();
 
-    // Auto-detect layout mode based on terminal height
-    app.layout_mode = if area.height < TWO_LINE_LAYOUT_HEIGHT_THRESHOLD {
+    // Use override if present, otherwise auto-detect from terminal height
+    app.layout_mode = if let Some(override_mode) = app.layout_mode_override {
+        override_mode
+    } else if area.height < TWO_LINE_LAYOUT_HEIGHT_THRESHOLD {
         LayoutMode::TwoLine
     } else {
         LayoutMode::Large
@@ -238,7 +243,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn make_app() -> App {
-        App::new(PathBuf::from("/tmp/test.sock"))
+        App::new(PathBuf::from("/tmp/test.sock"), None)
     }
 
     fn make_app_with_sessions(count: usize) -> App {
@@ -431,7 +436,7 @@ mod tests {
 
     #[test]
     fn test_full_dashboard_render_with_mixed_statuses() {
-        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
 
         // Add 4 sessions with different statuses
         let mut s1 = Session::new(
@@ -539,7 +544,7 @@ mod tests {
 
     #[test]
     fn test_full_dashboard_render_many_sessions_scrolling() {
-        let mut app = App::new(PathBuf::from("/tmp/test.sock"));
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
 
         // Add 50 sessions
         for i in 0..50 {
@@ -828,5 +833,70 @@ mod tests {
     fn test_layout_mode_threshold_is_5() {
         use crate::tui::app::TWO_LINE_LAYOUT_HEIGHT_THRESHOLD;
         assert_eq!(TWO_LINE_LAYOUT_HEIGHT_THRESHOLD, 5);
+    }
+
+    #[test]
+    fn test_layout_mode_override_forces_two_line() {
+        // Create app with TwoLine override
+        let mut app = App::new(
+            PathBuf::from("/tmp/test.sock"),
+            Some(crate::tui::app::LayoutMode::TwoLine),
+        );
+        app.sessions.push(Session::new(
+            "test-session".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp")),
+        ));
+
+        // Render with height 24 (normally would be Large mode)
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
+
+        // Should use TwoLine mode despite tall terminal
+        assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::TwoLine);
+
+        // TwoLine mode should NOT have the "Agent Console Dashboard" header
+        assert!(
+            find_row_with_text(&buffer, "Agent Console Dashboard").is_none(),
+            "TwoLine mode should not show header even with override"
+        );
+    }
+
+    #[test]
+    fn test_layout_mode_override_forces_large() {
+        // Create app with Large override
+        let mut app = App::new(
+            PathBuf::from("/tmp/test.sock"),
+            Some(crate::tui::app::LayoutMode::Large),
+        );
+        app.sessions.push(Session::new(
+            "test-session".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp")),
+        ));
+
+        // Render with height 2 (normally would be TwoLine mode)
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 2);
+
+        // Should use Large mode despite short terminal
+        assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::Large);
+    }
+
+    #[test]
+    fn test_layout_mode_no_override_auto_detects() {
+        // Create app with None override (auto-detect)
+        let mut app = App::new(PathBuf::from("/tmp/test.sock"), None);
+        app.sessions.push(Session::new(
+            "test-session".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp")),
+        ));
+
+        // Height 24 should auto-detect to Large
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 24);
+        assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::Large);
+
+        // Height 4 should auto-detect to TwoLine
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 4);
+        assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::TwoLine);
     }
 }
