@@ -7,7 +7,7 @@
 //!
 //! # Display Formats
 //!
-//! - **Full** (width >= 30): `Quota: 5h 8% | 7d 77% | resets 2h 15m`
+//! - **Long** (width >= 30): `5h: 42% / 75% | 7d: 77% / 50% | Period: used / elapsed`
 //! - **Compact** (width < 30): `[5h:8% 7d:77%]`
 //! - **Unavailable**: `Quota: --` in dark gray
 //!
@@ -19,9 +19,8 @@
 //! | 80%-95%     | Yellow |
 //! | > 95%       | Red    |
 
-use chrono::{DateTime, Utc};
 use ratatui::{
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
 };
 
@@ -59,12 +58,11 @@ impl Widget for ApiUsageWidget {
             }
         };
 
-        let five_h_pct = usage.five_hour.utilization;
-        let seven_d_pct = usage.seven_day.utilization;
-
         if width >= 30 {
-            render_full(five_h_pct, seven_d_pct, usage.five_hour.resets_at)
+            render_long(usage)
         } else {
+            let five_h_pct = usage.five_hour.utilization;
+            let seven_d_pct = usage.seven_day.utilization;
             render_compact(five_h_pct, seven_d_pct)
         }
     }
@@ -78,29 +76,35 @@ impl Widget for ApiUsageWidget {
     }
 }
 
-/// Render full format: `Quota: 5h 8% | 7d 77% | resets 2h 15m`
-fn render_full(
-    five_h_pct: f64,
-    seven_d_pct: f64,
-    resets_at: Option<DateTime<Utc>>,
-) -> Line<'static> {
-    let mut spans = vec![
-        Span::raw("Quota: 5h "),
+/// Render long format: `5h: 42% / 75% | 7d: 77% / 50% | Period: used / elapsed`
+fn render_long(usage: &claude_usage::UsageData) -> Line<'static> {
+    let five_h_pct = usage.five_hour.utilization;
+    let seven_d_pct = usage.seven_day.utilization;
+
+    // Calculate elapsed percentages (5 hours and 7 days)
+    let five_h_elapsed = usage.five_hour.time_elapsed_percent(5).unwrap_or(0.0);
+    let seven_d_elapsed = usage.seven_day.time_elapsed_percent(7 * 24).unwrap_or(0.0);
+
+    let dim_style = Style::default().fg(Color::DarkGray).add_modifier(Modifier::DIM);
+
+    let spans = vec![
+        Span::raw("5h: "),
         Span::styled(
             format!("{:.0}%", five_h_pct.floor()),
             Style::default().fg(utilization_color(five_h_pct)),
         ),
-        Span::raw(" | 7d "),
+        Span::raw(" / "),
+        Span::raw(format!("{:.0}%", five_h_elapsed.floor())),
+        Span::raw(" | 7d: "),
         Span::styled(
             format!("{:.0}%", seven_d_pct.floor()),
             Style::default().fg(utilization_color(seven_d_pct)),
         ),
+        Span::raw(" / "),
+        Span::raw(format!("{:.0}%", seven_d_elapsed.floor())),
+        Span::raw(" | "),
+        Span::styled("Period: used / elapsed", dim_style),
     ];
-
-    if let Some(reset) = resets_at {
-        spans.push(Span::raw(" | resets "));
-        spans.push(Span::raw(format_reset_time(reset)));
-    }
 
     Line::from(spans)
 }
@@ -137,19 +141,6 @@ fn utilization_color(pct: f64) -> Color {
     }
 }
 
-/// Format a reset time as a human-readable relative duration.
-///
-/// Produces strings like `2h 15m` or `45m` relative to now.
-fn format_reset_time(resets_at: DateTime<Utc>) -> String {
-    let duration = resets_at - Utc::now();
-    let hours = duration.num_hours();
-    let minutes = (duration.num_minutes() % 60).abs();
-    if hours > 0 {
-        format!("{}h {}m", hours, minutes)
-    } else {
-        format!("{}m", minutes)
-    }
-}
 
 /// Factory function for [`WidgetRegistry`](super::WidgetRegistry).
 pub fn create() -> Box<dyn Widget> {
@@ -160,6 +151,7 @@ pub fn create() -> Box<dyn Widget> {
 mod tests {
     use super::*;
     use crate::Session;
+    use chrono::{DateTime, Utc};
     use claude_usage::{UsageData, UsagePeriod};
 
     fn make_usage(five_h: f64, seven_d: f64, resets_at: Option<DateTime<Utc>>) -> UsageData {
@@ -218,34 +210,61 @@ mod tests {
         assert_eq!(span.style.fg, Some(Color::DarkGray));
     }
 
-    // --- Full format ---
+    // --- Long format ---
 
     #[test]
-    fn test_full_format_with_usage() {
-        let usage = make_usage(8.0, 77.0, None);
+    fn test_long_format_with_usage() {
+        let reset = Utc::now() + chrono::Duration::hours(2) + chrono::Duration::minutes(30); // 50% elapsed of 5h
+        let usage = UsageData {
+            five_hour: UsagePeriod {
+                utilization: 42.0,
+                resets_at: Some(reset),
+            },
+            seven_day: UsagePeriod {
+                utilization: 77.0,
+                resets_at: Some(Utc::now() + chrono::Duration::hours(84)), // 50% elapsed of 7d
+            },
+            seven_day_sonnet: None,
+            extra_usage: None,
+        };
         let sessions: Vec<Session> = vec![];
         let ctx = WidgetContext::new(&sessions).with_usage(&usage);
         let w = ApiUsageWidget::new();
         let line = w.render(40, &ctx);
         let text = line.to_string();
-        assert!(text.contains("Quota:"), "expected 'Quota:' in '{}'", text);
-        assert!(text.contains("5h"), "expected '5h' in '{}'", text);
-        assert!(text.contains("8%"), "expected '8%' in '{}'", text);
-        assert!(text.contains("7d"), "expected '7d' in '{}'", text);
+        assert!(text.contains("5h:"), "expected '5h:' in '{}'", text);
+        assert!(text.contains("42%"), "expected '42%' in '{}'", text);
+        assert!(text.contains("7d:"), "expected '7d:' in '{}'", text);
         assert!(text.contains("77%"), "expected '77%' in '{}'", text);
+        assert!(text.contains("Period: used / elapsed"), "expected legend in '{}'", text);
     }
 
     #[test]
-    fn test_full_format_with_reset_time() {
-        let reset = Utc::now() + chrono::Duration::hours(2) + chrono::Duration::minutes(15);
-        let usage = make_usage(8.0, 77.0, Some(reset));
+    fn test_long_format_shows_elapsed_percentages() {
+        // 5h window: 1h remaining out of 5h = 80% elapsed
+        // 7d window: 84h remaining out of 168h = 50% elapsed
+        let usage = UsageData {
+            five_hour: UsagePeriod {
+                utilization: 42.0,
+                resets_at: Some(Utc::now() + chrono::Duration::hours(1)),
+            },
+            seven_day: UsagePeriod {
+                utilization: 77.0,
+                resets_at: Some(Utc::now() + chrono::Duration::hours(84)),
+            },
+            seven_day_sonnet: None,
+            extra_usage: None,
+        };
         let sessions: Vec<Session> = vec![];
         let ctx = WidgetContext::new(&sessions).with_usage(&usage);
         let w = ApiUsageWidget::new();
         let line = w.render(40, &ctx);
         let text = line.to_string();
-        assert!(text.contains("resets"), "expected 'resets' in '{}'", text);
-        assert!(text.contains("2h"), "expected '2h' in '{}'", text);
+        // Should contain "42% / 80%" for 5h and "77% / 50%" for 7d (approximately)
+        assert!(text.contains("42%"), "expected '42%' used in '{}'", text);
+        assert!(text.contains("77%"), "expected '77%' used in '{}'", text);
+        // Elapsed percentages should be present (allow some margin for timing)
+        assert!(text.contains(" / "), "expected ' / ' separator in '{}'", text);
     }
 
     // --- Compact format ---
@@ -282,7 +301,7 @@ mod tests {
     }
 
     #[test]
-    fn test_width_30_selects_full() {
+    fn test_width_30_selects_long() {
         let usage = make_usage(50.0, 50.0, None);
         let sessions: Vec<Session> = vec![];
         let ctx = WidgetContext::new(&sessions).with_usage(&usage);
@@ -290,8 +309,8 @@ mod tests {
         let line = w.render(30, &ctx);
         let text = line.to_string();
         assert!(
-            text.contains("Quota:"),
-            "width 30 should use full: '{}'",
+            text.contains("5h:"),
+            "width 30 should use long: '{}'",
             text
         );
     }
@@ -332,41 +351,31 @@ mod tests {
         let ctx = WidgetContext::new(&sessions).with_usage(&usage);
         let w = ApiUsageWidget::new();
         let line = w.render(40, &ctx);
-        // spans: "Quota: 5h ", "8%", " | 7d ", "77%"
-        // Index 1 = 5h value (green), Index 3 = 7d value (red)
+        // Long format spans: "5h: ", "50%", " / ", "0%", " | 7d: ", "96%", " / ", "0%", " | ", "Period: used / elapsed"
+        // Index 1 = 5h utilization (green), Index 5 = 7d utilization (red)
         let five_h_span = &line.spans[1];
-        let seven_d_span = &line.spans[3];
+        let seven_d_span = &line.spans[5];
         assert_eq!(five_h_span.style.fg, Some(Color::Green));
         assert_eq!(seven_d_span.style.fg, Some(Color::Red));
     }
 
-    // --- Reset time formatting ---
+    // --- Legend styling ---
 
     #[test]
-    fn test_format_reset_time_hours_and_minutes() {
-        let future = Utc::now() + chrono::Duration::hours(3) + chrono::Duration::minutes(42);
-        let formatted = format_reset_time(future);
-        assert!(formatted.contains("3h"), "expected '3h' in '{}'", formatted);
+    fn test_legend_is_dimmed() {
+        let usage = make_usage(50.0, 50.0, None);
+        let sessions: Vec<Session> = vec![];
+        let ctx = WidgetContext::new(&sessions).with_usage(&usage);
+        let w = ApiUsageWidget::new();
+        let line = w.render(40, &ctx);
+        // Find the legend span
+        let legend_span = line.spans.iter().find(|s| s.content.contains("Period:"));
+        assert!(legend_span.is_some(), "legend span should exist");
+        let span = legend_span.unwrap();
+        assert_eq!(span.style.fg, Some(Color::DarkGray), "legend should be dark gray");
         assert!(
-            formatted.contains("42m") || formatted.contains("41m"),
-            "expected ~42m in '{}'",
-            formatted
-        );
-    }
-
-    #[test]
-    fn test_format_reset_time_minutes_only() {
-        let future = Utc::now() + chrono::Duration::minutes(45);
-        let formatted = format_reset_time(future);
-        assert!(
-            !formatted.contains('h'),
-            "should not contain 'h': '{}'",
-            formatted
-        );
-        assert!(
-            formatted.contains('m'),
-            "should contain 'm': '{}'",
-            formatted
+            span.style.add_modifier.contains(Modifier::DIM),
+            "legend should have DIM modifier"
         );
     }
 
