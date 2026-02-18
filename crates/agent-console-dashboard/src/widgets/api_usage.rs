@@ -85,7 +85,9 @@ fn render_long(usage: &claude_usage::UsageData) -> Line<'static> {
     let five_h_elapsed = usage.five_hour.time_elapsed_percent(5).unwrap_or(0.0);
     let seven_d_elapsed = usage.seven_day.time_elapsed_percent(7 * 24).unwrap_or(0.0);
 
-    let dim_style = Style::default().fg(Color::DarkGray).add_modifier(Modifier::DIM);
+    let dim_style = Style::default()
+        .fg(Color::DarkGray)
+        .add_modifier(Modifier::DIM);
 
     let spans = vec![
         Span::raw("5h: "),
@@ -140,7 +142,6 @@ fn utilization_color(pct: f64) -> Color {
         Color::Green
     }
 }
-
 
 /// Factory function for [`WidgetRegistry`](super::WidgetRegistry).
 pub fn create() -> Box<dyn Widget> {
@@ -236,7 +237,11 @@ mod tests {
         assert!(text.contains("42%"), "expected '42%' in '{}'", text);
         assert!(text.contains("7d:"), "expected '7d:' in '{}'", text);
         assert!(text.contains("77%"), "expected '77%' in '{}'", text);
-        assert!(text.contains("Period: used / elapsed"), "expected legend in '{}'", text);
+        assert!(
+            text.contains("Period: used / elapsed"),
+            "expected legend in '{}'",
+            text
+        );
     }
 
     #[test]
@@ -264,7 +269,11 @@ mod tests {
         assert!(text.contains("42%"), "expected '42%' used in '{}'", text);
         assert!(text.contains("77%"), "expected '77%' used in '{}'", text);
         // Elapsed percentages should be present (allow some margin for timing)
-        assert!(text.contains(" / "), "expected ' / ' separator in '{}'", text);
+        assert!(
+            text.contains(" / "),
+            "expected ' / ' separator in '{}'",
+            text
+        );
     }
 
     // --- Compact format ---
@@ -308,11 +317,7 @@ mod tests {
         let w = ApiUsageWidget::new();
         let line = w.render(30, &ctx);
         let text = line.to_string();
-        assert!(
-            text.contains("5h:"),
-            "width 30 should use long: '{}'",
-            text
-        );
+        assert!(text.contains("5h:"), "width 30 should use long: '{}'", text);
     }
 
     // --- Color thresholds ---
@@ -372,7 +377,11 @@ mod tests {
         let legend_span = line.spans.iter().find(|s| s.content.contains("Period:"));
         assert!(legend_span.is_some(), "legend span should exist");
         let span = legend_span.unwrap();
-        assert_eq!(span.style.fg, Some(Color::DarkGray), "legend should be dark gray");
+        assert_eq!(
+            span.style.fg,
+            Some(Color::DarkGray),
+            "legend should be dark gray"
+        );
         assert!(
             span.style.add_modifier.contains(Modifier::DIM),
             "legend should have DIM modifier"
