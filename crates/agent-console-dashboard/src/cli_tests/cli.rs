@@ -1,6 +1,6 @@
 //! CLI argument parsing tests.
 
-use crate::{Cli, Commands, ConfigAction, DaemonCommands, SessionCommands};
+use crate::{Cli, Commands, ConfigAction, DaemonCommands, LayoutModeArg, SessionCommands};
 use clap::{CommandFactory, Parser};
 use std::path::PathBuf;
 
@@ -840,4 +840,87 @@ fn test_uninstall_subcommand_parses() {
     let cli = Cli::try_parse_from(["agent-console-dashboard", "uninstall"])
         .expect("uninstall should parse");
     assert!(matches!(cli.command, Commands::Uninstall));
+}
+
+// -- TUI subcommand -------------------------------------------------------
+
+#[test]
+fn test_tui_without_layout_flag() {
+    // Verify tui command works without --layout (existing behavior)
+    let cli = Cli::try_parse_from(["agent-console-dashboard", "tui"]).unwrap();
+    match cli.command {
+        Commands::Tui { socket, layout } => {
+            assert_eq!(socket, PathBuf::from("/tmp/agent-console-dashboard.sock"));
+            assert_eq!(layout, None);
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_tui_with_layout_large() {
+    // Verify --layout large flag works
+    let cli =
+        Cli::try_parse_from(["agent-console-dashboard", "tui", "--layout", "large"]).unwrap();
+    match cli.command {
+        Commands::Tui { layout, .. } => {
+            assert_eq!(layout, Some(LayoutModeArg::Large));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_tui_with_layout_twoline() {
+    // Verify --layout twoline flag works
+    let cli =
+        Cli::try_parse_from(["agent-console-dashboard", "tui", "--layout", "twoline"]).unwrap();
+    match cli.command {
+        Commands::Tui { layout, .. } => {
+            assert_eq!(layout, Some(LayoutModeArg::TwoLine));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_tui_layout_case_insensitive() {
+    // Verify layout values are case-insensitive
+    let cli_upper =
+        Cli::try_parse_from(["agent-console-dashboard", "tui", "--layout", "LARGE"]).unwrap();
+    match cli_upper.command {
+        Commands::Tui { layout, .. } => {
+            assert_eq!(layout, Some(LayoutModeArg::Large));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+
+    let cli_mixed =
+        Cli::try_parse_from(["agent-console-dashboard", "tui", "--layout", "TwoLine"]).unwrap();
+    match cli_mixed.command {
+        Commands::Tui { layout, .. } => {
+            assert_eq!(layout, Some(LayoutModeArg::TwoLine));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
+fn test_tui_invalid_layout_value() {
+    // Verify invalid layout value fails
+    let result = Cli::try_parse_from(["agent-console-dashboard", "tui", "--layout", "invalid"]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_tui_help_contains_layout_option() {
+    // Verify that tui subcommand help contains --layout
+    let cmd = Cli::command();
+    let tui_cmd = cmd
+        .get_subcommands()
+        .find(|sc| sc.get_name() == "tui")
+        .expect("tui subcommand should exist");
+
+    let layout_arg = tui_cmd.get_arguments().find(|arg| arg.get_id() == "layout");
+    assert!(layout_arg.is_some(), "--layout flag should exist");
 }
