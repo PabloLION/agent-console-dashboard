@@ -1168,7 +1168,9 @@ mod tests {
         let mut session = Session::new(
             "test-session".to_string(),
             AgentType::ClaudeCode,
-            Some(PathBuf::from("/home/user/very-long-project-name-that-exceeds-limit")),
+            Some(PathBuf::from(
+                "/home/user/very-long-project-name-that-exceeds-limit",
+            )),
         );
         session.status = Status::Working;
         let sessions = vec![session];
