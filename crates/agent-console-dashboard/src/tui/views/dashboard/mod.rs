@@ -68,6 +68,21 @@ pub fn format_elapsed_seconds(total_seconds: u64) -> String {
 /// Responsive layout breakpoint threshold.
 const NARROW_THRESHOLD: u16 = 40;
 
+/// Returns a display name for a single session's directory.
+///
+/// Returns the basename of the working_dir, or "<error>" if None.
+/// For full disambiguation logic with collision detection, use `compute_directory_display_names`.
+pub fn get_directory_display_name(session: &Session) -> String {
+    match &session.working_dir {
+        None => "<error>".to_string(),
+        Some(path) => path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(String::from)
+            .unwrap_or_else(|| "<error>".to_string()),
+    }
+}
+
 /// Computes display names for session directories with basename disambiguation.
 ///
 /// Returns a map from session_id to display name. If multiple sessions share

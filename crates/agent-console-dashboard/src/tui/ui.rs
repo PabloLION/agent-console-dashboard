@@ -242,8 +242,9 @@ fn render_footer_normal(
 /// Width reserved for each overflow indicator (`<- N+ ` or ` N+ ->`).
 const OVERFLOW_INDICATOR_WIDTH: usize = 7;
 
-/// Approximate width of a single session chip (symbol + short ID + spacing).
-const CHIP_WIDTH: usize = 15;
+/// Approximate width of a single session chip (symbol + folder name + spacing).
+/// Accounts for typical folder name length (up to 12 chars for display).
+const CHIP_WIDTH: usize = 18;
 
 /// Calculates the maximum count of session chips that fit in the available width.
 fn calculate_max_visible_chips(available_width: u16) -> usize {
@@ -273,7 +274,7 @@ fn render_compact_session_chips(
     available_width: u16,
     _now: Instant,
 ) -> Line<'static> {
-    use crate::tui::views::dashboard::{status_color, status_symbol};
+    use crate::tui::views::dashboard::{get_directory_display_name, status_color, status_symbol};
 
     if sessions.is_empty() {
         return Line::raw("(no sessions)");
@@ -312,14 +313,25 @@ fn render_compact_session_chips(
         let symbol = status_symbol(status);
         let color = status_color(status);
 
-        // Short ID: first 8 chars of session_id
-        let short_id: String = session.session_id.chars().take(8).collect();
+        // Display name: folder basename, or fallback to short session_id (first 8 chars)
+        let display_name = get_directory_display_name(session);
+        let label = if display_name == "<error>" {
+            // Fallback to short session_id when working_dir is None
+            session.session_id.chars().take(8).collect()
+        } else {
+            // Truncate folder name to max 12 chars for chip display
+            if display_name.len() > 12 {
+                format!("{}...", &display_name[..9])
+            } else {
+                display_name
+            }
+        };
 
         // Format chip with brackets if selected
         let chip_text = if is_selected {
-            format!("[{} {}] ", symbol, short_id)
+            format!("[{} {}] ", symbol, label)
         } else {
-            format!(" {} {}  ", symbol, short_id)
+            format!(" {} {}  ", symbol, label)
         };
 
         let style = if is_selected {
@@ -892,11 +904,12 @@ mod tests {
     fn test_two_line_layout_shows_session_chips() {
         let mut app = make_app_with_sessions(3);
         let buffer = render_dashboard_to_buffer(&mut app, 80, 2);
-        // Line 0 should have session chips
+        // Line 0 should have session chips with folder names
         let line0 = row_text(&buffer, 0);
         assert!(
-            line0.contains("session-"),
-            "Line 0 should contain session chips"
+            line0.contains("project-"),
+            "Line 0 should contain session chips with folder names: {}",
+            line0
         );
     }
 
@@ -1015,14 +1028,14 @@ mod tests {
     #[test]
     fn test_calculate_max_visible_chips_wide_terminal() {
         // Wide terminal (80 chars): should fit multiple chips
-        // 80 - (7*2 for indicators) = 66 / 15 = 4 chips
-        assert_eq!(calculate_max_visible_chips(80), 4);
+        // 80 - (7*2 for indicators) = 66 / 18 = 3 chips
+        assert_eq!(calculate_max_visible_chips(80), 3);
     }
 
     #[test]
     fn test_calculate_max_visible_chips_narrow_terminal() {
         // Narrow terminal (30 chars): should fit at least 1 chip
-        // 30 - 14 = 16 / 15 = 1 chip (minimum)
+        // 30 - 14 = 16 / 18 = 0, but minimum is 1
         assert_eq!(calculate_max_visible_chips(30), 1);
     }
 
@@ -1047,7 +1060,7 @@ mod tests {
         let mut session = Session::new(
             "test-session-id-1234".to_string(),
             AgentType::ClaudeCode,
-            Some(PathBuf::from("/tmp")),
+            Some(PathBuf::from("/home/user/myproject")),
         );
         session.status = Status::Working;
         let sessions = vec![session];
@@ -1055,9 +1068,9 @@ mod tests {
         let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
         let text = line.to_string();
 
-        // Should contain status symbol and short ID (first 8 chars)
+        // Should contain status symbol and folder name
         assert!(text.contains("●"), "should contain working symbol");
-        assert!(text.contains("test-ses"), "should contain short ID");
+        assert!(text.contains("myproject"), "should contain folder name");
     }
 
     #[test]
@@ -1066,7 +1079,7 @@ mod tests {
         let mut session = Session::new(
             "selected-session".to_string(),
             AgentType::ClaudeCode,
-            Some(PathBuf::from("/tmp")),
+            Some(PathBuf::from("/home/user/myproject")),
         );
         session.status = Status::Attention;
         let sessions = vec![session];
@@ -1074,10 +1087,10 @@ mod tests {
         let line = render_compact_session_chips(&sessions, Some(0), 0, 80, Instant::now());
         let text = line.to_string();
 
-        // Selected chip should have brackets
+        // Selected chip should have brackets with folder name
         assert!(
-            text.contains("[○ selected"),
-            "selected chip should have brackets"
+            text.contains("[○ myproject]"),
+            "selected chip should have brackets with folder name"
         );
     }
 
@@ -1115,7 +1128,7 @@ mod tests {
             })
             .collect();
 
-        // At position 0, with 80 width fitting ~4 chips, should have 6 hidden on right
+        // At position 0, with 80 width fitting ~3 chips, should have 7 hidden on right
         let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
         let text = line.to_string();
 
@@ -1123,6 +1136,52 @@ mod tests {
         assert!(
             text.contains("+ ->"),
             "should show right overflow indicator"
+        );
+    }
+
+    #[test]
+    fn test_render_compact_chips_fallback_to_session_id_when_no_working_dir() {
+        use std::time::Instant;
+        let mut session = Session::new(
+            "fallback-session-id-12345".to_string(),
+            AgentType::ClaudeCode,
+            None, // No working_dir
+        );
+        session.status = Status::Working;
+        let sessions = vec![session];
+
+        let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Should fallback to first 8 chars of session_id
+        assert!(text.contains("●"), "should contain working symbol");
+        assert!(
+            text.contains("fallback"),
+            "should contain short session_id as fallback: {}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_render_compact_chips_truncates_long_folder_names() {
+        use std::time::Instant;
+        let mut session = Session::new(
+            "test-session".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/home/user/very-long-project-name-that-exceeds-limit")),
+        );
+        session.status = Status::Working;
+        let sessions = vec![session];
+
+        let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Should truncate folder name with ellipsis
+        assert!(text.contains("●"), "should contain working symbol");
+        assert!(
+            text.contains("very-long..."),
+            "should truncate long folder name with ellipsis: {}",
+            text
         );
     }
 
