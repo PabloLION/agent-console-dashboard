@@ -318,7 +318,7 @@ impl App {
                     key,
                     config_path.display()
                 ),
-                Instant::now() + Duration::from_secs(3),
+                Instant::now() + Duration::from_secs(2),
             ));
             return;
         };
@@ -370,7 +370,7 @@ impl App {
                 tracing::warn!("{} hook failed: {}: {}", hook_type, cmd, e);
                 self.status_message = Some((
                     format!("Hook failed: {}", e),
-                    Instant::now() + Duration::from_secs(3),
+                    Instant::now() + Duration::from_secs(2),
                 ));
             }
         }
@@ -558,7 +558,7 @@ impl App {
                                     tracing::warn!("failed to copy to clipboard: {}", e);
                                     self.status_message = Some((
                                         format!("Copy failed: {}", e),
-                                        Instant::now() + Duration::from_secs(3),
+                                        Instant::now() + Duration::from_secs(2),
                                     ));
                                 }
                             },
@@ -566,7 +566,7 @@ impl App {
                                 tracing::warn!("failed to initialize clipboard: {}", e);
                                 self.status_message = Some((
                                     format!("Clipboard init failed: {}", e),
-                                    Instant::now() + Duration::from_secs(3),
+                                    Instant::now() + Duration::from_secs(2),
                                 ));
                             }
                         },
