@@ -34,19 +34,12 @@ struct Cli {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 #[value(rename_all = "lowercase")]
 enum LayoutModeArg {
+    /// Auto-detect layout based on terminal height (default).
+    Auto,
     /// Full dashboard layout with session list and detail panel.
     Large,
     /// Compact two-line layout for narrow terminals.
     TwoLine,
-}
-
-impl From<LayoutModeArg> for LayoutMode {
-    fn from(arg: LayoutModeArg) -> Self {
-        match arg {
-            LayoutModeArg::Large => LayoutMode::Large,
-            LayoutModeArg::TwoLine => LayoutMode::TwoLine,
-        }
-    }
 }
 
 /// Available subcommands for the agent-console CLI
@@ -202,7 +195,11 @@ fn main() -> ExitCode {
             let rt =
                 tokio::runtime::Runtime::new().expect("failed to create tokio runtime for TUI");
             if let Err(e) = rt.block_on(async {
-                let layout_mode_override = layout.map(LayoutMode::from);
+                let layout_mode_override = layout.and_then(|l| match l {
+                    LayoutModeArg::Auto => None,
+                    LayoutModeArg::Large => Some(LayoutMode::Large),
+                    LayoutModeArg::TwoLine => Some(LayoutMode::TwoLine),
+                });
                 let mut app = App::new(socket, layout_mode_override);
                 // Wire hooks from config if available
                 if let Ok(config) =
