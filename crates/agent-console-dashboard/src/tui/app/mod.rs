@@ -66,6 +66,19 @@ pub enum View {
     },
 }
 
+/// Target of a mouse click in TwoLine layout mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClickTarget {
+    /// Click on a session chip at the given global index.
+    Chip(usize),
+    /// Click on left overflow indicator (`<- N+`).
+    LeftOverflow,
+    /// Click on right overflow indicator (`N+ ->`).
+    RightOverflow,
+    /// Click outside any interactive element.
+    None,
+}
+
 /// Core application state for the TUI.
 #[derive(Debug)]
 pub struct App {
@@ -121,6 +134,10 @@ pub struct App {
     /// Tracks which session chip is leftmost in the viewport. Only used in TwoLine
     /// layout mode for horizontal pagination. Zero-indexed into the sessions list.
     pub compact_scroll_offset: usize,
+    /// Terminal width (updated during each render pass).
+    ///
+    /// Used by mouse click detection in TwoLine mode to calculate chip positions.
+    pub terminal_width: u16,
 }
 
 impl App {
@@ -134,6 +151,8 @@ impl App {
     /// When `layout_mode_override` is `None`, the layout mode is auto-detected from
     /// terminal height during render. When `Some(mode)`, that mode is forced.
     pub fn new(socket_path: PathBuf, layout_mode_override: Option<LayoutMode>) -> Self {
+        // If override is set, use it as initial layout_mode
+        let initial_mode = layout_mode_override.unwrap_or(LayoutMode::Large);
         Self {
             should_quit: false,
             socket_path,
@@ -150,9 +169,10 @@ impl App {
             status_message: None,
             last_elapsed_render: Instant::now(),
             session_list_inner_area: None,
-            layout_mode: LayoutMode::Large,
+            layout_mode: initial_mode,
             layout_mode_override,
             compact_scroll_offset: 0,
+            terminal_width: 80, // Default, updated during render
         }
     }
 
@@ -404,7 +424,19 @@ impl App {
     /// a session (updating the always-visible detail panel). Double-click focuses
     /// and fires the configurable hook. Scroll wheel always navigates sessions —
     /// the detail panel never steals focus.
+    ///
+    /// In TwoLine layout mode, handles clicks on session chips and overflow indicators.
     fn handle_mouse_event(&mut self, mouse: MouseEvent) -> Action {
+        // Branch based on layout mode
+        if self.layout_mode == LayoutMode::TwoLine {
+            self.handle_mouse_event_two_line(mouse)
+        } else {
+            self.handle_mouse_event_large(mouse)
+        }
+    }
+
+    /// Handles mouse events in Large layout mode.
+    fn handle_mouse_event_large(&mut self, mouse: MouseEvent) -> Action {
         match mouse.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let now = Instant::now();
@@ -449,6 +481,143 @@ impl App {
             }
             _ => Action::None,
         }
+    }
+
+    /// Handles mouse events in TwoLine layout mode.
+    ///
+    /// Supports:
+    /// - Click on chip → select that chip
+    /// - Click on left overflow indicator → scroll left, focus new leftmost chip
+    /// - Click on right overflow indicator → scroll right, focus new rightmost chip
+    /// - Scroll wheel → scroll viewport left/right without changing selection
+    fn handle_mouse_event_two_line(&mut self, mouse: MouseEvent) -> Action {
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                let now = Instant::now();
+                let is_double_click = if let Some((last_time, last_row, last_col)) = self.last_click
+                {
+                    now.duration_since(last_time) < Duration::from_millis(500)
+                        && mouse.row == last_row
+                        && mouse.column == last_col
+                } else {
+                    false
+                };
+
+                // Only handle clicks on row 0 (session chips row)
+                if mouse.row == 0 {
+                    match self.calculate_clicked_chip(mouse.column) {
+                        ClickTarget::Chip(idx) => {
+                            // Reset history scroll when clicking a different session
+                            if self.selected_index != Some(idx) {
+                                self.history_scroll = 0;
+                            }
+                            self.selected_index = Some(idx);
+                            if is_double_click {
+                                self.last_click = None;
+                                self.execute_hook(idx);
+                                return Action::None;
+                            }
+                        }
+                        ClickTarget::LeftOverflow => {
+                            // Scroll left by 1, focus the new leftmost chip
+                            self.scroll_compact_left();
+                            self.selected_index = Some(self.compact_scroll_offset);
+                            self.history_scroll = 0;
+                        }
+                        ClickTarget::RightOverflow => {
+                            // Scroll right by 1, focus the new rightmost chip
+                            self.scroll_compact_right();
+                            // New rightmost chip is at offset + max_visible - 1
+                            let max_visible = self.calculate_max_visible_chips_for_click();
+                            let rightmost = (self.compact_scroll_offset + max_visible - 1)
+                                .min(self.sessions.len().saturating_sub(1));
+                            self.selected_index = Some(rightmost);
+                            self.history_scroll = 0;
+                        }
+                        ClickTarget::None => {
+                            // Click outside any interactive element → clear selection
+                            self.selected_index = None;
+                        }
+                    }
+                }
+
+                self.last_click = Some((now, mouse.row, mouse.column));
+                Action::None
+            }
+            MouseEventKind::ScrollDown => {
+                // Scroll viewport right (without changing selection)
+                self.scroll_compact_right();
+                Action::None
+            }
+            MouseEventKind::ScrollUp => {
+                // Scroll viewport left (without changing selection)
+                self.scroll_compact_left();
+                Action::None
+            }
+            _ => Action::None,
+        }
+    }
+
+    /// Calculates max visible chips for the current terminal width.
+    ///
+    /// Used by click detection to determine chip boundaries.
+    fn calculate_max_visible_chips_for_click(&self) -> usize {
+        use crate::tui::ui::CHIP_WIDTH;
+        use crate::tui::ui::OVERFLOW_INDICATOR_WIDTH;
+
+        let width = self.terminal_width as usize;
+        let content_width = width.saturating_sub(OVERFLOW_INDICATOR_WIDTH * 2);
+        (content_width / CHIP_WIDTH).max(1)
+    }
+
+    /// Calculates which chip or overflow indicator was clicked.
+    ///
+    /// Returns the target based on column position in the session chips row.
+    fn calculate_clicked_chip(&self, column: u16) -> ClickTarget {
+        use crate::tui::ui::CHIP_WIDTH;
+        use crate::tui::ui::OVERFLOW_INDICATOR_WIDTH;
+
+        if self.sessions.is_empty() {
+            return ClickTarget::None;
+        }
+
+        let col = column as usize;
+        let overflow_left = self.compact_scroll_offset;
+        let max_visible = self.calculate_max_visible_chips_for_click();
+        let overflow_right = self
+            .sessions
+            .len()
+            .saturating_sub(self.compact_scroll_offset + max_visible);
+
+        // Check left overflow indicator area
+        if overflow_left > 0 && col < OVERFLOW_INDICATOR_WIDTH {
+            return ClickTarget::LeftOverflow;
+        }
+
+        // Calculate content start (after left indicator or padding)
+        let content_start = OVERFLOW_INDICATOR_WIDTH;
+        if col < content_start {
+            return ClickTarget::None;
+        }
+
+        // Calculate chip index from column offset
+        let relative_col = col - content_start;
+        let chip_index = relative_col / CHIP_WIDTH;
+        let global_index = self.compact_scroll_offset + chip_index;
+
+        // Check if this is a valid chip
+        let visible_end = (self.compact_scroll_offset + max_visible).min(self.sessions.len());
+        if global_index < visible_end {
+            return ClickTarget::Chip(global_index);
+        }
+
+        // Check right overflow indicator area
+        let content_end = content_start + (max_visible * CHIP_WIDTH);
+        if overflow_right > 0 && col >= content_end && col < content_end + OVERFLOW_INDICATOR_WIDTH {
+            return ClickTarget::RightOverflow;
+        }
+
+        ClickTarget::None
     }
 
     /// Clears the status message if its expiry time has passed.

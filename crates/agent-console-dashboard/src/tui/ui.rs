@@ -43,6 +43,9 @@ pub fn render_dashboard(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
     let now = Instant::now();
 
+    // Store terminal width for mouse click detection
+    app.terminal_width = area.width;
+
     // Use override if present, otherwise auto-detect from terminal height
     app.layout_mode = if let Some(override_mode) = app.layout_mode_override {
         override_mode
@@ -264,11 +267,11 @@ fn render_footer_normal(
 }
 
 /// Width reserved for each overflow indicator (`<- N+ ` or ` N+ ->`).
-const OVERFLOW_INDICATOR_WIDTH: usize = 7;
+pub const OVERFLOW_INDICATOR_WIDTH: usize = 7;
 
 /// Approximate width of a single session chip (symbol + folder name + spacing).
 /// Accounts for typical folder name length (up to 12 chars for display).
-const CHIP_WIDTH: usize = 18;
+pub const CHIP_WIDTH: usize = 18;
 
 /// Calculates the maximum count of session chips that fit in the available width.
 fn calculate_max_visible_chips(available_width: u16) -> usize {
@@ -277,6 +280,11 @@ fn calculate_max_visible_chips(available_width: u16) -> usize {
     let content_width = width.saturating_sub(OVERFLOW_INDICATOR_WIDTH * 2);
     // Divide by chip width, minimum 1
     (content_width / CHIP_WIDTH).max(1)
+}
+
+/// Public wrapper for calculate_max_visible_chips (used by event handler).
+pub fn calculate_max_visible_chips_public(available_width: u16) -> usize {
+    calculate_max_visible_chips(available_width)
 }
 
 /// Renders session chips with horizontal pagination and overflow indicators.

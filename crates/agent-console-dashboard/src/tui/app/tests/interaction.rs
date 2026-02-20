@@ -418,6 +418,196 @@ fn test_session_snapshot_conversion() {
     assert!(!snapshot.closed);
 }
 
+// --- TwoLine layout mouse interaction tests ---
+
+fn make_two_line_app(session_count: usize, terminal_width: u16) -> App {
+    let mut app = App::new(
+        PathBuf::from("/tmp/test.sock"),
+        Some(crate::tui::app::LayoutMode::TwoLine),
+    );
+    for i in 0..session_count {
+        app.sessions.push(Session::new(
+            format!("session-{}", i),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from(format!("/home/user/project-{}", i))),
+        ));
+    }
+    app.init_selection();
+    app.terminal_width = terminal_width;
+    app
+}
+
+#[test]
+fn test_two_line_click_chip_selects() {
+    let mut app = make_two_line_app(10, 80);
+    app.selected_index = Some(0);
+    app.compact_scroll_offset = 0;
+
+    // Click on second chip (column 25, within second chip area)
+    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 25);
+    let action = app.handle_mouse_event(mouse);
+    assert_eq!(action, Action::None);
+    assert_eq!(app.selected_index, Some(1), "should select chip at index 1");
+}
+
+#[test]
+fn test_two_line_click_left_overflow_scrolls_and_focuses() {
+    let mut app = make_two_line_app(10, 80);
+    app.compact_scroll_offset = 5;
+    app.selected_index = Some(5);
+
+    // Click on left overflow indicator (column < 7)
+    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 3);
+    let action = app.handle_mouse_event(mouse);
+    assert_eq!(action, Action::None);
+    assert_eq!(
+        app.compact_scroll_offset, 4,
+        "should scroll left by 1"
+    );
+    assert_eq!(
+        app.selected_index,
+        Some(4),
+        "should focus new leftmost chip"
+    );
+}
+
+#[test]
+fn test_two_line_click_right_overflow_scrolls_and_focuses() {
+    let mut app = make_two_line_app(10, 80);
+    app.compact_scroll_offset = 0;
+    app.selected_index = Some(0);
+
+    // Click on right overflow indicator (column > content_end)
+    // Content ends at 7 + (3 chips * 18) = 61
+    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 65);
+    let action = app.handle_mouse_event(mouse);
+    assert_eq!(action, Action::None);
+    assert_eq!(
+        app.compact_scroll_offset, 1,
+        "should scroll right by 1"
+    );
+    // Rightmost visible chip: offset(1) + max_visible(3) - 1 = 3
+    assert_eq!(
+        app.selected_index,
+        Some(3),
+        "should focus new rightmost chip"
+    );
+}
+
+#[test]
+fn test_two_line_scroll_wheel_down_scrolls_viewport() {
+    let mut app = make_two_line_app(10, 80);
+    app.compact_scroll_offset = 3;
+    app.selected_index = Some(3);
+
+    let mouse = make_mouse_event(MouseEventKind::ScrollDown, 0, 10);
+    let action = app.handle_mouse_event(mouse);
+    assert_eq!(action, Action::None);
+    assert_eq!(
+        app.compact_scroll_offset, 4,
+        "should scroll viewport right"
+    );
+    // Selection should not change on scroll wheel
+    assert_eq!(app.selected_index, Some(3), "selection unchanged");
+}
+
+#[test]
+fn test_two_line_scroll_wheel_up_scrolls_viewport() {
+    let mut app = make_two_line_app(10, 80);
+    app.compact_scroll_offset = 3;
+    app.selected_index = Some(5);
+
+    let mouse = make_mouse_event(MouseEventKind::ScrollUp, 0, 10);
+    let action = app.handle_mouse_event(mouse);
+    assert_eq!(action, Action::None);
+    assert_eq!(
+        app.compact_scroll_offset, 2,
+        "should scroll viewport left"
+    );
+    // Selection should not change on scroll wheel
+    assert_eq!(app.selected_index, Some(5), "selection unchanged");
+}
+
+#[test]
+fn test_two_line_click_outside_chips_clears_selection() {
+    let mut app = make_two_line_app(3, 80);
+    app.selected_index = Some(1);
+
+    // Click on row 1 (not session chips row)
+    let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 1, 10);
+    let action = app.handle_mouse_event(mouse);
+    assert_eq!(action, Action::None);
+    // Selection should remain (only row 0 is interactive)
+    assert_eq!(app.selected_index, Some(1));
+}
+
+#[test]
+fn test_two_line_double_click_fires_hook() {
+    let mut app = make_two_line_app(3, 80);
+    app.activate_hook = Some("echo test".to_string());
+
+    // First click
+    let mouse1 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 10);
+    app.handle_mouse_event(mouse1);
+    assert_eq!(app.selected_index, Some(0));
+
+    // Second click (double-click)
+    let mouse2 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 10);
+    app.handle_mouse_event(mouse2);
+    assert!(app.status_message.is_some());
+    let (msg, _) = app.status_message.as_ref().expect("msg");
+    assert_eq!(msg, "Hook executed");
+}
+
+#[test]
+fn test_keyboard_left_arrow_focuses_new_leftmost() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+
+    let mut app = make_two_line_app(10, 80);
+    app.compact_scroll_offset = 5;
+    app.selected_index = Some(5);
+
+    let key = KeyEvent {
+        code: KeyCode::Left,
+        modifiers: KeyModifiers::NONE,
+        kind: KeyEventKind::Press,
+        state: KeyEventState::NONE,
+    };
+    let action = handle_key_event(&mut app, key);
+    assert_eq!(action, Action::None);
+    assert_eq!(app.compact_scroll_offset, 4, "should scroll left");
+    assert_eq!(
+        app.selected_index,
+        Some(4),
+        "should focus new leftmost chip"
+    );
+}
+
+#[test]
+fn test_keyboard_right_arrow_focuses_new_rightmost() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+
+    let mut app = make_two_line_app(10, 80);
+    app.compact_scroll_offset = 0;
+    app.selected_index = Some(0);
+
+    let key = KeyEvent {
+        code: KeyCode::Right,
+        modifiers: KeyModifiers::NONE,
+        kind: KeyEventKind::Press,
+        state: KeyEventState::NONE,
+    };
+    let action = handle_key_event(&mut app, key);
+    assert_eq!(action, Action::None);
+    assert_eq!(app.compact_scroll_offset, 1, "should scroll right");
+    // Rightmost: offset(1) + max_visible(3) - 1 = 3
+    assert_eq!(
+        app.selected_index,
+        Some(3),
+        "should focus new rightmost chip"
+    );
+}
+
 // --- Render integration tests (test visual output, not click logic) ---
 
 use crate::tui::test_utils::{find_row_with_text, render_dashboard_to_buffer};
