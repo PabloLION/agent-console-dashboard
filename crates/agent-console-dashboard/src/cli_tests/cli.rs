@@ -858,6 +858,18 @@ fn test_tui_without_layout_flag() {
 }
 
 #[test]
+fn test_tui_with_layout_auto() {
+    // Verify --layout auto flag works (explicit auto-detect)
+    let cli = Cli::try_parse_from(["agent-console-dashboard", "tui", "--layout", "auto"]).unwrap();
+    match cli.command {
+        Commands::Tui { layout, .. } => {
+            assert_eq!(layout, Some(LayoutModeArg::Auto));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+}
+
+#[test]
 fn test_tui_with_layout_large() {
     // Verify --layout large flag works
     let cli = Cli::try_parse_from(["agent-console-dashboard", "tui", "--layout", "large"]).unwrap();
@@ -885,6 +897,15 @@ fn test_tui_with_layout_twoline() {
 #[test]
 fn test_tui_layout_case_insensitive() {
     // Verify layout values are case-insensitive
+    let cli_auto =
+        Cli::try_parse_from(["agent-console-dashboard", "tui", "--layout", "AUTO"]).unwrap();
+    match cli_auto.command {
+        Commands::Tui { layout, .. } => {
+            assert_eq!(layout, Some(LayoutModeArg::Auto));
+        }
+        _ => panic!("unexpected command variant"),
+    }
+
     let cli_upper =
         Cli::try_parse_from(["agent-console-dashboard", "tui", "--layout", "LARGE"]).unwrap();
     match cli_upper.command {
