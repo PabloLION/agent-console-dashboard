@@ -16,10 +16,10 @@ use std::time::Instant;
 /// Returns the status symbol for a given session status.
 pub fn status_symbol(status: Status) -> &'static str {
     match status {
-        Status::Working => "●",
-        Status::Attention => "○",
+        Status::Working => "*",
+        Status::Attention => "!",
         Status::Question => "?",
-        Status::Closed => "×",
+        Status::Closed => "x",
     }
 }
 
@@ -213,7 +213,7 @@ pub fn format_session_line<'a>(
         };
         (
             Color::DarkGray,
-            "◌",
+            ".",
             Style::default().fg(text_color).add_modifier(Modifier::DIM),
             display_status,
         )

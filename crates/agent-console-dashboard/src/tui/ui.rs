@@ -333,9 +333,19 @@ fn render_compact_session_chips(
         let global_index = start + index;
         let is_selected = selected_index == Some(global_index);
 
-        let status = session.status;
-        let symbol = status_symbol(status);
-        let color = status_color(status);
+        let inactive = session.is_inactive(crate::INACTIVE_SESSION_THRESHOLD);
+        let should_dim = inactive || session.status.should_dim();
+
+        // Use dot symbol for inactive sessions, otherwise use status-specific symbol
+        let (symbol, color) = if should_dim {
+            if inactive {
+                (".", Color::DarkGray)
+            } else {
+                (status_symbol(session.status), Color::DarkGray)
+            }
+        } else {
+            (status_symbol(session.status), status_color(session.status))
+        };
 
         // Display name: folder basename, or fallback to short session_id (first 8 chars)
         let display_name = get_directory_display_name(session);
@@ -360,10 +370,6 @@ fn render_compact_session_chips(
 
         let style = if is_selected {
             Style::default().fg(color).add_modifier(Modifier::BOLD)
-        } else if session.status.should_dim()
-            || session.is_inactive(crate::INACTIVE_SESSION_THRESHOLD)
-        {
-            Style::default().fg(Color::DarkGray)
         } else {
             Style::default().fg(color)
         };
@@ -1093,7 +1099,7 @@ mod tests {
         let text = line.to_string();
 
         // Should contain status symbol and folder name
-        assert!(text.contains("●"), "should contain working symbol");
+        assert!(text.contains("*"), "should contain working symbol");
         assert!(text.contains("myproject"), "should contain folder name");
     }
 
@@ -1113,7 +1119,7 @@ mod tests {
 
         // Selected chip should have brackets with folder name
         assert!(
-            text.contains("[○ myproject]"),
+            text.contains("[! myproject]"),
             "selected chip should have brackets with folder name"
         );
     }
@@ -1178,7 +1184,7 @@ mod tests {
         let text = line.to_string();
 
         // Should fallback to first 8 chars of session_id
-        assert!(text.contains("●"), "should contain working symbol");
+        assert!(text.contains("*"), "should contain working symbol");
         assert!(
             text.contains("fallback"),
             "should contain short session_id as fallback: {}",
@@ -1203,7 +1209,7 @@ mod tests {
         let text = line.to_string();
 
         // Should truncate folder name with ellipsis
-        assert!(text.contains("●"), "should contain working symbol");
+        assert!(text.contains("*"), "should contain working symbol");
         assert!(
             text.contains("very-long..."),
             "should truncate long folder name with ellipsis: {}",
@@ -1317,7 +1323,7 @@ mod tests {
         // Line 0 should contain session chips
         let line0 = row_text(&buffer, 0);
         assert!(
-            line0.contains("session-") || line0.contains("●") || line0.contains("○"),
+            line0.contains("session-") || line0.contains("*") || line0.contains("!"),
             "Line 0 should contain session chips: {}",
             line0
         );
