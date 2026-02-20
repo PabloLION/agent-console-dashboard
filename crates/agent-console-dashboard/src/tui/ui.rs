@@ -163,16 +163,40 @@ fn render_two_line_layout(
     let session_paragraph = Paragraph::new(session_line);
     frame.render_widget(session_paragraph, chunks[0]);
 
-    // Line 2: API usage
-    let mut ctx = WidgetContext::new(&app.sessions);
-    ctx.now = now;
-    if let Some(ref usage) = app.usage {
-        ctx = ctx.with_usage(usage);
+    // Line 2: Status message (if active) or API usage
+    if let Some((ref msg, expiry)) = app.status_message {
+        if now < expiry {
+            // Show status message (yellow)
+            let status_line = Line::from(vec![Span::styled(
+                msg.clone(),
+                Style::default().fg(Color::Yellow),
+            )]);
+            let status_paragraph = Paragraph::new(status_line);
+            frame.render_widget(status_paragraph, chunks[1]);
+        } else {
+            // Status message expired, render API usage
+            let mut ctx = WidgetContext::new(&app.sessions);
+            ctx.now = now;
+            if let Some(ref usage) = app.usage {
+                ctx = ctx.with_usage(usage);
+            }
+            let api_widget = ApiUsageWidget::new();
+            let api_line = api_widget.render(chunks[1].width, &ctx);
+            let api_paragraph = Paragraph::new(api_line);
+            frame.render_widget(api_paragraph, chunks[1]);
+        }
+    } else {
+        // No status message, render API usage
+        let mut ctx = WidgetContext::new(&app.sessions);
+        ctx.now = now;
+        if let Some(ref usage) = app.usage {
+            ctx = ctx.with_usage(usage);
+        }
+        let api_widget = ApiUsageWidget::new();
+        let api_line = api_widget.render(chunks[1].width, &ctx);
+        let api_paragraph = Paragraph::new(api_line);
+        frame.render_widget(api_paragraph, chunks[1]);
     }
-    let api_widget = ApiUsageWidget::new();
-    let api_line = api_widget.render(chunks[1].width, &ctx);
-    let api_paragraph = Paragraph::new(api_line);
-    frame.render_widget(api_paragraph, chunks[1]);
 
     // Clear session_list_inner_area since there's no clickable list in TwoLine mode
     app.session_list_inner_area = None;
