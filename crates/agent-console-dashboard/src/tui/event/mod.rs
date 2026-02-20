@@ -122,11 +122,30 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
             Action::None
         }
         KeyCode::Left => {
-            app.scroll_compact_left();
+            // In TwoLine mode, focus the new leftmost chip after scrolling
+            if app.layout_mode == crate::tui::app::LayoutMode::TwoLine {
+                app.scroll_compact_left();
+                app.selected_index = Some(app.compact_scroll_offset);
+                app.history_scroll = 0;
+            } else {
+                app.scroll_compact_left();
+            }
             Action::None
         }
         KeyCode::Right => {
-            app.scroll_compact_right();
+            // In TwoLine mode, focus the new rightmost chip after scrolling
+            if app.layout_mode == crate::tui::app::LayoutMode::TwoLine {
+                app.scroll_compact_right();
+                // Calculate rightmost visible chip index
+                let max_visible =
+                    crate::tui::ui::calculate_max_visible_chips_public(app.terminal_width);
+                let rightmost = (app.compact_scroll_offset + max_visible - 1)
+                    .min(app.sessions.len().saturating_sub(1));
+                app.selected_index = Some(rightmost);
+                app.history_scroll = 0;
+            } else {
+                app.scroll_compact_right();
+            }
             Action::None
         }
         KeyCode::Enter => {
