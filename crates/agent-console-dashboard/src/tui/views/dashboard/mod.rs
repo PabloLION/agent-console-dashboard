@@ -70,7 +70,7 @@ const NARROW_THRESHOLD: u16 = 40;
 
 /// Returns a display name for a single session's directory.
 ///
-/// Returns the basename of the working_dir, or "<error>" if None.
+/// Returns the basename of the working_dir, or `"<error>"` if None.
 /// For full disambiguation logic with collision detection, use `compute_directory_display_names`.
 pub fn get_directory_display_name(session: &Session) -> String {
     match &session.working_dir {
