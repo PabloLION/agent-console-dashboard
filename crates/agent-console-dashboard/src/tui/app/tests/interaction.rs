@@ -460,10 +460,7 @@ fn test_two_line_click_left_overflow_scrolls_and_focuses() {
     let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 3);
     let action = app.handle_mouse_event(mouse);
     assert_eq!(action, Action::None);
-    assert_eq!(
-        app.compact_scroll_offset, 4,
-        "should scroll left by 1"
-    );
+    assert_eq!(app.compact_scroll_offset, 4, "should scroll left by 1");
     assert_eq!(
         app.selected_index,
         Some(4),
@@ -482,10 +479,7 @@ fn test_two_line_click_right_overflow_scrolls_and_focuses() {
     let mouse = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 65);
     let action = app.handle_mouse_event(mouse);
     assert_eq!(action, Action::None);
-    assert_eq!(
-        app.compact_scroll_offset, 1,
-        "should scroll right by 1"
-    );
+    assert_eq!(app.compact_scroll_offset, 1, "should scroll right by 1");
     // Rightmost visible chip: offset(1) + max_visible(3) - 1 = 3
     assert_eq!(
         app.selected_index,
@@ -503,10 +497,7 @@ fn test_two_line_scroll_wheel_down_scrolls_viewport() {
     let mouse = make_mouse_event(MouseEventKind::ScrollDown, 0, 10);
     let action = app.handle_mouse_event(mouse);
     assert_eq!(action, Action::None);
-    assert_eq!(
-        app.compact_scroll_offset, 4,
-        "should scroll viewport right"
-    );
+    assert_eq!(app.compact_scroll_offset, 4, "should scroll viewport right");
     // Selection should not change on scroll wheel
     assert_eq!(app.selected_index, Some(3), "selection unchanged");
 }
@@ -520,10 +511,7 @@ fn test_two_line_scroll_wheel_up_scrolls_viewport() {
     let mouse = make_mouse_event(MouseEventKind::ScrollUp, 0, 10);
     let action = app.handle_mouse_event(mouse);
     assert_eq!(action, Action::None);
-    assert_eq!(
-        app.compact_scroll_offset, 2,
-        "should scroll viewport left"
-    );
+    assert_eq!(app.compact_scroll_offset, 2, "should scroll viewport left");
     // Selection should not change on scroll wheel
     assert_eq!(app.selected_index, Some(5), "selection unchanged");
 }

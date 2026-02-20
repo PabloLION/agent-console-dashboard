@@ -157,3 +157,27 @@ Span structure (10 spans): 0. "5h: " (raw)
 7. "50%" (raw, elapsed)
 8. " | " (raw)
 9. "Period: used / elapsed" (dimmed legend)
+
+## Status Symbols (acd-p26i)
+
+All status symbols are ASCII characters for terminal compatibility.
+
+Symbol mapping:
+
+- Working: `*`
+- Attention: `!`
+- Question: `?`
+- Closed: `x`
+- Inactive: `.` (dot)
+
+Implementation pattern:
+
+- `status_symbol(status)` in dashboard/mod.rs returns symbol for Status enum
+- Inactive is NOT a Status variant — determined by
+  `session.is_inactive(INACTIVE_SESSION_THRESHOLD)` at render time
+- Everywhere a symbol is rendered, check `is_inactive()` FIRST. If inactive, use
+  `"."` instead of calling `status_symbol()`
+- Applies to both Large layout (dashboard/mod.rs `format_session_line()`) and
+  two-line layout (ui.rs `render_compact_session_chips()`)
+- Two-line layout: determine inactive/should_dim before calling
+  `status_symbol()`

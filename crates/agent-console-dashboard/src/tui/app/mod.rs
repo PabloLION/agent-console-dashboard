@@ -613,7 +613,8 @@ impl App {
 
         // Check right overflow indicator area
         let content_end = content_start + (max_visible * CHIP_WIDTH);
-        if overflow_right > 0 && col >= content_end && col < content_end + OVERFLOW_INDICATOR_WIDTH {
+        if overflow_right > 0 && col >= content_end && col < content_end + OVERFLOW_INDICATOR_WIDTH
+        {
             return ClickTarget::RightOverflow;
         }
 
