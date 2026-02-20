@@ -4,12 +4,12 @@ use super::*;
 
 #[test]
 fn test_status_symbol_working() {
-    assert_eq!(status_symbol(Status::Working), "●");
+    assert_eq!(status_symbol(Status::Working), "*");
 }
 
 #[test]
 fn test_status_symbol_attention() {
-    assert_eq!(status_symbol(Status::Attention), "○");
+    assert_eq!(status_symbol(Status::Attention), "!");
 }
 
 #[test]
@@ -19,7 +19,7 @@ fn test_status_symbol_question() {
 
 #[test]
 fn test_status_symbol_closed() {
-    assert_eq!(status_symbol(Status::Closed), "×");
+    assert_eq!(status_symbol(Status::Closed), "x");
 }
 
 // --- status_color tests ---
