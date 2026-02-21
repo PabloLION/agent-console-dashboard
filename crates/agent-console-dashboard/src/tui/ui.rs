@@ -1166,7 +1166,7 @@ mod tests {
         ));
 
         // Render with height 2 (normally would be TwoLine mode)
-        let buffer = render_dashboard_to_buffer(&mut app, 80, 2);
+        let _buffer = render_dashboard_to_buffer(&mut app, 80, 2);
 
         // Should use Large mode despite short terminal
         assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::Large);
