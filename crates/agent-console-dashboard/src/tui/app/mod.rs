@@ -560,62 +560,137 @@ impl App {
 
     /// Calculates max visible chips for the current terminal width.
     ///
-    /// Used by click detection to determine chip boundaries.
+    /// Used by click detection to determine chip boundaries. With dynamic chip widths,
+    /// this uses MAX_CHIP_WIDTH as an estimate.
     fn calculate_max_visible_chips_for_click(&self) -> usize {
-        use crate::tui::ui::CHIP_WIDTH;
+        use crate::tui::ui::MAX_CHIP_WIDTH;
         use crate::tui::ui::OVERFLOW_INDICATOR_WIDTH;
 
         let width = self.terminal_width as usize;
         let content_width = width.saturating_sub(OVERFLOW_INDICATOR_WIDTH * 2);
-        (content_width / CHIP_WIDTH).max(1)
+        (content_width / MAX_CHIP_WIDTH).max(1)
     }
 
     /// Calculates which chip or overflow indicator was clicked.
     ///
     /// Returns the target based on column position in the session chips row.
+    /// With dynamic chip widths, performs linear scan of cumulative positions.
     fn calculate_clicked_chip(&self, column: u16) -> ClickTarget {
-        use crate::tui::ui::CHIP_WIDTH;
         use crate::tui::ui::OVERFLOW_INDICATOR_WIDTH;
+        use crate::tui::views::dashboard::get_directory_display_name;
 
         if self.sessions.is_empty() {
             return ClickTarget::None;
         }
 
         let col = column as usize;
-        let overflow_left = self.compact_scroll_offset;
-        let max_visible = self.calculate_max_visible_chips_for_click();
-        let overflow_right = self
-            .sessions
-            .len()
-            .saturating_sub(self.compact_scroll_offset + max_visible);
 
-        // Check left overflow indicator area
-        if overflow_left > 0 && col < OVERFLOW_INDICATOR_WIDTH {
-            return ClickTarget::LeftOverflow;
+        // Helper: calculates chip display width
+        fn chip_width(name: &str, is_focused: bool) -> usize {
+            let name_len = name.len();
+            if is_focused {
+                4 + name_len // '[' + symbol + ' ' + name + ']'
+            } else {
+                3 + name_len // ' ' + symbol + ' ' + name
+            }
         }
 
-        // Calculate content start (after left indicator or padding)
+        // Helper: truncates from start
+        fn truncate_from_start(name: &str, max_len: usize) -> String {
+            if name.len() <= max_len {
+                name.to_string()
+            } else if max_len <= 3 {
+                name[name.len().saturating_sub(max_len)..].to_string()
+            } else {
+                format!("...{}", &name[name.len().saturating_sub(max_len - 3)..])
+            }
+        }
+
+        // Calculate visible range (same logic as render_compact_session_chips)
+        let start = self.compact_scroll_offset.min(self.sessions.len().saturating_sub(1));
+        let width = self.terminal_width as usize;
+        let content_width = width.saturating_sub(OVERFLOW_INDICATOR_WIDTH * 2);
+
+        let mut accumulated_width = 0;
+        let mut end = start;
+
+        for i in start..self.sessions.len() {
+            let session = &self.sessions[i];
+            let is_focused = self.selected_index == Some(i);
+
+            let display_name = get_directory_display_name(session);
+            let label = if display_name == "<error>" {
+                session.session_id.chars().take(8).collect()
+            } else {
+                truncate_from_start(&display_name, 12)
+            };
+
+            let this_chip_width = chip_width(&label, is_focused);
+            let separator_width = if i > start { 3 } else { 0 };
+            let total_needed = accumulated_width + separator_width + this_chip_width;
+
+            if total_needed > content_width && i > start {
+                break;
+            }
+
+            accumulated_width = total_needed;
+            end = i + 1;
+        }
+
+        let overflow_left = start;
+        let overflow_right = self.sessions.len().saturating_sub(end);
+
+        // Check left overflow indicator area (7 chars)
+        if col < OVERFLOW_INDICATOR_WIDTH {
+            return if overflow_left > 0 {
+                ClickTarget::LeftOverflow
+            } else {
+                ClickTarget::None
+            };
+        }
+
+        // Calculate chip boundaries
         let content_start = OVERFLOW_INDICATOR_WIDTH;
-        if col < content_start {
-            return ClickTarget::None;
-        }
+        let mut cursor = content_start;
 
-        // Calculate chip index from column offset
-        let relative_col = col - content_start;
-        let chip_index = relative_col / CHIP_WIDTH;
-        let global_index = self.compact_scroll_offset + chip_index;
+        for i in start..end {
+            let session = &self.sessions[i];
+            let is_focused = self.selected_index == Some(i);
 
-        // Check if this is a valid chip
-        let visible_end = (self.compact_scroll_offset + max_visible).min(self.sessions.len());
-        if global_index < visible_end {
-            return ClickTarget::Chip(global_index);
+            let display_name = get_directory_display_name(session);
+            let label = if display_name == "<error>" {
+                session.session_id.chars().take(8).collect()
+            } else {
+                truncate_from_start(&display_name, 12)
+            };
+
+            // Add separator width before this chip (except first)
+            if i > start {
+                cursor += 3; // " | " or "]| " (3 chars)
+            }
+
+            let this_chip_width = chip_width(&label, is_focused);
+            let chip_end = cursor + this_chip_width;
+
+            if col >= cursor && col < chip_end {
+                return ClickTarget::Chip(i);
+            }
+
+            cursor = chip_end;
         }
 
         // Check right overflow indicator area
-        let content_end = content_start + (max_visible * CHIP_WIDTH);
-        if overflow_right > 0 && col >= content_end && col < content_end + OVERFLOW_INDICATOR_WIDTH
-        {
-            return ClickTarget::RightOverflow;
+        // cursor is now at the end of the last chip
+        // Right indicator starts at cursor (with potential space before pipe)
+        let right_indicator_start = cursor;
+        let right_indicator_end = right_indicator_start + OVERFLOW_INDICATOR_WIDTH;
+
+        if col >= right_indicator_start && col < right_indicator_end {
+            return if overflow_right > 0 {
+                ClickTarget::RightOverflow
+            } else {
+                ClickTarget::None
+            };
         }
 
         ClickTarget::None
