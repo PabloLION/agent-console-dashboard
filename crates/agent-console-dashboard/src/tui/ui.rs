@@ -266,20 +266,26 @@ fn render_footer_normal(
     Line::from(spans)
 }
 
-/// Width reserved for each overflow indicator (`<- N+ ` or ` N+ ->`).
+/// Width reserved for each overflow indicator.
+/// Format: `<- N+|` (left) or `|N+ ->` (right), where N can be 0-999.
+/// With 0: `<- 0 |` (6 chars), with count: `<- N+|` (6 chars for N<10, 7 for N<100, 8 for N<1000).
+/// We reserve 7 chars to handle counts up to 99 safely.
 pub const OVERFLOW_INDICATOR_WIDTH: usize = 7;
 
-/// Approximate width of a single session chip (symbol + folder name + spacing).
-/// Accounts for typical folder name length (up to 12 chars for display).
-pub const CHIP_WIDTH: usize = 18;
+/// Maximum width of a single session chip (symbol + folder name + spacing).
+/// Actual chip widths are dynamic (sized to content), but capped at this max.
+pub const MAX_CHIP_WIDTH: usize = 18;
 
 /// Calculates the maximum count of session chips that fit in the available width.
+///
+/// With dynamic chip widths, this uses MAX_CHIP_WIDTH as an estimate for initial
+/// viewport sizing. Actual visible count may vary based on content length.
 fn calculate_max_visible_chips(available_width: u16) -> usize {
     let width = available_width as usize;
     // Reserve space for both overflow indicators
     let content_width = width.saturating_sub(OVERFLOW_INDICATOR_WIDTH * 2);
-    // Divide by chip width, minimum 1
-    (content_width / CHIP_WIDTH).max(1)
+    // Divide by max chip width, minimum 1
+    (content_width / MAX_CHIP_WIDTH).max(1)
 }
 
 /// Public wrapper for calculate_max_visible_chips (used by event handler).
@@ -287,10 +293,49 @@ pub fn calculate_max_visible_chips_public(available_width: u16) -> usize {
     calculate_max_visible_chips(available_width)
 }
 
+/// Helper: Truncates a folder name from the start, keeping the end.
+/// E.g., "my-long-folder-name" → "...folder-name" (max 12 chars visible).
+fn truncate_from_start(name: &str, max_len: usize) -> String {
+    if name.len() <= max_len {
+        name.to_string()
+    } else if max_len <= 3 {
+        name[name.len().saturating_sub(max_len)..].to_string()
+    } else {
+        format!("...{}", &name[name.len().saturating_sub(max_len - 3)..])
+    }
+}
+
+/// Calculates the display width of a chip (accounts for symbol, name, brackets, separators).
+///
+/// # Chip anatomy
+///
+/// - Unselected: ` ` + symbol + ` ` + name (e.g., ` * my-proj`)
+/// - Focused: `[` + symbol + ` ` + name + `]` (e.g., `[? src]`)
+/// - Separator: ` | ` between chips, but NO extra space adjacent to brackets:
+///   - unfocused | unfocused: ` | `
+///   - unfocused |[focused: ` |[`
+///   - focused]| unfocused: `]| `
+///
+/// The separator is NOT part of the chip width — it's rendered between chips.
+fn chip_width(name: &str, is_focused: bool) -> usize {
+    let name_len = name.len();
+    if is_focused {
+        // '[' + symbol + ' ' + name + ']' = 4 + name_len
+        4 + name_len
+    } else {
+        // ' ' + symbol + ' ' + name = 3 + name_len
+        3 + name_len
+    }
+}
+
 /// Renders session chips with horizontal pagination and overflow indicators.
 ///
-/// Shows a viewport window of visible sessions with `<- N+` and `N+ ->` indicators
-/// when more sessions exist beyond the viewport boundaries.
+/// Shows a viewport window of visible sessions with overflow indicators in the new format:
+/// - With overflow: `<- 3+| * agent-console | ! my-project |[? src]| . old-proj |5+ ->`
+/// - No overflow: `<- 0 | * agent-console | ! my-project |[? src]| . old-proj | 0 ->`
+///
+/// Overflow indicators are ALWAYS shown, never hidden or grayed out. The count changes
+/// format: N+ (no space) when N > 0, or 0 (with space) when N = 0.
 ///
 /// # Arguments
 ///
@@ -312,11 +357,46 @@ fn render_compact_session_chips(
         return Line::raw("(no sessions)");
     }
 
-    let max_visible = calculate_max_visible_chips(available_width);
+    let width = available_width as usize;
 
-    // Determine visible range
+    // Determine visible range by accumulating chip widths
     let start = scroll_offset.min(sessions.len().saturating_sub(1));
-    let end = (start + max_visible).min(sessions.len());
+
+    // Calculate visible chips that fit in available width
+    // Reserve: left_indicator (7) + right_indicator (7) = 14 chars
+    let content_width = width.saturating_sub(OVERFLOW_INDICATOR_WIDTH * 2);
+
+    let mut accumulated_width = 0;
+    let mut end = start;
+
+    for (offset, session) in sessions[start..].iter().enumerate() {
+        let i = start + offset;
+        let is_focused = selected_index == Some(i);
+
+        // Get display name
+        let display_name = get_directory_display_name(session);
+        let label = if display_name == "<error>" {
+            session.session_id.chars().take(8).collect()
+        } else {
+            truncate_from_start(&display_name, 12)
+        };
+
+        let this_chip_width = chip_width(&label, is_focused);
+
+        // Add separator width (3 chars: " | ") except for first chip
+        let separator_width = if offset > 0 { 3 } else { 0 };
+
+        let total_needed = accumulated_width + separator_width + this_chip_width;
+
+        if total_needed > content_width && offset > 0 {
+            // Would overflow, stop here
+            break;
+        }
+
+        accumulated_width = total_needed;
+        end = i + 1;
+    }
+
     let visible_sessions = &sessions[start..end];
 
     // Calculate overflow counts
@@ -325,15 +405,17 @@ fn render_compact_session_chips(
 
     let mut spans = vec![];
 
-    // Left overflow indicator
+    // Left overflow indicator (always shown)
     if overflow_left > 0 {
         spans.push(Span::styled(
-            format!("<- {}+ ", overflow_left),
+            format!("<- {}+|", overflow_left),
             Style::default().fg(Color::DarkGray),
         ));
     } else {
-        // Padding for alignment when no left overflow
-        spans.push(Span::raw("       "));
+        spans.push(Span::styled(
+            "<- 0 |".to_string(),
+            Style::default().fg(Color::DarkGray),
+        ));
     }
 
     // Visible chips
@@ -358,39 +440,90 @@ fn render_compact_session_chips(
         // Display name: folder basename, or fallback to short session_id (first 8 chars)
         let display_name = get_directory_display_name(session);
         let label = if display_name == "<error>" {
-            // Fallback to short session_id when working_dir is None
             session.session_id.chars().take(8).collect()
         } else {
-            // Truncate folder name to max 12 chars for chip display
-            if display_name.len() > 12 {
-                format!("{}...", &display_name[..9])
+            truncate_from_start(&display_name, 12)
+        };
+
+        // Separator before this chip (except for first chip)
+        if index > 0 {
+            // Previous chip was focused: "]|", otherwise: " |"
+            let prev_was_focused = selected_index == Some(global_index - 1);
+            if prev_was_focused {
+                spans.push(Span::styled(
+                    "]|".to_string(),
+                    Style::default().fg(Color::DarkGray),
+                ));
             } else {
-                display_name
+                spans.push(Span::styled(
+                    " |".to_string(),
+                    Style::default().fg(Color::DarkGray),
+                ));
             }
-        };
+        }
 
-        // Format chip with brackets if selected
-        let chip_text = if is_selected {
-            format!("[{} {}] ", symbol, label)
+        // Current chip opening (space or bracket)
+        if is_selected {
+            spans.push(Span::styled(
+                "[".to_string(),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ));
         } else {
-            format!(" {} {}  ", symbol, label)
-        };
+            spans.push(Span::styled(
+                " ".to_string(),
+                Style::default().fg(color),
+            ));
+        }
 
+        // Chip content: symbol + space + label
+        let chip_content = format!("{} {}", symbol, label);
         let style = if is_selected {
             Style::default().fg(color).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(color)
         };
+        spans.push(Span::styled(chip_content, style));
 
-        spans.push(Span::styled(chip_text, style));
+        // For last chip, we need to handle the closing separator
+        if index == visible_sessions.len() - 1 {
+            // Close focused chip with ']'
+            if is_selected {
+                spans.push(Span::styled(
+                    "]".to_string(),
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                ));
+            }
+        }
     }
 
-    // Right overflow indicator
+    // Right overflow indicator (always shown)
     if overflow_right > 0 {
-        spans.push(Span::styled(
-            format!(" {}+ ->", overflow_right),
-            Style::default().fg(Color::DarkGray),
-        ));
+        // If last chip was selected, no space before pipe (already have ']')
+        let last_selected = selected_index == Some(end - 1);
+        if last_selected {
+            spans.push(Span::styled(
+                format!("|{}+ ->", overflow_right),
+                Style::default().fg(Color::DarkGray),
+            ));
+        } else {
+            spans.push(Span::styled(
+                format!(" |{}+ ->", overflow_right),
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
+    } else {
+        let last_selected = selected_index == Some(end - 1);
+        if last_selected {
+            spans.push(Span::styled(
+                "| 0 ->".to_string(),
+                Style::default().fg(Color::DarkGray),
+            ));
+        } else {
+            spans.push(Span::styled(
+                " | 0 ->".to_string(),
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
     }
 
     Line::from(spans)
@@ -1216,11 +1349,11 @@ mod tests {
         let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
         let text = line.to_string();
 
-        // Should truncate folder name with ellipsis
+        // Should truncate folder name from start, keeping end with ellipsis
         assert!(text.contains("*"), "should contain working symbol");
         assert!(
-            text.contains("very-long..."),
-            "should truncate long folder name with ellipsis: {}",
+            text.contains("...eds-limit"),
+            "should truncate long folder name from start with ellipsis: {}",
             text
         );
     }
@@ -1334,6 +1467,199 @@ mod tests {
             line0.contains("session-") || line0.contains("*") || line0.contains("!"),
             "Line 0 should contain session chips: {}",
             line0
+        );
+    }
+
+    // --- Dynamic chip width and new style tests (acd-2d9a) ---
+
+    #[test]
+    fn test_dynamic_chip_width_short_names_not_padded() {
+        use std::time::Instant;
+        let mut s1 = Session::new(
+            "session-1".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/src")),
+        );
+        s1.status = Status::Working;
+        let sessions = vec![s1];
+
+        let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Short name "src" should not be padded to 18 chars
+        // Chip width: ' ' + '*' + ' ' + "src" = 6 chars (not 18)
+        assert!(text.contains(" * src"), "should contain short name without padding: {}", text);
+    }
+
+    #[test]
+    fn test_truncate_from_start_keeps_end() {
+        use std::time::Instant;
+        let mut session = Session::new(
+            "test-session".to_string(),
+            AgentType::ClaudeCode,
+            Some(PathBuf::from("/tmp/my-very-long-project-name")),
+        );
+        session.status = Status::Working;
+        let sessions = vec![session];
+
+        let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Should keep end: "...ject-name" (12 chars max)
+        assert!(
+            text.contains("...ject-name"),
+            "should truncate from start, keeping end: {}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_pipe_separator_style() {
+        use std::time::Instant;
+        let sessions: Vec<Session> = (0..3)
+            .map(|i| {
+                let mut s = Session::new(
+                    format!("session-{}", i),
+                    AgentType::ClaudeCode,
+                    Some(PathBuf::from(format!("/tmp/proj{}", i))),
+                );
+                s.status = Status::Working;
+                s
+            })
+            .collect();
+
+        let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Should have " | " separators between chips
+        assert!(
+            text.contains(" |"),
+            "should have pipe separators between chips: {}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_brackets_only_on_focused_chip() {
+        use std::time::Instant;
+        let sessions: Vec<Session> = (0..3)
+            .map(|i| {
+                let mut s = Session::new(
+                    format!("session-{}", i),
+                    AgentType::ClaudeCode,
+                    Some(PathBuf::from(format!("/tmp/proj{}", i))),
+                );
+                s.status = Status::Working;
+                s
+            })
+            .collect();
+
+        // Select middle session
+        let line = render_compact_session_chips(&sessions, Some(1), 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Should have brackets around focused chip only
+        assert!(
+            text.contains("[* proj1]"),
+            "focused chip should have brackets: {}",
+            text
+        );
+        // Unfocused chips should not have brackets
+        assert!(
+            text.contains(" * proj0"),
+            "unfocused chip should not have brackets: {}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_overflow_format_with_count() {
+        use std::time::Instant;
+        // Create many sessions to ensure overflow on both sides
+        let sessions: Vec<Session> = (0..20)
+            .map(|i| {
+                Session::new(
+                    format!("session-{}", i),
+                    AgentType::ClaudeCode,
+                    Some(PathBuf::from(format!("/tmp/project{}", i))),
+                )
+            })
+            .collect();
+
+        // Scroll to position 5 (5 hidden left, should have overflow on right too)
+        let line = render_compact_session_chips(&sessions, None, 5, 80, Instant::now());
+        let text = line.to_string();
+
+        // Should show left overflow with format: "<- N+|" (no space before pipe)
+        assert!(
+            text.contains("<- 5+|"),
+            "should show left overflow with N+ format: {}",
+            text
+        );
+        // Should show right overflow with format: "|N+ ->"
+        assert!(
+            text.contains("+ ->"),
+            "should show right overflow indicator: {}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_overflow_format_zero_count() {
+        use std::time::Instant;
+        let sessions: Vec<Session> = (0..3)
+            .map(|i| {
+                Session::new(
+                    format!("session-{}", i),
+                    AgentType::ClaudeCode,
+                    Some(PathBuf::from(format!("/tmp/p{}", i))),
+                )
+            })
+            .collect();
+
+        // All sessions fit, no overflow
+        let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Should show zero format: "<- 0 |" and "| 0 ->" (with space)
+        assert!(
+            text.contains("<- 0 |"),
+            "should show left zero indicator with space: {}",
+            text
+        );
+        assert!(
+            text.contains("| 0 ->"),
+            "should show right zero indicator with space: {}",
+            text
+        );
+    }
+
+    #[test]
+    fn test_overflow_indicators_always_shown() {
+        use std::time::Instant;
+        let sessions: Vec<Session> = (0..2)
+            .map(|i| {
+                Session::new(
+                    format!("session-{}", i),
+                    AgentType::ClaudeCode,
+                    Some(PathBuf::from(format!("/tmp/p{}", i))),
+                )
+            })
+            .collect();
+
+        let line = render_compact_session_chips(&sessions, None, 0, 80, Instant::now());
+        let text = line.to_string();
+
+        // Overflow indicators should always be present (never hidden)
+        assert!(
+            text.starts_with("<-"),
+            "should always show left overflow indicator: {}",
+            text
+        );
+        assert!(
+            text.ends_with("->"),
+            "should always show right overflow indicator: {}",
+            text
         );
     }
 }
