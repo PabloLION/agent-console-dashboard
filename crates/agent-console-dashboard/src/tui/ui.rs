@@ -469,10 +469,7 @@ fn render_compact_session_chips(
                 Style::default().fg(color).add_modifier(Modifier::BOLD),
             ));
         } else {
-            spans.push(Span::styled(
-                " ".to_string(),
-                Style::default().fg(color),
-            ));
+            spans.push(Span::styled(" ".to_string(), Style::default().fg(color)));
         }
 
         // Chip content: symbol + space + label
@@ -1488,7 +1485,11 @@ mod tests {
 
         // Short name "src" should not be padded to 18 chars
         // Chip width: ' ' + '*' + ' ' + "src" = 6 chars (not 18)
-        assert!(text.contains(" * src"), "should contain short name without padding: {}", text);
+        assert!(
+            text.contains(" * src"),
+            "should contain short name without padding: {}",
+            text
+        );
     }
 
     #[test]

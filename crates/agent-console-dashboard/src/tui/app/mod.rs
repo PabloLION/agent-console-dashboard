@@ -607,7 +607,9 @@ impl App {
         }
 
         // Calculate visible range (same logic as render_compact_session_chips)
-        let start = self.compact_scroll_offset.min(self.sessions.len().saturating_sub(1));
+        let start = self
+            .compact_scroll_offset
+            .min(self.sessions.len().saturating_sub(1));
         let width = self.terminal_width as usize;
         let content_width = width.saturating_sub(OVERFLOW_INDICATOR_WIDTH * 2);
 
