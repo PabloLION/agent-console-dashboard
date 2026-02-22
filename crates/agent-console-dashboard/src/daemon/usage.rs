@@ -94,9 +94,6 @@ impl UsageFetcher {
     /// at the configured interval, but only when subscribers are present.
     pub async fn run(&self, mut shutdown_rx: broadcast::Receiver<()>) {
         let mut ticker = tokio::time::interval(self.interval);
-        // The first tick completes immediately; skip it to avoid fetching at startup
-        // when no subscribers are connected yet.
-        ticker.tick().await;
 
         loop {
             tokio::select! {
