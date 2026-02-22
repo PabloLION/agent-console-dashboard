@@ -17,6 +17,7 @@ pub use store::SessionStore;
 use crate::{DaemonConfig, INACTIVE_SESSION_THRESHOLD};
 use fork::{daemon, Fork};
 use std::error::Error;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
@@ -138,6 +139,46 @@ pub fn daemonize_process(nochdir: bool, noclose: bool) -> DaemonResult<()> {
     }
 }
 
+/// Expands tilde (~) in a path string to the user's home directory.
+fn expand_tilde(path: &str) -> PathBuf {
+    if let Some(stripped) = path.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(stripped);
+        }
+    }
+    PathBuf::from(path)
+}
+
+/// Resolve the log file path from config, falling back to XDG data dir.
+///
+/// - If config has a non-empty `log_file`, use it (expanding ~ if needed)
+/// - Otherwise, use XDG data directory: `~/.local/share/agent-console-dashboard/daemon.log`
+///
+/// Returns `Some(PathBuf)` with the resolved absolute path.
+fn resolve_log_file_path() -> Option<PathBuf> {
+    // Load config and check log_file field
+    let log_file_from_config = match crate::config::loader::ConfigLoader::load_default() {
+        Ok(toml_config) => {
+            let log_file_str = toml_config.daemon.log_file.trim();
+            if log_file_str.is_empty() {
+                None
+            } else {
+                Some(expand_tilde(log_file_str))
+            }
+        }
+        Err(_) => None,
+    };
+
+    // If config specifies a path, use it; otherwise fall back to XDG data dir
+    log_file_from_config.or_else(|| {
+        dirs::data_dir().map(|data_dir| {
+            data_dir
+                .join("agent-console-dashboard")
+                .join("daemon.log")
+        })
+    })
+}
+
 /// Run the daemon with the given configuration.
 ///
 /// This is the main entry point for the daemon. It performs daemonization
@@ -172,8 +213,16 @@ pub fn run_daemon(config: DaemonConfig) -> DaemonResult<()> {
         daemonize_process(false, false)?;
     }
 
+    // Resolve log file path before initializing logging
+    let log_file_path = resolve_log_file_path();
+
     // Initialize logging after daemonize (stderr may be redirected)
-    logging::init();
+    logging::init(log_file_path).map_err(|e| {
+        Box::new(std::io::Error::other(format!(
+            "Failed to initialize logging: {}",
+            e
+        ))) as Box<dyn Error>
+    })?;
 
     info!(
         socket_path = %config.socket_path.display(),
@@ -316,5 +365,53 @@ mod tests {
         let config = DaemonConfig::new(PathBuf::from("/tmp/test.sock"), true);
         assert!(config.daemonize);
         assert_eq!(config.socket_path, PathBuf::from("/tmp/test.sock"));
+    }
+
+    #[test]
+    fn test_expand_tilde_with_home() {
+        let path = "~/test/path";
+        let expanded = expand_tilde(path);
+        assert!(!expanded.to_string_lossy().contains('~'));
+        assert!(expanded.to_string_lossy().ends_with("test/path"));
+    }
+
+    #[test]
+    fn test_expand_tilde_without_tilde() {
+        let path = "/absolute/path";
+        let expanded = expand_tilde(path);
+        assert_eq!(expanded, PathBuf::from("/absolute/path"));
+    }
+
+    #[test]
+    fn test_expand_tilde_relative_path() {
+        let path = "relative/path";
+        let expanded = expand_tilde(path);
+        assert_eq!(expanded, PathBuf::from("relative/path"));
+    }
+
+    #[test]
+    fn test_resolve_log_file_path_returns_some() {
+        // Should always return Some since we fall back to XDG data dir
+        let path = resolve_log_file_path();
+        assert!(path.is_some());
+    }
+
+    #[test]
+    fn test_resolve_log_file_path_default_location() {
+        // When config load fails or log_file is empty, should use XDG data dir
+        let path = resolve_log_file_path();
+        if let Some(p) = path {
+            let path_str = p.to_string_lossy();
+            assert!(
+                path_str.contains("agent-console-dashboard"),
+                "expected path to contain 'agent-console-dashboard', got: {}",
+                path_str
+            );
+            assert!(
+                path_str.ends_with("daemon.log"),
+                "expected path to end with 'daemon.log', got: {}",
+                path_str
+            );
+        }
     }
 }
