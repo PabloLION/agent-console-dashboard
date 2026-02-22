@@ -171,11 +171,7 @@ fn resolve_log_file_path() -> Option<PathBuf> {
 
     // If config specifies a path, use it; otherwise fall back to XDG data dir
     log_file_from_config.or_else(|| {
-        dirs::data_dir().map(|data_dir| {
-            data_dir
-                .join("agent-console-dashboard")
-                .join("daemon.log")
-        })
+        dirs::data_dir().map(|data_dir| data_dir.join("agent-console-dashboard").join("daemon.log"))
     })
 }
 

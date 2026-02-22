@@ -47,10 +47,7 @@ pub fn init(log_file: Option<PathBuf>) -> io::Result<()> {
             }
 
             // Open file in append mode
-            let file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&path)?;
+            let file = OpenOptions::new().create(true).append(true).open(&path)?;
 
             fmt()
                 .with_env_filter(filter)
