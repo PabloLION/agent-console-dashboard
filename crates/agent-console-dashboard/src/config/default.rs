@@ -65,16 +65,33 @@ tick_rate = "250ms"
 # Supports placeholders: {session_id}, {working_dir}, {status}
 # Executed via `sh -c` (fire-and-forget, no callback).
 # Empty string means double-click has no effect.
-# Examples: "code {working_dir}", "tmux new-window -c {working_dir}"
 # Hot-reloadable: Yes
+#
+# Examples:
+#   Zellij — focus the tab matching the folder name:
+#     "zellij action go-to-tab-name $(basename {working_dir})"
+#   VS Code — open the folder:
+#     "code {working_dir}"
+#   tmux — switch to window matching the folder name:
+#     "tmux select-window -t $(basename {working_dir})"
+#   Terminal — open a new terminal window at the folder:
+#     "open -a Terminal {working_dir}"
 activate_hook = ""
 
 # Shell command to run on double-click of closed session (reopen action).
+# Fires when double-clicking a closed session.
 # Supports placeholders: {session_id}, {working_dir}, {status}
 # Executed via `sh -c` (fire-and-forget, no callback).
 # Empty string means double-click has no effect.
-# Example: "zellij action new-tab -c {working_dir}"
 # Hot-reloadable: Yes
+#
+# Examples:
+#   Zellij — focus the tab matching the folder name:
+#     "zellij action go-to-tab-name $(basename {working_dir})"
+#   Zellij — open a new tab at the folder:
+#     "zellij action new-tab --name $(basename {working_dir}) --cwd {working_dir}"
+#   tmux — create a new window at the folder:
+#     "tmux new-window -n $(basename {working_dir}) -c {working_dir}"
 reopen_hook = ""
 
 # ==============================================================================
