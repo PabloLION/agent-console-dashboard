@@ -210,9 +210,15 @@ pub(crate) fn run_config_edit_command(
     println!("Config backed up to: {}", backup_path.display());
     println!("Opening {} in editor...", config_path.display());
 
-    // Open editor
-    let status = Command::new(&editor)
-        .arg(&config_path)
+    // Open editor via the shell so that EDITOR values like `code-insiders --wait`
+    // or `vim -u NONE` are word-split correctly.  Direct Command::new() would
+    // look for a binary whose name is the entire EDITOR string (no word splitting
+    // outside of a shell).
+    let status = Command::new("sh")
+        .arg("-c")
+        .arg(format!("{} \"$1\"", &editor))
+        .arg("--") // $0 (argv[0] for the shell)
+        .arg(&config_path) // $1 — the file to edit
         .status()
         .map_err(
             |e| agent_console_dashboard::config::error::ConfigError::EditorError {
