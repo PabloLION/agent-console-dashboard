@@ -77,6 +77,23 @@ All test files updated to pass priority parameter (default 0) to
 - `src/commands/ipc.rs` - run_set_command
 - All IpcCommand construction sites
 
+## Daemon SET Logging (acd-trhx)
+
+Added logging to daemon SET path:
+
+- `handle_set_command()` (`daemon/handlers/mod.rs`): `info!` after successful
+  SET showing `session=<8chars> status=<status> working_dir=<path>` (omits
+  working_dir when None)
+- `get_or_create_session()` (`daemon/store/lifecycle.rs`): `debug!` at create
+  and update branches showing `session=<8chars> status=<status>`
+
+Patterns:
+- Short session ID: `&id[..id.len().min(8)]` — safe for any length, UUID v4 is
+  all ASCII so byte slicing is correct
+- `tracing::info!` / `tracing::debug!` with full path (no `use` import needed)
+- `status` uses `{}` format since `Status` implements `fmt::Display`
+- `dir.display()` for `PathBuf` display
+
 ## Important Notes
 
 - session_id is UUID v4 (36 chars), stable across resume/clear/compact

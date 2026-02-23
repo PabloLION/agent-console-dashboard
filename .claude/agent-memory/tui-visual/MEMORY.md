@@ -158,6 +158,28 @@ Span structure (10 spans): 0. "5h: " (raw)
 8. " | " (raw)
 9. "Period: used / elapsed" (dimmed legend)
 
+## Focused Chip Bracket Style (acd-uvq5)
+
+Brackets `[` and `]` of focused chips must use the same style as chip content.
+
+Root cause: the `]` for non-last focused chips was embedded in the next chip's
+separator span `"]|"` with `DarkGray` style instead of the chip's own color.
+
+Fix pattern in `render_compact_session_chips()`:
+
+- Always render `]` at the end of the focused chip's own spans (not in the next
+  chip's separator)
+- When `prev_was_focused`, separator is `"|"` (1 char, DarkGray) — not `"]|"`
+- The `]` rendered by the chip itself uses `Style::default().fg(color).add_modifier(Modifier::BOLD)`
+- Total visual width is unchanged: chip renders 1 more char, separator loses 1 char
+
+Test pattern:
+
+- Access `line.spans` to get (text, style) pairs
+- Find `"["`, `"]"`, and chip content spans by text content
+- Assert `span.style.fg` matches across all three spans
+- Assert `span.style.add_modifier.contains(Modifier::BOLD)` for all three
+
 ## Status Symbols (acd-p26i)
 
 All status symbols are ASCII characters for terminal compatibility.

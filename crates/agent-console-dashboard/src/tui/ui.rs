@@ -1044,10 +1044,10 @@ mod tests {
     // --- Layout mode tests ---
 
     #[test]
-    fn test_layout_mode_auto_detects_large_for_height_5() {
+    fn test_layout_mode_auto_detects_large_for_height_7() {
         let mut app = make_app_with_sessions(3);
-        let buffer = render_dashboard_to_buffer(&mut app, 80, 5);
-        // Height 5 should use Large mode (threshold is < 5)
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 7);
+        // Height 7 (= threshold) should use Large mode (threshold is < 7)
         assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::Large);
         // Should have header
         assert!(
@@ -1057,10 +1057,10 @@ mod tests {
     }
 
     #[test]
-    fn test_layout_mode_auto_detects_two_line_for_height_4() {
+    fn test_layout_mode_auto_detects_two_line_for_height_6() {
         let mut app = make_app_with_sessions(3);
-        let buffer = render_dashboard_to_buffer(&mut app, 80, 4);
-        // Height 4 should use TwoLine mode
+        let buffer = render_dashboard_to_buffer(&mut app, 80, 6);
+        // Height 6 (< 7 threshold) should use TwoLine mode
         assert_eq!(app.layout_mode, crate::tui::app::LayoutMode::TwoLine);
         // Should NOT have header
         assert!(
@@ -1122,9 +1122,9 @@ mod tests {
     }
 
     #[test]
-    fn test_layout_mode_threshold_is_5() {
+    fn test_layout_mode_threshold_is_7() {
         use crate::tui::app::TWO_LINE_LAYOUT_HEIGHT_THRESHOLD;
-        assert_eq!(TWO_LINE_LAYOUT_HEIGHT_THRESHOLD, 5);
+        assert_eq!(TWO_LINE_LAYOUT_HEIGHT_THRESHOLD, 7);
     }
 
     #[test]

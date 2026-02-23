@@ -33,7 +33,7 @@ const ELAPSED_TIME_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 ///
 /// When terminal height is less than this value, TwoLine mode is automatically
 /// selected. Otherwise, Large mode is used.
-pub const TWO_LINE_LAYOUT_HEIGHT_THRESHOLD: u16 = 5;
+pub const TWO_LINE_LAYOUT_HEIGHT_THRESHOLD: u16 = 7;
 
 /// Layout mode for the TUI rendering.
 ///
