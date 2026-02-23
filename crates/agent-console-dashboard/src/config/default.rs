@@ -146,8 +146,8 @@ usage_fetch_interval = "3m"
 # Hot-reloadable: Yes
 log_level = "info"
 
-# Path to log file. Empty string uses the default XDG data path.
-# Default: ~/.local/share/agent-console-dashboard/daemon.log
+# Path to log file. Empty string uses the default XDG state path.
+# Default: ~/.local/state/agent-console-dashboard/daemon.log
 # Tilde (~) is expanded to your home directory.
 # Examples: "/var/log/agent-console-dashboard.log", "~/logs/acd-daemon.log"
 # Hot-reloadable: No (restart required)
