@@ -195,4 +195,90 @@ mod tests {
             "SerializeError display should include the message"
         );
     }
+
+    #[test]
+    fn display_editor_not_set() {
+        let err = ConfigError::EditorNotSet;
+        let msg = err.to_string();
+        assert!(
+            msg.contains("EDITOR"),
+            "EditorNotSet display should mention EDITOR"
+        );
+    }
+
+    #[test]
+    fn display_editor_error_simple() {
+        let err = ConfigError::EditorError {
+            editor: "vim".to_string(),
+            source: std::io::Error::new(std::io::ErrorKind::NotFound, "file not found"),
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("vim"),
+            "EditorError display should include the editor name"
+        );
+    }
+
+    #[test]
+    fn display_editor_error_with_args_preserves_full_string() {
+        // Regression test for acd-ohr6: EDITOR values like 'code-insiders --wait'
+        // must appear verbatim in the error message so the user knows what failed.
+        let err = ConfigError::EditorError {
+            editor: "code-insiders --wait".to_string(),
+            source: std::io::Error::new(std::io::ErrorKind::NotFound, "file not found"),
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("code-insiders --wait"),
+            "EditorError display should include the full editor string with arguments"
+        );
+    }
+
+    #[test]
+    fn display_editor_failed_with_exit_code() {
+        let err = ConfigError::EditorFailed {
+            editor: "vim".to_string(),
+            code: Some(1),
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("vim"),
+            "EditorFailed display should include the editor"
+        );
+        assert!(
+            msg.contains("1"),
+            "EditorFailed display should include the exit code"
+        );
+    }
+
+    #[test]
+    fn display_editor_failed_no_exit_code() {
+        let err = ConfigError::EditorFailed {
+            editor: "vim".to_string(),
+            code: None,
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("vim"),
+            "EditorFailed display should include the editor"
+        );
+        assert!(
+            msg.contains("unknown"),
+            "EditorFailed display should say 'unknown' when exit code is None"
+        );
+    }
+
+    #[test]
+    fn display_editor_failed_with_args_preserves_full_string() {
+        // Regression test for acd-ohr6: full EDITOR string preserved in failure message.
+        let err = ConfigError::EditorFailed {
+            editor: "code-insiders --wait".to_string(),
+            code: Some(1),
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("code-insiders --wait"),
+            "EditorFailed display should include the full editor string with arguments"
+        );
+    }
 }
