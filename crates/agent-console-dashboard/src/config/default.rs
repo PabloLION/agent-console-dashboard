@@ -198,7 +198,7 @@ pub fn create_default_config_if_missing() -> Result<bool, ConfigError> {
 /// Creates (or force-overwrites) the default config file.
 ///
 /// - If the file exists and `force` is `false`, returns `ConfigError::AlreadyExists`.
-/// - If the file exists and `force` is `true`, backs it up to `<name>.bak.<tinydate>` first.
+/// - If the file exists and `force` is `true`, backs it up to `<name>.<tinydate>.bak` first.
 /// - Returns the path where the config was written.
 ///
 /// When `force` is true but the config doesn't exist, behaves like normal creation
@@ -210,9 +210,9 @@ pub fn create_default_config(force: bool) -> Result<PathBuf, ConfigError> {
         if !force {
             return Err(ConfigError::AlreadyExists { path: path.clone() });
         }
-        // Back up existing file with tinydate format: config.toml.bak.YYYYMMDDTHHmmssZ
+        // Back up existing file with tinydate format: config.toml.YYYYMMDDTHHmmssZ.bak
         let tinydate = generate_tinydate();
-        let backup_path = PathBuf::from(format!("{}.bak.{}", path.display(), tinydate));
+        let backup_path = PathBuf::from(format!("{}.{}.bak", path.display(), tinydate));
         fs::rename(&path, &backup_path).map_err(|e| ConfigError::WriteError {
             path: backup_path.clone(),
             source: e,
@@ -418,7 +418,7 @@ mod tests {
             let new_path = create_default_config(true).expect("force should succeed");
             assert_eq!(new_path, path);
 
-            // Backup should exist with format: config.toml.bak.YYYYMMDDTHHmmssZ
+            // Backup should exist with format: config.toml.YYYYMMDDTHHmmssZ.bak
             let parent = path.parent().expect("config file should have parent dir");
             let backups: Vec<_> = fs::read_dir(parent)
                 .expect("read config dir")
@@ -426,23 +426,24 @@ mod tests {
                 .filter(|e| {
                     e.file_name()
                         .to_str()
-                        .map(|n| n.starts_with("config.toml.bak."))
+                        .map(|n| n.starts_with("config.toml.") && n.ends_with(".bak"))
                         .unwrap_or(false)
                 })
                 .collect();
             assert_eq!(backups.len(), 1, "should have exactly one backup file");
             let backup_path = backups[0].path();
 
-            // Verify backup filename format: config.toml.bak.YYYYMMDDTHHmmssZ (16 char timestamp)
+            // Verify backup filename format: config.toml.YYYYMMDDTHHmmssZ.bak (16 char timestamp)
             let backup_name = backup_path.file_name().expect("backup has filename");
             let backup_str = backup_name.to_str().expect("filename is utf8");
             assert!(
-                backup_str.starts_with("config.toml.bak."),
-                "backup name should start with config.toml.bak."
+                backup_str.starts_with("config.toml.") && backup_str.ends_with(".bak"),
+                "backup name should start with config.toml. and end with .bak"
             );
             let timestamp = backup_str
-                .strip_prefix("config.toml.bak.")
-                .expect("strip prefix");
+                .strip_prefix("config.toml.")
+                .and_then(|s| s.strip_suffix(".bak"))
+                .expect("strip prefix and suffix");
             assert_eq!(
                 timestamp.len(),
                 16,
@@ -483,7 +484,7 @@ mod tests {
                 .filter(|e| {
                     e.file_name()
                         .to_str()
-                        .map(|n| n.starts_with("config.toml.bak."))
+                        .map(|n| n.starts_with("config.toml.") && n.ends_with(".bak"))
                         .unwrap_or(false)
                 })
                 .collect();

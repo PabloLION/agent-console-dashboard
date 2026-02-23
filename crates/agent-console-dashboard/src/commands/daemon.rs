@@ -198,7 +198,7 @@ pub(crate) fn run_config_edit_command(
 
     // Back up config with tinydate format
     let tinydate = default::generate_tinydate();
-    let backup_path = PathBuf::from(format!("{}.bak.{}", config_path.display(), tinydate));
+    let backup_path = PathBuf::from(format!("{}.{}.bak", config_path.display(), tinydate));
 
     fs::copy(&config_path, &backup_path).map_err(|e| {
         agent_console_dashboard::config::error::ConfigError::WriteError {
