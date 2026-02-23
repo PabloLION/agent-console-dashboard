@@ -447,11 +447,13 @@ fn render_compact_session_chips(
 
         // Separator before this chip (except for first chip)
         if index > 0 {
-            // Previous chip was focused: "]|", otherwise: " |"
+            // Previous chip was focused: its ']' was already pushed in that
+            // chip's own rendering, so the separator is just "|".
+            // Otherwise: " |"
             let prev_was_focused = selected_index == Some(global_index - 1);
             if prev_was_focused {
                 spans.push(Span::styled(
-                    "]|".to_string(),
+                    "|".to_string(),
                     Style::default().fg(Color::DarkGray),
                 ));
             } else {
@@ -481,15 +483,14 @@ fn render_compact_session_chips(
         };
         spans.push(Span::styled(chip_content, style));
 
-        // For last chip, we need to handle the closing separator
-        if index == visible_sessions.len() - 1 {
-            // Close focused chip with ']'
-            if is_selected {
-                spans.push(Span::styled(
-                    "]".to_string(),
-                    Style::default().fg(color).add_modifier(Modifier::BOLD),
-                ));
-            }
+        // Close focused chip with ']' using the same style as the chip content.
+        // This ensures the bracket color matches the chip text regardless of
+        // whether this is the last visible chip or not.
+        if is_selected {
+            spans.push(Span::styled(
+                "]".to_string(),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ));
         }
     }
 
@@ -1570,6 +1571,80 @@ mod tests {
             text.contains(" * proj0"),
             "unfocused chip should not have brackets: {}",
             text
+        );
+    }
+
+    #[test]
+    fn test_focused_chip_bracket_style_matches_chip_content() {
+        // Regression test for acd-uvq5: the '[' and ']' brackets must use
+        // the same fg color and modifiers as the chip content text.
+        use ratatui::style::Modifier;
+        use std::time::Instant;
+
+        let sessions: Vec<Session> = (0..3)
+            .map(|i| {
+                let mut s = Session::new(
+                    format!("session-{}", i),
+                    AgentType::ClaudeCode,
+                    Some(PathBuf::from(format!("/tmp/proj{}", i))),
+                );
+                s.status = Status::Working;
+                s
+            })
+            .collect();
+
+        // Select the middle session so it is NOT the last visible chip.
+        // This exercises the code path where ']' was previously rendered
+        // with DarkGray inside the next chip's separator.
+        let line = render_compact_session_chips(&sessions, Some(1), 0, 80, Instant::now());
+
+        // Collect (text, style) pairs for all spans
+        let span_pairs: Vec<(&str, Style)> = line
+            .spans
+            .iter()
+            .map(|s| (s.content.as_ref(), s.style))
+            .collect();
+
+        // Find the '[' span for the focused chip
+        let bracket_open = span_pairs
+            .iter()
+            .find(|(text, _)| *text == "[")
+            .expect("should have a '[' span for focused chip");
+
+        // Find the chip content span (contains the symbol and name)
+        let chip_content = span_pairs
+            .iter()
+            .find(|(text, _)| text.contains("* proj1"))
+            .expect("should have chip content span for focused chip");
+
+        // Find the ']' span that closes the focused chip
+        let bracket_close = span_pairs
+            .iter()
+            .find(|(text, _)| *text == "]")
+            .expect("should have a ']' span for focused chip");
+
+        // All three spans must share the same fg color
+        assert_eq!(
+            bracket_open.1.fg, chip_content.1.fg,
+            "opening bracket fg color must match chip content fg color"
+        );
+        assert_eq!(
+            bracket_close.1.fg, chip_content.1.fg,
+            "closing bracket fg color must match chip content fg color"
+        );
+
+        // All three spans must have the BOLD modifier
+        assert!(
+            bracket_open.1.add_modifier.contains(Modifier::BOLD),
+            "opening bracket must be BOLD"
+        );
+        assert!(
+            chip_content.1.add_modifier.contains(Modifier::BOLD),
+            "chip content must be BOLD when focused"
+        );
+        assert!(
+            bracket_close.1.add_modifier.contains(Modifier::BOLD),
+            "closing bracket must be BOLD"
         );
     }
 
