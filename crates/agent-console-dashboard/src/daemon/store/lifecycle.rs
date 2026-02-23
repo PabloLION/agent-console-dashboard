@@ -157,6 +157,11 @@ impl SessionStore {
             existing.set_status(status);
             existing.priority = priority;
             let updated = existing.clone();
+            tracing::debug!(
+                "session updated id={} status={}",
+                &id[..id.len().min(8)],
+                status
+            );
             // Broadcast if status or priority changed
             if old_status != updated.status || old_priority != updated.priority {
                 self.broadcast_session_change(old_status, old_priority, &updated);
@@ -168,6 +173,12 @@ impl SessionStore {
         let mut session = Session::new(id.clone(), agent_type, working_dir);
         session.set_status(status);
         session.priority = priority;
+
+        tracing::debug!(
+            "session created id={} status={}",
+            &id[..id.len().min(8)],
+            status
+        );
 
         // Insert and return clone
         sessions.insert(id, session.clone());

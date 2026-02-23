@@ -71,6 +71,17 @@ pub(super) async fn handle_set_command(cmd: &IpcCommand, store: &SessionStore) -
         )
         .await;
 
+    let short_id = &session_id[..session_id.len().min(8)];
+    match &session.working_dir {
+        Some(dir) => tracing::info!(
+            "SET session={} status={} working_dir={}",
+            short_id,
+            status,
+            dir.display()
+        ),
+        None => tracing::info!("SET session={} status={}", short_id, status),
+    }
+
     let info = SessionSnapshot::from(&session);
     IpcResponse::success(Some(
         serde_json::to_value(&info).expect("failed to serialize SessionSnapshot"),
