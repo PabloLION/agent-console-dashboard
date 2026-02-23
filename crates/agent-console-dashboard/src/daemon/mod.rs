@@ -149,10 +149,10 @@ fn expand_tilde(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
-/// Resolve the log file path from config, falling back to XDG data dir.
+/// Resolve the log file path from config, falling back to XDG state dir.
 ///
 /// - If config has a non-empty `log_file`, use it (expanding ~ if needed)
-/// - Otherwise, use XDG data directory: `~/.local/share/agent-console-dashboard/daemon.log`
+/// - Otherwise, use XDG state directory: `~/.local/state/agent-console-dashboard/daemon.log`
 ///
 /// Returns `Some(PathBuf)` with the resolved absolute path.
 fn resolve_log_file_path() -> Option<PathBuf> {
@@ -169,9 +169,13 @@ fn resolve_log_file_path() -> Option<PathBuf> {
         Err(_) => None,
     };
 
-    // If config specifies a path, use it; otherwise fall back to XDG data dir
+    // If config specifies a path, use it; otherwise fall back to XDG state dir.
+    // On macOS, state_dir() returns None (no XDG_STATE_HOME equivalent), so we
+    // fall back to data_dir() (~/Library/Application Support) to stay functional.
     log_file_from_config.or_else(|| {
-        dirs::data_dir().map(|data_dir| data_dir.join("agent-console-dashboard").join("daemon.log"))
+        dirs::state_dir()
+            .or_else(dirs::data_dir)
+            .map(|base| base.join("agent-console-dashboard").join("daemon.log"))
     })
 }
 
