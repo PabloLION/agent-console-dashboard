@@ -9,6 +9,43 @@
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
+// Hook types
+// ---------------------------------------------------------------------------
+
+/// A single hook command with an optional timeout.
+///
+/// Used in `tui.activate_hooks` and `tui.reopen_hooks`. Each hook is spawned
+/// via `sh -c <command>` with session data available as environment variables
+/// (`ACD_SESSION_ID`, `ACD_WORKING_DIR`, `ACD_STATUS`) and as a JSON
+/// `SessionSnapshot` on stdin.
+///
+/// Example TOML:
+/// ```toml
+/// [[tui.activate_hooks]]
+/// command = 'zellij action go-to-tab-name "$(basename "$ACD_WORKING_DIR")"'
+/// timeout = 5
+/// ```
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(default)]
+pub struct HookConfig {
+    /// Shell command to execute via `sh -c`.
+    pub command: String,
+    /// Maximum seconds to wait for the hook to complete.
+    /// If the hook exceeds this duration it is killed.
+    /// Default: 5 seconds.
+    pub timeout: u64,
+}
+
+impl Default for HookConfig {
+    fn default() -> Self {
+        Self {
+            command: String::new(),
+            timeout: 5,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Top-level Config
 // ---------------------------------------------------------------------------
 
@@ -52,33 +89,25 @@ pub struct TuiConfig {
     /// Render tick rate as a human-readable duration (e.g. `"250ms"`).
     /// Hot-reloadable: No (restart required).
     pub tick_rate: String,
-    /// Shell command to execute on double-click (activate action).
+    /// Hooks to execute on double-click of a non-closed session (activate action).
     ///
-    /// Fires when double-clicking a non-closed session.
-    /// Session data is passed as environment variables:
+    /// Hooks run sequentially in order. Each hook is spawned via `sh -c` with:
     /// - `ACD_SESSION_ID` — the session's identifier
     /// - `ACD_WORKING_DIR` — the session's working directory (empty if unknown)
     /// - `ACD_STATUS` — the session's current status (working, attention, etc.)
     ///
     /// The full session JSON is also piped to stdin.
-    /// Executed via `sh -c` in a fire-and-forget manner.
-    /// None means double-click has no effect.
+    /// Each hook is killed if it exceeds its `timeout` (seconds, default 5).
+    /// Stdout/stderr are captured and logged at debug level.
+    /// An empty list means double-click has no effect.
     /// Hot-reloadable: Yes.
-    #[serde(default, deserialize_with = "deserialize_optional_string")]
-    pub activate_hook: Option<String>,
-    /// Shell command to execute on double-click of a closed session.
+    pub activate_hooks: Vec<HookConfig>,
+    /// Hooks to execute on double-click of a closed session (reopen action).
     ///
-    /// Session data is passed as environment variables:
-    /// - `ACD_SESSION_ID` — the session's identifier
-    /// - `ACD_WORKING_DIR` — the session's working directory (empty if unknown)
-    /// - `ACD_STATUS` — the session's current status (always "closed")
-    ///
-    /// The full session JSON is also piped to stdin.
-    /// Executed via `sh -c` in a fire-and-forget manner.
-    /// None means double-click has no effect.
+    /// Same execution model as `activate_hooks`.
+    /// An empty list means double-click has no effect.
     /// Hot-reloadable: Yes.
-    #[serde(default, deserialize_with = "deserialize_optional_string")]
-    pub reopen_hook: Option<String>,
+    pub reopen_hooks: Vec<HookConfig>,
 }
 
 impl Default for TuiConfig {
@@ -90,19 +119,10 @@ impl Default for TuiConfig {
                 "api-usage".to_string(),
             ],
             tick_rate: "250ms".to_string(),
-            activate_hook: None,
-            reopen_hook: None,
+            activate_hooks: Vec::new(),
+            reopen_hooks: Vec::new(),
         }
     }
-}
-
-/// Deserializes an optional string, treating empty strings as None.
-fn deserialize_optional_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    Ok(s.and_then(|s| if s.is_empty() { None } else { Some(s) }))
 }
 
 /// Layout preset variants.
@@ -410,84 +430,91 @@ log_level = "debug"
     }
 
     #[test]
-    fn default_activate_hook_is_none() {
+    fn default_activate_hooks_is_empty() {
         let config = Config::default();
-        assert_eq!(config.tui.activate_hook, None);
+        assert!(config.tui.activate_hooks.is_empty());
     }
 
     #[test]
-    fn default_reopen_hook_is_none() {
+    fn default_reopen_hooks_is_empty() {
         let config = Config::default();
-        assert_eq!(config.tui.reopen_hook, None);
+        assert!(config.tui.reopen_hooks.is_empty());
     }
 
     #[test]
-    fn parse_activate_hook() {
+    fn parse_activate_hooks_array() {
         let toml_str = r#"
-[tui]
-activate_hook = "code \"$ACD_WORKING_DIR\""
+[[tui.activate_hooks]]
+command = 'code "$ACD_WORKING_DIR"'
+timeout = 10
+
+[[tui.activate_hooks]]
+command = 'echo activated >> /tmp/acd.log'
 "#;
-        let config: Config = toml::from_str(toml_str).expect("should parse activate_hook");
+        let config: Config = toml::from_str(toml_str).expect("should parse activate_hooks");
+        assert_eq!(config.tui.activate_hooks.len(), 2);
         assert_eq!(
-            config.tui.activate_hook,
-            Some("code \"$ACD_WORKING_DIR\"".to_string())
+            config.tui.activate_hooks[0].command,
+            r#"code "$ACD_WORKING_DIR""#
         );
+        assert_eq!(config.tui.activate_hooks[0].timeout, 10);
+        assert_eq!(
+            config.tui.activate_hooks[1].command,
+            "echo activated >> /tmp/acd.log"
+        );
+        // Default timeout for second hook
+        assert_eq!(config.tui.activate_hooks[1].timeout, 5);
     }
 
     #[test]
-    fn parse_reopen_hook() {
+    fn parse_reopen_hooks_array() {
         let toml_str = r#"
-[tui]
-reopen_hook = "zellij action new-tab -c \"$ACD_WORKING_DIR\""
+[[tui.reopen_hooks]]
+command = 'zellij action new-tab --cwd "$ACD_WORKING_DIR"'
+timeout = 5
 "#;
-        let config: Config = toml::from_str(toml_str).expect("should parse reopen_hook");
+        let config: Config = toml::from_str(toml_str).expect("should parse reopen_hooks");
+        assert_eq!(config.tui.reopen_hooks.len(), 1);
         assert_eq!(
-            config.tui.reopen_hook,
-            Some("zellij action new-tab -c \"$ACD_WORKING_DIR\"".to_string())
+            config.tui.reopen_hooks[0].command,
+            r#"zellij action new-tab --cwd "$ACD_WORKING_DIR""#
         );
+        assert_eq!(config.tui.reopen_hooks[0].timeout, 5);
     }
 
     #[test]
-    fn activate_hook_roundtrip() {
+    fn hook_config_default_timeout_is_5() {
+        let hook = HookConfig::default();
+        assert_eq!(hook.timeout, 5);
+    }
+
+    #[test]
+    fn activate_hooks_roundtrip() {
         let mut config = Config::default();
-        config.tui.activate_hook = Some("echo \"$ACD_SESSION_ID\"".to_string());
+        config.tui.activate_hooks = vec![HookConfig {
+            command: "echo \"$ACD_SESSION_ID\"".to_string(),
+            timeout: 3,
+        }];
         let toml_str = toml::to_string(&config).expect("serialization should succeed");
         let parsed: Config = toml::from_str(&toml_str).expect("roundtrip should parse");
+        assert_eq!(parsed.tui.activate_hooks.len(), 1);
         assert_eq!(
-            parsed.tui.activate_hook,
-            Some("echo \"$ACD_SESSION_ID\"".to_string())
+            parsed.tui.activate_hooks[0].command,
+            "echo \"$ACD_SESSION_ID\""
         );
+        assert_eq!(parsed.tui.activate_hooks[0].timeout, 3);
     }
 
     #[test]
-    fn reopen_hook_roundtrip() {
+    fn reopen_hooks_roundtrip() {
         let mut config = Config::default();
-        config.tui.reopen_hook = Some("zellij action new-tab".to_string());
+        config.tui.reopen_hooks = vec![HookConfig {
+            command: "zellij action new-tab".to_string(),
+            timeout: 5,
+        }];
         let toml_str = toml::to_string(&config).expect("serialization should succeed");
         let parsed: Config = toml::from_str(&toml_str).expect("roundtrip should parse");
-        assert_eq!(
-            parsed.tui.reopen_hook,
-            Some("zellij action new-tab".to_string())
-        );
-    }
-
-    #[test]
-    fn empty_activate_hook_becomes_none() {
-        let toml_str = r#"
-[tui]
-activate_hook = ""
-"#;
-        let config: Config = toml::from_str(toml_str).expect("should parse empty activate_hook");
-        assert_eq!(config.tui.activate_hook, None);
-    }
-
-    #[test]
-    fn empty_reopen_hook_becomes_none() {
-        let toml_str = r#"
-[tui]
-reopen_hook = ""
-"#;
-        let config: Config = toml::from_str(toml_str).expect("should parse empty reopen_hook");
-        assert_eq!(config.tui.reopen_hook, None);
+        assert_eq!(parsed.tui.reopen_hooks.len(), 1);
+        assert_eq!(parsed.tui.reopen_hooks[0].command, "zellij action new-tab");
     }
 }

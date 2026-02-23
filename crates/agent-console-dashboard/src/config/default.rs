@@ -60,59 +60,48 @@ widgets = ["session-status:two-line", "api-usage"]
 # Note: Changing this requires a restart (not hot-reloadable).
 tick_rate = "250ms"
 
-# Shell command to run on double-click of active session (activate action).
+# Hooks to run on double-click of an active session (activate action).
 # Fires when double-clicking a non-closed session.
-# Executed via `sh -c` (fire-and-forget, no callback).
-# Empty string means double-click has no effect.
+# Each hook is spawned via `sh -c` with session context. Hooks run in sequence.
+# An empty list means double-click has no effect.
 # Hot-reloadable: No (restart TUI to apply changes)
 #
-# Available environment variables set for the hook process:
+# Available environment variables set for each hook process:
 #   $ACD_SESSION_ID  — unique session identifier
 #   $ACD_WORKING_DIR — working directory path (empty string if unknown)
 #   $ACD_STATUS      — current status: working, attention, question, closed
 #
-# The full session JSON is also piped to stdin for advanced hooks (same pattern
-# as Claude Code hooks). Use `jq` or any JSON parser to access all fields.
+# The full session JSON is also piped to stdin (same pattern as Claude Code hooks).
+# Use `jq` or any JSON parser to access all fields.
 #
-# TOML escaping tip: for commands with double quotes, use triple-quoted strings:
-#   activate_hook = '''zellij action go-to-tab-name "$(basename "$ACD_WORKING_DIR")"'''
+# TOML syntax: use [[tui.activate_hooks]] (double brackets) for each hook entry.
+# For commands with double quotes, use single-quoted TOML strings (no escaping needed):
+#   command = 'zellij action go-to-tab-name "$(basename "$ACD_WORKING_DIR")"'
 #
-# Examples:
-#   Zellij — focus the tab matching the folder name:
-#     '''zellij --session $ZELLIJ_SESSION_NAME action go-to-tab-name "$(basename "$ACD_WORKING_DIR")"'''
-#   VS Code — open the folder:
-#     "code \"$ACD_WORKING_DIR\""
-#   tmux — switch to window matching the folder name:
-#     "tmux select-window -t \"$(basename \"$ACD_WORKING_DIR\")\""
-#   Terminal — open a new terminal window at the folder:
-#     "open -a Terminal \"$ACD_WORKING_DIR\""
-activate_hook = ""
+# Uncomment to enable — example: focus the Zellij tab matching the folder name:
+# [[tui.activate_hooks]]
+# command = 'zellij action go-to-tab-name "$(basename "$ACD_WORKING_DIR")" --session "$ZELLIJ_SESSION_NAME"'
+# timeout = 5
+#
+# Uncomment to enable — example: log hook activations:
+# [[tui.activate_hooks]]
+# command = 'echo "activated $ACD_SESSION_ID at $ACD_WORKING_DIR" >> /tmp/acd-hooks.log'
+# timeout = 2
 
-# Shell command to run on double-click of closed session (reopen action).
+# Hooks to run on double-click of a closed session (reopen action).
 # Fires when double-clicking a closed session.
-# Executed via `sh -c` (fire-and-forget, no callback).
-# Empty string means double-click has no effect.
+# Each hook is spawned via `sh -c` with session context. Hooks run in sequence.
+# An empty list means double-click has no effect.
 # Hot-reloadable: No (restart TUI to apply changes)
 #
-# Available environment variables set for the hook process:
-#   $ACD_SESSION_ID  — unique session identifier
-#   $ACD_WORKING_DIR — working directory path (empty string if unknown)
-#   $ACD_STATUS      — current status: working, attention, question, closed
+# Same environment variables and stdin JSON as activate_hooks above.
 #
-# The full session JSON is also piped to stdin for advanced hooks (same pattern
-# as Claude Code hooks). Use `jq` or any JSON parser to access all fields.
+# TOML syntax: use [[tui.reopen_hooks]] (double brackets) for each hook entry.
 #
-# TOML escaping tip: for commands with double quotes, use triple-quoted strings:
-#   reopen_hook = '''zellij action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR"'''
-#
-# Examples:
-#   Zellij — focus the tab matching the folder name:
-#     '''zellij --session $ZELLIJ_SESSION_NAME action go-to-tab-name "$(basename "$ACD_WORKING_DIR")"'''
-#   Zellij — open a new tab at the folder:
-#     '''zellij --session $ZELLIJ_SESSION_NAME action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR"'''
-#   tmux — create a new window at the folder:
-#     "tmux new-window -n \"$(basename \"$ACD_WORKING_DIR\")\" -c \"$ACD_WORKING_DIR\""
-reopen_hook = ""
+# Uncomment to enable — example: open a new Zellij tab at the session folder:
+# [[tui.reopen_hooks]]
+# command = 'zellij action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR" --session "$ZELLIJ_SESSION_NAME"'
+# timeout = 5
 
 # ==============================================================================
 # Agent Configuration

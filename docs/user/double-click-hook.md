@@ -1,22 +1,43 @@
 # Double-Click Hook
 
 The TUI supports configurable hooks that fire when a session is double-clicked
-in the dashboard. The hook receives full session context as environment
-variables and as JSON on stdin.
+in the dashboard. Multiple hooks can be defined per event — they run
+sequentially. Each hook receives full session context as environment variables
+and as JSON on stdin.
 
 ## Configuration
 
-Configure the hooks in your TOML config file at
-`~/.config/agent-console-dashboard/config.toml`:
+Configure hooks in your TOML config file at
+`~/.config/agent-console-dashboard/config.toml` using the
+`[[tui.activate_hooks]]` and `[[tui.reopen_hooks]]` array-of-tables syntax
+(double brackets):
 
 ```toml
-[tui]
-# Hook for non-closed sessions (double-click to activate)
-activate_hook = "zellij action go-to-tab-name \"$(basename \"$ACD_WORKING_DIR\")\""
+# Fires when double-clicking a non-closed session
+[[tui.activate_hooks]]
+command = 'zellij action go-to-tab-name "$(basename "$ACD_WORKING_DIR")" --session "$ZELLIJ_SESSION_NAME"'
+timeout = 5
 
-# Hook for closed sessions (double-click to reopen)
-reopen_hook = '''zellij action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR"'''
+# Second activate hook runs after the first
+[[tui.activate_hooks]]
+command = 'echo "activated $ACD_SESSION_ID at $ACD_WORKING_DIR" >> /tmp/acd-hooks.log'
+timeout = 2
+
+# Fires when double-clicking a closed session
+[[tui.reopen_hooks]]
+command = 'zellij action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR" --session "$ZELLIJ_SESSION_NAME"'
+timeout = 5
 ```
+
+### Hook Object Fields
+
+Each hook entry has two fields:
+
+- `command` — shell command passed to `sh -c` (required)
+- `timeout` — seconds to wait before killing the process (optional, default `5`)
+
+The hook process is killed if it exceeds `timeout`. Execution continues to the
+next hook regardless of whether the previous hook succeeded or was killed.
 
 ## Environment Variables
 
@@ -29,13 +50,14 @@ The hook process receives these variables set in its environment:
 Use these directly in your hook command:
 
 ```toml
-[tui]
-activate_hook = "code \"$ACD_WORKING_DIR\""
+[[tui.activate_hooks]]
+command = 'code "$ACD_WORKING_DIR"'
+timeout = 5
 ```
 
 ## JSON Payload (stdin)
 
-The hook also receives a JSON payload on stdin containing the full session
+Each hook also receives a JSON payload on stdin containing the full session
 snapshot. This follows the same pattern as Claude Code hooks and is useful for
 advanced hooks that need fields not available as environment variables.
 
@@ -97,57 +119,85 @@ Each history entry records a status change:
 History is a bounded queue with approximately 10 entries, sorted oldest to
 newest.
 
-## TOML Escaping
+## TOML Syntax Notes
 
-Hook commands often contain double quotes (e.g., for shell subcommands). TOML
-offers two options:
+The `[[tui.activate_hooks]]` double-bracket syntax creates an array of objects.
+Each `[[...]]` block appends one entry to the array.
 
-**Option 1 — Backslash escaping** (basic strings):
-
-```toml
-activate_hook = "zellij action go-to-tab-name \"$(basename \"$ACD_WORKING_DIR\")\""
-```
-
-**Option 2 — Triple-quoted literal strings** (no escaping needed):
+For commands with double quotes, use TOML single-quoted strings — no escaping
+needed:
 
 ```toml
-activate_hook = '''zellij action go-to-tab-name "$(basename "$ACD_WORKING_DIR")"'''
+[[tui.activate_hooks]]
+command = 'zellij action go-to-tab-name "$(basename "$ACD_WORKING_DIR")"'
+timeout = 5
 ```
 
-Triple-quoted literal strings (`'''...'''`) are the cleaner option for complex
-commands.
+Alternatively, escape with backslashes in double-quoted strings:
+
+```toml
+[[tui.activate_hooks]]
+command = "zellij action go-to-tab-name \"$(basename \"$ACD_WORKING_DIR\")\""
+timeout = 5
+```
+
+Single-quoted strings (no escaping) are cleaner for complex shell commands.
 
 ## Example Hooks
 
 ### Zellij — focus the matching tab
 
 ```toml
-[tui]
-activate_hook = '''zellij --session $ZELLIJ_SESSION_NAME action go-to-tab-name "$(basename "$ACD_WORKING_DIR")"'''
+[[tui.activate_hooks]]
+command = 'zellij action go-to-tab-name "$(basename "$ACD_WORKING_DIR")" --session "$ZELLIJ_SESSION_NAME"'
+timeout = 5
 ```
 
 ### Zellij — open a new tab for a closed session
 
 ```toml
-[tui]
-reopen_hook = '''zellij --session $ZELLIJ_SESSION_NAME action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR"'''
+[[tui.reopen_hooks]]
+command = 'zellij action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR" --session "$ZELLIJ_SESSION_NAME"'
+timeout = 5
 ```
 
 ### VS Code — open the folder
 
 ```toml
-[tui]
-activate_hook = "code \"$ACD_WORKING_DIR\""
+[[tui.activate_hooks]]
+command = 'code "$ACD_WORKING_DIR"'
+timeout = 10
+```
+
+### Log to file
+
+```toml
+[[tui.activate_hooks]]
+command = 'echo "activated $ACD_SESSION_ID at $ACD_WORKING_DIR (status: $ACD_STATUS)" >> /tmp/acd-hooks.log'
+timeout = 2
 ```
 
 ### Read JSON with `jq`
 
 ```toml
-[tui]
-activate_hook = "jq -r '.session_id' | pbcopy"
+[[tui.activate_hooks]]
+command = "jq -r '.session_id' | pbcopy"
+timeout = 5
 ```
 
 This copies the session ID to the clipboard (reads from stdin JSON).
+
+### Multiple hooks in sequence
+
+```toml
+[[tui.activate_hooks]]
+command = 'zellij action go-to-tab-name "$(basename "$ACD_WORKING_DIR")" --session "$ZELLIJ_SESSION_NAME"'
+timeout = 5
+
+[[tui.activate_hooks]]
+command = 'echo "$(date): activated $ACD_SESSION_ID" >> /tmp/acd-hooks.log'
+timeout = 2
+```
 
 ### Rust Hook
 
@@ -183,6 +233,6 @@ echo "History entries: $history_count" >> /tmp/hook.log
 
 ## No Hook Configured
 
-If no hook is configured and you double-click a session, the TUI displays a
-status message showing the config file path where you can add the
-`tui.activate_hook` or `tui.reopen_hook` setting.
+If no hooks are configured and you double-click a session, the TUI displays a
+status message showing the config file path where you can add
+`[[tui.activate_hooks]]` or `[[tui.reopen_hooks]]` entries.

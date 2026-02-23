@@ -102,14 +102,14 @@ pub struct App {
     pub usage: Option<UsageData>,
     /// Last click time and position for double-click detection.
     last_click: Option<(Instant, u16, u16)>,
-    /// Shell command to execute on double-click/Enter for non-closed sessions.
+    /// Hooks to execute on double-click/Enter for non-closed sessions.
     ///
-    /// Loaded from `tui.activate_hook` in config. `None` means no hook configured.
-    pub activate_hook: Option<String>,
-    /// Shell command to execute on double-click/Enter/'r' for closed sessions.
+    /// Loaded from `tui.activate_hooks` in config. Empty means no hook configured.
+    pub activate_hooks: Vec<crate::config::schema::HookConfig>,
+    /// Hooks to execute on double-click/Enter/'r' for closed sessions.
     ///
-    /// Loaded from `tui.reopen_hook` in config. `None` means no hook configured.
-    pub reopen_hook: Option<String>,
+    /// Loaded from `tui.reopen_hooks` in config. Empty means no hook configured.
+    pub reopen_hooks: Vec<crate::config::schema::HookConfig>,
     /// Temporary status message shown in footer, with expiry time.
     pub status_message: Option<(String, Instant)>,
     /// Last time elapsed-time rendering occurred (for throttling passive updates).
@@ -164,8 +164,8 @@ impl App {
             layout_preset: 1,
             usage: None,
             last_click: None,
-            activate_hook: None,
-            reopen_hook: None,
+            activate_hooks: Vec::new(),
+            reopen_hooks: Vec::new(),
             status_message: None,
             last_elapsed_render: Instant::now(),
             session_list_inner_area: None,
@@ -295,20 +295,23 @@ impl App {
         self.history_scroll = self.history_scroll.saturating_sub(1);
     }
 
-    /// Executes the appropriate hook for the given session based on its status.
+    /// Executes all hooks for the given session based on its status.
     ///
-    /// - Non-closed sessions → activate_hook
-    /// - Closed sessions → reopen_hook
+    /// - Non-closed sessions → activate_hooks
+    /// - Closed sessions → reopen_hooks
     ///
-    /// Spawns the hook command via `sh -c` in fire-and-forget mode. Session data
-    /// is passed as environment variables (`ACD_SESSION_ID`, `ACD_WORKING_DIR`,
-    /// `ACD_STATUS`) and as a JSON SessionSnapshot on stdin (same pattern as
-    /// Claude Code hooks). The command string is passed to `sh -c` unchanged
-    /// (no placeholder substitution).
+    /// Hooks run sequentially in order. Each hook is spawned via `sh -c` with session
+    /// data as environment variables (`ACD_SESSION_ID`, `ACD_WORKING_DIR`, `ACD_STATUS`)
+    /// and as a JSON SessionSnapshot on stdin (same pattern as Claude Code hooks).
     ///
-    /// For closed sessions reopened via reopen_hook, the session status is updated
+    /// Each hook respects its configured `timeout`: the process is killed if it runs
+    /// longer than the timeout duration. Stdout/stderr are captured and logged at
+    /// debug level. Failure of one hook does not prevent subsequent hooks from running.
+    ///
+    /// For closed sessions reopened via reopen_hooks, the session status is updated
     /// locally to Attention (TUI-only, no IPC to daemon).
     pub fn execute_hook(&mut self, session_index: usize) {
+        use crate::config::schema::HookConfig;
         use crate::SessionSnapshot;
         use std::io::Write;
 
@@ -317,36 +320,34 @@ impl App {
         };
 
         let is_closed = session.status == Status::Closed;
-        let hook = if is_closed {
-            &self.reopen_hook
+        let hooks: Vec<HookConfig> = if is_closed {
+            self.reopen_hooks.clone()
         } else {
-            &self.activate_hook
+            self.activate_hooks.clone()
         };
 
-        let Some(ref hook_cmd) = hook else {
-            // No hook configured — show hint message
+        if hooks.is_empty() {
+            // No hooks configured — show hint message with config path
             let config_path = crate::config::xdg::config_path();
             let key = if is_closed {
-                "reopen_hook"
+                "reopen_hooks"
             } else {
-                "activate_hook"
+                "activate_hooks"
             };
             self.status_message = Some((
                 format!(
-                    "Set tui.{} in {} to enable this action",
+                    "Add [[tui.{}]] in {} to enable this action",
                     key,
                     config_path.display()
                 ),
                 Instant::now() + Duration::from_secs(2),
             ));
             return;
-        };
+        }
 
-        let hook_cmd = hook_cmd.clone();
         let hook_type = if is_closed { "reopen" } else { "activate" };
-        tracing::debug!("executing {} hook: {}", hook_type, hook_cmd);
 
-        // Extract env var values before converting session to snapshot (borrows end here)
+        // Extract env var values before converting session to snapshot (borrow ends here)
         let session_id = session.session_id.clone();
         let working_dir_str = session
             .working_dir
@@ -365,46 +366,130 @@ impl App {
             }
         };
 
-        match std::process::Command::new("sh")
-            .arg("-c")
-            .arg(&hook_cmd)
-            .env("ACD_SESSION_ID", &session_id)
-            .env("ACD_WORKING_DIR", &working_dir_str)
-            .env("ACD_STATUS", &status_str)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-        {
-            Ok(mut child) => {
-                tracing::debug!("{} hook spawned: {}", hook_type, hook_cmd);
-                if let Some(ref mut stdin) = child.stdin {
+        // Spawn hooks sequentially in a background thread so the TUI stays responsive.
+        // Each hook's stdout/stderr are captured and logged at debug level.
+        let session_id_clone = session_id.clone();
+        let working_dir_clone = working_dir_str.clone();
+        let status_clone = status_str.clone();
+        std::thread::spawn(move || {
+            use std::io::Read;
+
+            for (idx, hook) in hooks.iter().enumerate() {
+                let label = format!("{} hook[{}]", hook_type, idx);
+                tracing::debug!("executing {}: {}", label, hook.command);
+
+                let spawn_result = std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(&hook.command)
+                    .env("ACD_SESSION_ID", &session_id_clone)
+                    .env("ACD_WORKING_DIR", &working_dir_clone)
+                    .env("ACD_STATUS", &status_clone)
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .spawn();
+
+                let mut child = match spawn_result {
+                    Ok(c) => c,
+                    Err(e) => {
+                        tracing::warn!("{} failed to spawn: {}", label, e);
+                        continue;
+                    }
+                };
+
+                // Write JSON payload to stdin, then close stdin so the hook can read EOF
+                if let Some(mut stdin) = child.stdin.take() {
                     if let Err(e) = stdin.write_all(json_payload.as_bytes()) {
-                        tracing::warn!("failed to write to hook stdin: {}", e);
+                        tracing::warn!("{} failed to write stdin: {}", label, e);
                     }
+                    // stdin dropped here → EOF sent to child
                 }
 
-                // For closed sessions, update local status to Attention (no IPC)
-                if is_closed {
-                    if let Some(session) = self.sessions.get_mut(session_index) {
-                        session.status = Status::Attention;
-                        tracing::debug!("updated local session status to attention");
-                    }
-                }
+                // Take stdout/stderr handles so we can read them into buffers.
+                // These are read in separate threads to avoid deadlocking on large output.
+                let mut stdout_handle = child.stdout.take();
+                let mut stderr_handle = child.stderr.take();
 
-                self.status_message = Some((
-                    "Hook executed".to_string(),
-                    Instant::now() + Duration::from_secs(2),
-                ));
+                let stdout_thread = std::thread::spawn(move || {
+                    let mut buf = Vec::new();
+                    if let Some(ref mut h) = stdout_handle {
+                        let _ = h.read_to_end(&mut buf);
+                    }
+                    buf
+                });
+                let stderr_thread = std::thread::spawn(move || {
+                    let mut buf = Vec::new();
+                    if let Some(ref mut h) = stderr_handle {
+                        let _ = h.read_to_end(&mut buf);
+                    }
+                    buf
+                });
+
+                // Wait with timeout: poll every 50ms up to `timeout` seconds.
+                let timeout_duration = std::time::Duration::from_secs(hook.timeout);
+                let deadline = std::time::Instant::now() + timeout_duration;
+                let timed_out = loop {
+                    match child.try_wait() {
+                        Ok(Some(status)) => {
+                            tracing::debug!("{} exited with: {}", label, status);
+                            break false;
+                        }
+                        Ok(None) => {
+                            if std::time::Instant::now() >= deadline {
+                                tracing::warn!(
+                                    "{} timed out after {}s, killing",
+                                    label,
+                                    hook.timeout
+                                );
+                                let _ = child.kill();
+                                let _ = child.wait();
+                                break true;
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(50));
+                        }
+                        Err(e) => {
+                            tracing::warn!("{} wait error: {}", label, e);
+                            break false;
+                        }
+                    }
+                };
+
+                // Collect stdout/stderr from reader threads
+                let stdout_bytes = stdout_thread.join().unwrap_or_default();
+                let stderr_bytes = stderr_thread.join().unwrap_or_default();
+
+                if !stdout_bytes.is_empty() {
+                    tracing::debug!(
+                        "{} stdout: {}",
+                        label,
+                        String::from_utf8_lossy(&stdout_bytes).trim()
+                    );
+                }
+                if !stderr_bytes.is_empty() {
+                    tracing::debug!(
+                        "{} stderr: {}",
+                        label,
+                        String::from_utf8_lossy(&stderr_bytes).trim()
+                    );
+                }
+                if timed_out {
+                    tracing::warn!("{} was killed due to timeout", label);
+                }
             }
-            Err(e) => {
-                tracing::warn!("{} hook failed: {}: {}", hook_type, hook_cmd, e);
-                self.status_message = Some((
-                    format!("Hook failed: {}", e),
-                    Instant::now() + Duration::from_secs(2),
-                ));
+        });
+
+        // For closed sessions, update local status to Attention (no IPC)
+        if is_closed {
+            if let Some(session) = self.sessions.get_mut(session_index) {
+                session.status = Status::Attention;
+                tracing::debug!("updated local session status to attention");
             }
         }
+
+        self.status_message = Some((
+            "Hook executed".to_string(),
+            Instant::now() + Duration::from_secs(2),
+        ));
     }
 
     /// Calculates which session index was clicked based on mouse row coordinate.

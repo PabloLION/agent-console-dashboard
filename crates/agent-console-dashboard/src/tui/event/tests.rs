@@ -142,8 +142,12 @@ fn test_handle_key_unknown_returns_none() {
 
 #[test]
 fn test_handle_enter_fires_activate_hook() {
+    use crate::config::schema::HookConfig;
     let mut app = make_app_with_sessions(3);
-    app.activate_hook = Some("echo test".to_string());
+    app.activate_hooks = vec![HookConfig {
+        command: "echo test".to_string(),
+        timeout: 5,
+    }];
     let action = handle_key_event(&mut app, make_key(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(action, Action::None);
     assert!(app.status_message.is_some());
@@ -154,12 +158,12 @@ fn test_handle_enter_fires_activate_hook() {
 #[test]
 fn test_handle_enter_no_hook_shows_message() {
     let mut app = make_app_with_sessions(3);
-    app.activate_hook = None;
+    app.activate_hooks = vec![];
     let action = handle_key_event(&mut app, make_key(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(action, Action::None);
     assert!(app.status_message.is_some());
     let (msg, _) = app.status_message.as_ref().expect("msg");
-    assert!(msg.contains("activate_hook"));
+    assert!(msg.contains("activate_hooks"));
 }
 
 #[test]
@@ -171,9 +175,13 @@ fn test_handle_enter_no_selection_returns_none() {
 
 #[test]
 fn test_handle_enter_closed_session_fires_reopen_hook() {
+    use crate::config::schema::HookConfig;
     let mut app = make_app_with_sessions(1);
     app.sessions[0].status = crate::Status::Closed;
-    app.reopen_hook = Some("echo reopen".to_string());
+    app.reopen_hooks = vec![HookConfig {
+        command: "echo reopen".to_string(),
+        timeout: 5,
+    }];
     let action = handle_key_event(&mut app, make_key(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(action, Action::None);
     assert!(app.status_message.is_some());
@@ -185,9 +193,13 @@ fn test_handle_enter_closed_session_fires_reopen_hook() {
 
 #[test]
 fn test_handle_r_fires_reopen_hook() {
+    use crate::config::schema::HookConfig;
     let mut app = make_app_with_sessions(1);
     app.sessions[0].status = crate::Status::Closed;
-    app.reopen_hook = Some("echo reopen".to_string());
+    app.reopen_hooks = vec![HookConfig {
+        command: "echo reopen".to_string(),
+        timeout: 5,
+    }];
     let action = handle_key_event(&mut app, make_key(KeyCode::Char('r'), KeyModifiers::NONE));
     assert_eq!(action, Action::None);
     assert!(app.status_message.is_some());
@@ -201,12 +213,12 @@ fn test_handle_r_fires_reopen_hook() {
 fn test_handle_r_on_closed_session_no_hook() {
     let mut app = make_app_with_sessions(1);
     app.sessions[0].status = crate::Status::Closed;
-    app.reopen_hook = None;
+    app.reopen_hooks = vec![];
     let action = handle_key_event(&mut app, make_key(KeyCode::Char('r'), KeyModifiers::NONE));
     assert_eq!(action, Action::None);
     assert!(app.status_message.is_some());
     let (msg, _) = app.status_message.as_ref().expect("msg");
-    assert!(msg.contains("reopen_hook"));
+    assert!(msg.contains("reopen_hooks"));
 }
 
 #[test]
