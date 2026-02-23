@@ -156,7 +156,7 @@ pub fn handle_key_event(app: &mut App, key: KeyEvent) -> Action {
             Action::None
         }
         KeyCode::Char('r') => {
-            // 'r' on closed session fires reopen_hook
+            // 'r' on closed session fires reopen_hooks
             if let Some(idx) = app.selected_index {
                 if let Some(session) = app.sessions.get(idx) {
                     if session.status == crate::Status::Closed {

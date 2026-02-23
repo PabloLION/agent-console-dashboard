@@ -233,15 +233,15 @@ fn test_last_click_initialized_to_none() {
 }
 
 #[test]
-fn test_activate_hook_default_none() {
+fn test_activate_hooks_default_empty() {
     let app = App::new(PathBuf::from("/tmp/test.sock"), None);
-    assert!(app.activate_hook.is_none());
+    assert!(app.activate_hooks.is_empty());
 }
 
 #[test]
-fn test_reopen_hook_default_none() {
+fn test_reopen_hooks_default_empty() {
     let app = App::new(PathBuf::from("/tmp/test.sock"), None);
-    assert!(app.reopen_hook.is_none());
+    assert!(app.reopen_hooks.is_empty());
 }
 
 #[test]
@@ -253,7 +253,7 @@ fn test_status_message_default_none() {
 #[test]
 fn test_double_click_no_hook_sets_config_message() {
     let mut app = make_clickable_app(3);
-    app.activate_hook = None;
+    app.activate_hooks = vec![];
     let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
     app.handle_mouse_event(first_click);
     let second_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
@@ -261,15 +261,19 @@ fn test_double_click_no_hook_sets_config_message() {
     assert!(app.status_message.is_some(), "should set status message");
     let (msg, _) = app.status_message.as_ref().expect("msg");
     assert!(
-        msg.contains("activate_hook"),
+        msg.contains("activate_hooks"),
         "message should mention config key"
     );
 }
 
 #[test]
 fn test_double_click_with_activate_hook() {
+    use crate::config::schema::HookConfig;
     let mut app = make_clickable_app(3);
-    app.activate_hook = Some("echo test".to_string());
+    app.activate_hooks = vec![HookConfig {
+        command: "echo test".to_string(),
+        timeout: 5,
+    }];
     let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
     app.handle_mouse_event(first_click);
     let second_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
@@ -281,9 +285,13 @@ fn test_double_click_with_activate_hook() {
 
 #[test]
 fn test_double_click_closed_session_fires_reopen_hook() {
+    use crate::config::schema::HookConfig;
     let mut app = make_clickable_app(3);
     app.sessions[0].status = Status::Closed;
-    app.reopen_hook = Some("echo reopen".to_string());
+    app.reopen_hooks = vec![HookConfig {
+        command: "echo reopen".to_string(),
+        timeout: 5,
+    }];
     let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
     app.handle_mouse_event(first_click);
     let second_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
@@ -299,7 +307,7 @@ fn test_double_click_closed_session_fires_reopen_hook() {
 fn test_double_click_closed_session_no_reopen_hook() {
     let mut app = make_clickable_app(3);
     app.sessions[0].status = Status::Closed;
-    app.reopen_hook = None;
+    app.reopen_hooks = vec![];
     let first_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
     app.handle_mouse_event(first_click);
     let second_click = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 3, 10);
@@ -307,8 +315,8 @@ fn test_double_click_closed_session_no_reopen_hook() {
     assert!(app.status_message.is_some(), "should set status message");
     let (msg, _) = app.status_message.as_ref().expect("msg");
     assert!(
-        msg.contains("reopen_hook"),
-        "message should mention reopen_hook"
+        msg.contains("reopen_hooks"),
+        "message should mention reopen_hooks"
     );
     // Session should remain closed
     assert_eq!(app.sessions[0].status, Status::Closed);
@@ -473,8 +481,12 @@ fn test_two_line_click_outside_chips_clears_selection() {
 
 #[test]
 fn test_two_line_double_click_fires_hook() {
+    use crate::config::schema::HookConfig;
     let mut app = make_two_line_app(3, 80);
-    app.activate_hook = Some("echo test".to_string());
+    app.activate_hooks = vec![HookConfig {
+        command: "echo test".to_string(),
+        timeout: 5,
+    }];
 
     // First click
     let mouse1 = make_mouse_event(MouseEventKind::Down(MouseButton::Left), 0, 10);

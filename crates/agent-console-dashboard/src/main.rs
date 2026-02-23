@@ -205,8 +205,8 @@ fn main() -> ExitCode {
                 if let Ok(config) =
                     agent_console_dashboard::config::loader::ConfigLoader::load_default()
                 {
-                    app.activate_hook = config.tui.activate_hook;
-                    app.reopen_hook = config.tui.reopen_hook;
+                    app.activate_hooks = config.tui.activate_hooks;
+                    app.reopen_hooks = config.tui.reopen_hooks;
                 }
                 app.run().await
             }) {
