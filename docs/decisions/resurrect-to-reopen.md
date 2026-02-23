@@ -37,11 +37,11 @@ Replace the entire resurrect system with configurable hooks.
 
 ### Config (acd-puk)
 
-Two hooks replace `double_click_hook`:
+Two hook arrays replace `double_click_hook`:
 
-- `tui.activate_hook` — fires on double-click/Enter of a non-closed session
-  (renamed from `double_click_hook`, same behavior)
-- `tui.reopen_hook` — fires on double-click/Enter/r of a closed session (new)
+- `tui.activate_hooks` — fires on double-click/Enter of a non-closed session
+  (renamed from `double_click_hook`, extended to array format)
+- `tui.reopen_hooks` — fires on double-click/Enter/r of a closed session (new)
 
 Both receive `SessionSnapshot` as JSON on stdin and environment variables
 `$ACD_SESSION_ID`, `$ACD_WORKING_DIR`, `$ACD_STATUS`.
@@ -91,7 +91,8 @@ If CLI reopen is needed later, it can be added as `acd session reopen <id>`.
 - `src/daemon/handlers/mod.rs` — handler rename + reopen implementation
 - `src/daemon/store/lifecycle.rs` — `reopen_session()` method
 - `src/daemon/store/tests/lifecycle_reopen.rs` — new test file (9 tests)
-- `src/config/schema.rs` — `activate_hook` + `reopen_hook` fields
+- `src/config/schema.rs` — `activate_hooks` + `reopen_hooks` fields (array of
+  HookConfig)
 - `src/config/default.rs` — default template updated
 - `src/main.rs` — resurrect command removed, config wiring updated
 - `src/commands/ipc.rs` — `run_resurrect_command()` removed

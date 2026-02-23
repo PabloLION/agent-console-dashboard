@@ -1,38 +1,48 @@
-# Hook Config Fields: `Option<String>` over Empty String
+# Hook Config Fields: `Vec<HookConfig>`
 
-Created: 20260215T030000Z Issue: acd-1j2
+Created: 20260215T030000Z Issue: acd-1j2 Updated: 20260223T000000Z Issue:
+acd-hgaz
 
-## Problem
+## Evolution
 
-Hook config fields (`activate_hook`, `reopen_hook`) need a way to represent "no
-hook configured". Two options:
+### Phase 1 (acd-1j2): `Option<String>`
 
-- `String` where empty string means no hook
-- `Option<String>` where `None` means no hook
+Hook fields started as `Option<String>` where `None` meant "not configured".
+`None` was semantically cleaner than empty string as a sentinel.
+
+### Phase 2 (acd-hgaz): `Vec` of HookConfig
+
+Redesigned to match the Claude Code hook structure: an array of hook objects,
+each with `command` and `timeout` fields. An empty vec means "not configured".
 
 ## Decision
 
-Use `Option<String>` for both hook fields.
+Use a `Vec` of `HookConfig` for `activate_hooks` and `reopen_hooks`.
 
-### Why
+```rust
+pub struct HookConfig {
+    pub command: String,
+    pub timeout: u64, // seconds, default 5
+}
+```
 
-`None` means "not configured" unambiguously. An empty string is a sentinel value
-— every consumer must know that empty means none. `Option` makes the intent
-self-documenting at the type level.
+### Why array format
 
-This required refactoring `activate_hook` (renamed from `double_click_hook`)
-from `String` to `Option<String>`. The config schema uses serde's default `None`
-for absent TOML keys.
+- Supports multiple hooks per event without needing shell composition
+- Per-hook timeout is explicit and enforced by the runtime
+- Matches the Claude Code hook structure (consistent mental model)
+- TOML array-of-tables (`[[tui.activate_hooks]]`) is readable and unambiguous
 
-### Trade-off
+### Why no backward compatibility
 
-The refactoring cost is small: change the field type, update deserialization,
-and replace `is_empty()` checks with `is_some()`. The user's preference was
-explicit: "go with the correct option, not the easy option."
+Users must update their config when upgrading. The old `activate_hook = "..."`
+string format produces a TOML parse error, which is clear and actionable.
+Migration code adds complexity for a breaking change that affects only hook
+users who are actively configuring the TUI.
 
-## Orchestration Rule Update
+### Execution model
 
-Also in this session: the pre-dispatch protocol was updated to require showing
-every issue to the user before dispatch, even when the orchestrator has zero
-doubts. The user may have doubts of their own. This is documented in
-`.claude/rules/orchestration.md`.
+Hooks run sequentially. Each hook is spawned via `sh -c`, with session data in
+env vars (`ACD_SESSION_ID`, `ACD_WORKING_DIR`, `ACD_STATUS`) and a JSON
+`SessionSnapshot` on stdin. Stdout/stderr are captured and logged at debug
+level. A hook exceeding its timeout is killed; the next hook still runs.

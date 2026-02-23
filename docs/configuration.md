@@ -75,37 +75,50 @@ use more CPU.
 tick_rate = "500ms"
 ```
 
-#### `tui.activate_hook`
+#### `tui.activate_hooks`
 
-**Type:** string **Default:** `""` (disabled) **Hot-reloadable:** No (restart
-TUI)
+**Type:** array of hook objects **Default:** `[]` (disabled) **Hot-reloadable:**
+No (restart TUI)
 
-Shell command executed when double-clicking a non-closed session. Session data
-is passed as environment variables:
+Hooks executed when double-clicking a non-closed session. Hooks run sequentially
+in order. Each hook is killed if it exceeds its timeout.
+
+Session data is passed as environment variables to each hook:
 
 - `$ACD_SESSION_ID` — session's unique identifier
 - `$ACD_WORKING_DIR` — session's working directory (empty string if unknown)
 - `$ACD_STATUS` — current status (`working`, `attention`, `question`, `closed`)
 
-The full session JSON is also piped to stdin. Command is executed via `sh -c` in
-fire-and-forget mode (no callback).
+The full session JSON is also piped to stdin. Each hook is executed via `sh -c`.
+
+Each hook object has two fields:
+
+- `command` — shell command string (required)
+- `timeout` — max seconds to wait before killing the process (optional, default
+  `5`)
 
 ```toml
-[tui]
-activate_hook = "code \"$ACD_WORKING_DIR\""
+[[tui.activate_hooks]]
+command = 'zellij action go-to-tab-name "$(basename "$ACD_WORKING_DIR")" --session "$ZELLIJ_SESSION_NAME"'
+timeout = 5
+
+[[tui.activate_hooks]]
+command = 'echo "activated $ACD_SESSION_ID" >> /tmp/acd-hooks.log'
+timeout = 2
 ```
 
-#### `tui.reopen_hook`
+#### `tui.reopen_hooks`
 
-**Type:** string **Default:** `""` (disabled) **Hot-reloadable:** No (restart
-TUI)
+**Type:** array of hook objects **Default:** `[]` (disabled) **Hot-reloadable:**
+No (restart TUI)
 
-Shell command executed when double-clicking a closed session. Same environment
-variables and stdin JSON as `activate_hook`.
+Hooks executed when double-clicking a closed session. Same execution model as
+`activate_hooks` — sequential, per-hook timeout, stdin JSON, env vars.
 
 ```toml
-[tui]
-reopen_hook = '''zellij action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR"'''
+[[tui.reopen_hooks]]
+command = 'zellij action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR" --session "$ZELLIJ_SESSION_NAME"'
+timeout = 5
 ```
 
 ### `[agents.claude-code]` - Claude Code Integration
@@ -236,7 +249,10 @@ Non-hot-reloadable settings require:
 # Minimal custom configuration
 [tui]
 layout = "compact"
-activate_hook = "code \"$ACD_WORKING_DIR\""
+
+[[tui.activate_hooks]]
+command = 'code "$ACD_WORKING_DIR"'
+timeout = 5
 
 [daemon]
 idle_timeout = "2h"
