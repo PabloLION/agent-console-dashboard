@@ -65,11 +65,11 @@ tick_rate = "250ms"
 # Supports placeholders: {session_id}, {working_dir}, {status}
 # Executed via `sh -c` (fire-and-forget, no callback).
 # Empty string means double-click has no effect.
-# Hot-reloadable: Yes
+# Hot-reloadable: No (restart TUI to apply changes)
 #
 # Examples:
 #   Zellij — focus the tab matching the folder name:
-#     "zellij action go-to-tab-name $(basename {working_dir})"
+#     "zellij --session $ZELLIJ_SESSION_NAME action go-to-tab-name $(basename {working_dir})"
 #   VS Code — open the folder:
 #     "code {working_dir}"
 #   tmux — switch to window matching the folder name:
@@ -83,13 +83,13 @@ activate_hook = ""
 # Supports placeholders: {session_id}, {working_dir}, {status}
 # Executed via `sh -c` (fire-and-forget, no callback).
 # Empty string means double-click has no effect.
-# Hot-reloadable: Yes
+# Hot-reloadable: No (restart TUI to apply changes)
 #
 # Examples:
 #   Zellij — focus the tab matching the folder name:
-#     "zellij action go-to-tab-name $(basename {working_dir})"
+#     "zellij --session $ZELLIJ_SESSION_NAME action go-to-tab-name $(basename {working_dir})"
 #   Zellij — open a new tab at the folder:
-#     "zellij action new-tab --name $(basename {working_dir}) --cwd {working_dir}"
+#     "zellij --session $ZELLIJ_SESSION_NAME action new-tab --name $(basename {working_dir}) --cwd {working_dir}"
 #   tmux — create a new window at the folder:
 #     "tmux new-window -n $(basename {working_dir}) -c {working_dir}"
 reopen_hook = ""
@@ -127,13 +127,13 @@ enabled = true
 # Auto-stop the daemon after this idle duration with no active sessions.
 # Set to a longer value if you want the daemon to persist.
 # Examples: "60m", "2h", "30m"
-# Hot-reloadable: Yes
+# Hot-reloadable: No (restart TUI to apply changes)
 idle_timeout = "60m"
 
 # Interval between API usage data fetches.
 # Lower values give fresher data but increase API calls.
 # Examples: "3m", "5m", "1m"
-# Hot-reloadable: Yes
+# Hot-reloadable: No (restart TUI to apply changes)
 usage_fetch_interval = "3m"
 
 # Logging verbosity level.
@@ -143,7 +143,7 @@ usage_fetch_interval = "3m"
 #   info  - General operational information (recommended)
 #   debug - Detailed debugging information
 #   trace - Very verbose, includes all internal operations
-# Hot-reloadable: Yes
+# Hot-reloadable: No (restart TUI to apply changes)
 log_level = "info"
 
 # Path to log file. Empty string uses the default XDG state path.
