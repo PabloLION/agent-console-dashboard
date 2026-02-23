@@ -300,12 +300,11 @@ impl App {
     /// - Non-closed sessions → activate_hook
     /// - Closed sessions → reopen_hook
     ///
-    /// Substitutes `{session_id}`, `{working_dir}`, and `{status}` placeholders
-    /// in the hook command, then spawns it via `sh -c` in fire-and-forget mode.
-    /// The child process is detached (stdout/stderr piped to null).
-    ///
-    /// Pipes the full SessionSnapshot as JSON to the hook's stdin, following the
-    /// same pattern as Claude Code hooks.
+    /// Spawns the hook command via `sh -c` in fire-and-forget mode. Session data
+    /// is passed as environment variables (`ACD_SESSION_ID`, `ACD_WORKING_DIR`,
+    /// `ACD_STATUS`) and as a JSON SessionSnapshot on stdin (same pattern as
+    /// Claude Code hooks). The command string is passed to `sh -c` unchanged
+    /// (no placeholder substitution).
     ///
     /// For closed sessions reopened via reopen_hook, the session status is updated
     /// locally to Attention (TUI-only, no IPC to daemon).
@@ -343,9 +342,18 @@ impl App {
             return;
         };
 
-        let cmd = substitute_hook_placeholders(hook_cmd, session);
+        let hook_cmd = hook_cmd.clone();
         let hook_type = if is_closed { "reopen" } else { "activate" };
-        tracing::debug!("executing {} hook: {}", hook_type, cmd);
+        tracing::debug!("executing {} hook: {}", hook_type, hook_cmd);
+
+        // Extract env var values before converting session to snapshot (borrows end here)
+        let session_id = session.session_id.clone();
+        let working_dir_str = session
+            .working_dir
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        let status_str = session.status.to_string();
 
         // Convert Session to SessionSnapshot and serialize to JSON
         let snapshot: SessionSnapshot = session.into();
@@ -359,14 +367,17 @@ impl App {
 
         match std::process::Command::new("sh")
             .arg("-c")
-            .arg(&cmd)
+            .arg(&hook_cmd)
+            .env("ACD_SESSION_ID", &session_id)
+            .env("ACD_WORKING_DIR", &working_dir_str)
+            .env("ACD_STATUS", &status_str)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()
         {
             Ok(mut child) => {
-                tracing::debug!("{} hook spawned: {}", hook_type, cmd);
+                tracing::debug!("{} hook spawned: {}", hook_type, hook_cmd);
                 if let Some(ref mut stdin) = child.stdin {
                     if let Err(e) = stdin.write_all(json_payload.as_bytes()) {
                         tracing::warn!("failed to write to hook stdin: {}", e);
@@ -387,7 +398,7 @@ impl App {
                 ));
             }
             Err(e) => {
-                tracing::warn!("{} hook failed: {}: {}", hook_type, cmd, e);
+                tracing::warn!("{} hook failed: {}: {}", hook_type, hook_cmd, e);
                 self.status_message = Some((
                     format!("Hook failed: {}", e),
                     Instant::now() + Duration::from_secs(2),
@@ -859,24 +870,6 @@ fn restore_terminal() -> io::Result<()> {
     disable_raw_mode()?;
     execute!(stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
     Ok(())
-}
-
-/// Substitutes placeholders in a hook command template with session values.
-///
-/// Supported placeholders:
-/// - `{session_id}` — replaced with `session.session_id`
-/// - `{working_dir}` — replaced with `session.working_dir` display string
-/// - `{status}` — replaced with `session.status` display string
-pub fn substitute_hook_placeholders(template: &str, session: &Session) -> String {
-    let working_dir_str = session
-        .working_dir
-        .as_ref()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|| "<none>".to_string());
-    template
-        .replace("{session_id}", &session.session_id)
-        .replace("{working_dir}", &working_dir_str)
-        .replace("{status}", &session.status.to_string())
 }
 
 #[cfg(test)]

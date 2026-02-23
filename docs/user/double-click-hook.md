@@ -1,39 +1,43 @@
 # Double-Click Hook
 
-The TUI supports a configurable double-click hook that fires when a session is
-double-clicked in the dashboard. The hook receives full session context as JSON
-on stdin.
+The TUI supports configurable hooks that fire when a session is double-clicked
+in the dashboard. The hook receives full session context as environment
+variables and as JSON on stdin.
 
 ## Configuration
 
-Configure the hook in your TOML config file at
+Configure the hooks in your TOML config file at
 `~/.config/agent-console-dashboard/config.toml`:
 
 ```toml
 [tui]
-double_click_hook = "your-command-here {session_id}"
+# Hook for non-closed sessions (double-click to activate)
+activate_hook = "zellij action go-to-tab-name \"$(basename \"$ACD_WORKING_DIR\")\""
+
+# Hook for closed sessions (double-click to reopen)
+reopen_hook = '''zellij action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR"'''
 ```
 
-## Placeholder Substitution
+## Environment Variables
 
-The hook command supports three placeholders that are expanded before execution:
+The hook process receives these variables set in its environment:
 
-- `{session_id}` — replaced with the session identifier
-- `{working_dir}` — replaced with the working directory path (or `<none>`)
-- `{status}` — replaced with current status (`working`, `attention`, `question`,
-  `closed`)
+- `ACD_SESSION_ID` — the session's unique identifier
+- `ACD_WORKING_DIR` — the working directory path (empty string if unknown)
+- `ACD_STATUS` — current status (`working`, `attention`, `question`, `closed`)
 
-Example:
+Use these directly in your hook command:
 
 ```toml
 [tui]
-double_click_hook = "zellij action go-to-tab-name \"{session_id}\""
+activate_hook = "code \"$ACD_WORKING_DIR\""
 ```
 
 ## JSON Payload (stdin)
 
-The hook receives a JSON payload on stdin containing the full session snapshot.
-This follows the same pattern as Claude Code hooks.
+The hook also receives a JSON payload on stdin containing the full session
+snapshot. This follows the same pattern as Claude Code hooks and is useful for
+advanced hooks that need fields not available as environment variables.
 
 ### SessionSnapshot Schema
 
@@ -61,16 +65,16 @@ This follows the same pattern as Claude Code hooks.
 
 ### Field Descriptions
 
-| Field             | Type              | Description                                      |
-| ----------------- | ----------------- | ------------------------------------------------ |
-| `session_id`      | string            | Unique session identifier                        |
-| `agent_type`      | string            | Agent type (e.g., `"claudecode"`)                |
-| `status`          | string            | Current status (see Status Values below)         |
-| `working_dir`     | string or null    | Working directory path, or `null` if unknown     |
-| `elapsed_seconds` | integer           | Seconds since session entered current status     |
-| `idle_seconds`    | integer           | Seconds since last hook activity                 |
-| `closed`          | boolean           | Whether the session has been closed              |
-| `history`         | array of objects  | Status change history (see History Entry below)  |
+| Field             | Type             | Description                                     |
+| ----------------- | ---------------- | ----------------------------------------------- |
+| `session_id`      | string           | Unique session identifier                       |
+| `agent_type`      | string           | Agent type (e.g., `"claudecode"`)               |
+| `status`          | string           | Current status (see Status Values below)        |
+| `working_dir`     | string or null   | Working directory path, or `null` if unknown    |
+| `elapsed_seconds` | integer          | Seconds since session entered current status    |
+| `idle_seconds`    | integer          | Seconds since last hook activity                |
+| `closed`          | boolean          | Whether the session has been closed             |
+| `history`         | array of objects | Status change history (see History Entry below) |
 
 ### Status Values
 
@@ -85,29 +89,70 @@ Valid status strings:
 
 Each history entry records a status change:
 
-| Field     | Type    | Description                               |
-| --------- | ------- | ----------------------------------------- |
-| `status`  | string  | The new status after this transition      |
-| `at_secs` | integer | Unix timestamp when this status began     |
+| Field     | Type    | Description                           |
+| --------- | ------- | ------------------------------------- |
+| `status`  | string  | The new status after this transition  |
+| `at_secs` | integer | Unix timestamp when this status began |
 
 History is a bounded queue with approximately 10 entries, sorted oldest to
 newest.
 
+## TOML Escaping
+
+Hook commands often contain double quotes (e.g., for shell subcommands). TOML
+offers two options:
+
+**Option 1 — Backslash escaping** (basic strings):
+
+```toml
+activate_hook = "zellij action go-to-tab-name \"$(basename \"$ACD_WORKING_DIR\")\""
+```
+
+**Option 2 — Triple-quoted literal strings** (no escaping needed):
+
+```toml
+activate_hook = '''zellij action go-to-tab-name "$(basename "$ACD_WORKING_DIR")"'''
+```
+
+Triple-quoted literal strings (`'''...'''`) are the cleaner option for complex
+commands.
+
 ## Example Hooks
+
+### Zellij — focus the matching tab
+
+```toml
+[tui]
+activate_hook = '''zellij --session $ZELLIJ_SESSION_NAME action go-to-tab-name "$(basename "$ACD_WORKING_DIR")"'''
+```
+
+### Zellij — open a new tab for a closed session
+
+```toml
+[tui]
+reopen_hook = '''zellij --session $ZELLIJ_SESSION_NAME action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR"'''
+```
+
+### VS Code — open the folder
+
+```toml
+[tui]
+activate_hook = "code \"$ACD_WORKING_DIR\""
+```
 
 ### Read JSON with `jq`
 
 ```toml
 [tui]
-double_click_hook = "jq -r '.session_id' | pbcopy"
+activate_hook = "jq -r '.session_id' | pbcopy"
 ```
 
-This copies the session ID to the clipboard.
+This copies the session ID to the clipboard (reads from stdin JSON).
 
 ### Rust Hook
 
-Rust programs can deserialize the JSON using the `agent-console-dashboard`
-crate:
+Rust programs can deserialize the JSON from stdin using the
+`agent-console-dashboard` crate:
 
 ```rust
 use agent_console_dashboard::SessionSnapshot;
@@ -127,15 +172,17 @@ fn main() -> anyhow::Result<()> {
 
 ```bash
 #!/bin/bash
-# Read JSON from stdin
+# Environment variables are set directly — no stdin parsing needed for simple cases
+echo "Activated: $ACD_SESSION_ID at $ACD_WORKING_DIR (status: $ACD_STATUS)" >> /tmp/hook.log
+
+# For advanced use, read the full JSON from stdin
 json=$(cat)
-session_id=$(echo "$json" | jq -r '.session_id')
-status=$(echo "$json" | jq -r '.status')
-echo "Clicked session: $session_id (status: $status)" >> /tmp/hook.log
+history_count=$(echo "$json" | jq '.history | length')
+echo "History entries: $history_count" >> /tmp/hook.log
 ```
 
 ## No Hook Configured
 
 If no hook is configured and you double-click a session, the TUI displays a
 status message showing the config file path where you can add the
-`tui.double_click_hook` setting.
+`tui.activate_hook` or `tui.reopen_hook` setting.
