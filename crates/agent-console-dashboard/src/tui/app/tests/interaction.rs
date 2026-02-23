@@ -339,64 +339,6 @@ fn test_expire_status_message_keeps_fresh() {
     assert!(app.status_message.is_some(), "fresh message should be kept");
 }
 
-// --- substitute_hook_placeholders tests ---
-
-#[test]
-fn test_substitute_hook_all_placeholders() {
-    let session = Session::new(
-        "sess-123".to_string(),
-        AgentType::ClaudeCode,
-        Some(PathBuf::from("/home/user/project")),
-    );
-    let result = substitute_hook_placeholders("open {working_dir} --id={session_id}", &session);
-    assert_eq!(result, "open /home/user/project --id=sess-123");
-}
-
-#[test]
-fn test_substitute_hook_status_placeholder() {
-    let mut session = Session::new(
-        "sess-456".to_string(),
-        AgentType::ClaudeCode,
-        Some(PathBuf::from("/tmp")),
-    );
-    session.status = crate::Status::Attention;
-    let result = substitute_hook_placeholders("echo {status}", &session);
-    assert_eq!(result, "echo attention");
-}
-
-#[test]
-fn test_substitute_hook_no_placeholders() {
-    let session = Session::new(
-        "sess-789".to_string(),
-        AgentType::ClaudeCode,
-        Some(PathBuf::from("/tmp")),
-    );
-    let result = substitute_hook_placeholders("echo hello", &session);
-    assert_eq!(result, "echo hello");
-}
-
-#[test]
-fn test_substitute_hook_repeated_placeholders() {
-    let session = Session::new(
-        "abc".to_string(),
-        AgentType::ClaudeCode,
-        Some(PathBuf::from("/x")),
-    );
-    let result = substitute_hook_placeholders("{session_id} and {session_id}", &session);
-    assert_eq!(result, "abc and abc");
-}
-
-#[test]
-fn test_substitute_hook_empty_template() {
-    let session = Session::new(
-        "s".to_string(),
-        AgentType::ClaudeCode,
-        Some(PathBuf::from("/")),
-    );
-    let result = substitute_hook_placeholders("", &session);
-    assert_eq!(result, "");
-}
-
 // --- SessionSnapshot conversion test ---
 
 #[test]

@@ -43,8 +43,8 @@ Two hooks replace `double_click_hook`:
   (renamed from `double_click_hook`, same behavior)
 - `tui.reopen_hook` — fires on double-click/Enter/r of a closed session (new)
 
-Both receive `SessionSnapshot` as JSON on stdin. Both support placeholder
-substitution: `{session_id}`, `{working_dir}`, `{status}`.
+Both receive `SessionSnapshot` as JSON on stdin and environment variables
+`$ACD_SESSION_ID`, `$ACD_WORKING_DIR`, `$ACD_STATUS`.
 
 The gesture is the same (double-click or Enter). The TUI decides which hook to
 fire based on session state.
@@ -69,8 +69,8 @@ The `terminal/` module (environment detection + executor) will be deleted next
 
 Hooks are generic. The user configures a shell command that does whatever their
 setup needs. ACD doesn't need to add support for every multiplexer. A Zellij
-user writes `zellij run -- claude --resume {session_id}`, a tmux user writes
-`tmux new-window claude --resume {session_id}`.
+user writes `zellij run -- claude --resume $ACD_SESSION_ID`, a tmux user writes
+`tmux new-window claude --resume $ACD_SESSION_ID`.
 
 ### Why Attention status on reopen
 

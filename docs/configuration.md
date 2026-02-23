@@ -75,21 +75,37 @@ use more CPU.
 tick_rate = "500ms"
 ```
 
-#### `tui.double_click_hook`
+#### `tui.activate_hook`
 
-**Type:** string **Default:** `""` (disabled) **Hot-reloadable:** Yes
+**Type:** string **Default:** `""` (disabled) **Hot-reloadable:** No (restart
+TUI)
 
-Shell command executed when double-clicking a session. Supports placeholders:
+Shell command executed when double-clicking a non-closed session. Session data
+is passed as environment variables:
 
-- `{session_id}` - Session's unique identifier
-- `{working_dir}` - Session's working directory
-- `{status}` - Session's current status (working, attention, question, closed)
+- `$ACD_SESSION_ID` — session's unique identifier
+- `$ACD_WORKING_DIR` — session's working directory (empty string if unknown)
+- `$ACD_STATUS` — current status (`working`, `attention`, `question`, `closed`)
 
-Command is executed via `sh -c` in fire-and-forget mode (no callback).
+The full session JSON is also piped to stdin. Command is executed via `sh -c` in
+fire-and-forget mode (no callback).
 
 ```toml
 [tui]
-double_click_hook = "code {working_dir}"
+activate_hook = "code \"$ACD_WORKING_DIR\""
+```
+
+#### `tui.reopen_hook`
+
+**Type:** string **Default:** `""` (disabled) **Hot-reloadable:** No (restart
+TUI)
+
+Shell command executed when double-clicking a closed session. Same environment
+variables and stdin JSON as `activate_hook`.
+
+```toml
+[tui]
+reopen_hook = '''zellij action new-tab --name "$(basename "$ACD_WORKING_DIR")" --cwd "$ACD_WORKING_DIR"'''
 ```
 
 ### `[agents.claude-code]` - Claude Code Integration
@@ -220,7 +236,7 @@ Non-hot-reloadable settings require:
 # Minimal custom configuration
 [tui]
 layout = "compact"
-double_click_hook = "code {working_dir}"
+activate_hook = "code \"$ACD_WORKING_DIR\""
 
 [daemon]
 idle_timeout = "2h"

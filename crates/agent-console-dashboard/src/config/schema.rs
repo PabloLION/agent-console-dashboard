@@ -55,11 +55,12 @@ pub struct TuiConfig {
     /// Shell command to execute on double-click (activate action).
     ///
     /// Fires when double-clicking a non-closed session.
-    /// Supports placeholder substitution:
-    /// - `{session_id}` — the session's identifier
-    /// - `{working_dir}` — the session's working directory
-    /// - `{status}` — the session's current status (working, attention, etc.)
+    /// Session data is passed as environment variables:
+    /// - `ACD_SESSION_ID` — the session's identifier
+    /// - `ACD_WORKING_DIR` — the session's working directory (empty if unknown)
+    /// - `ACD_STATUS` — the session's current status (working, attention, etc.)
     ///
+    /// The full session JSON is also piped to stdin.
     /// Executed via `sh -c` in a fire-and-forget manner.
     /// None means double-click has no effect.
     /// Hot-reloadable: Yes.
@@ -67,11 +68,12 @@ pub struct TuiConfig {
     pub activate_hook: Option<String>,
     /// Shell command to execute on double-click of a closed session.
     ///
-    /// Supports placeholder substitution:
-    /// - `{session_id}` — the session's identifier
-    /// - `{working_dir}` — the session's working directory
-    /// - `{status}` — the session's current status (always "closed")
+    /// Session data is passed as environment variables:
+    /// - `ACD_SESSION_ID` — the session's identifier
+    /// - `ACD_WORKING_DIR` — the session's working directory (empty if unknown)
+    /// - `ACD_STATUS` — the session's current status (always "closed")
     ///
+    /// The full session JSON is also piped to stdin.
     /// Executed via `sh -c` in a fire-and-forget manner.
     /// None means double-click has no effect.
     /// Hot-reloadable: Yes.
@@ -423,12 +425,12 @@ log_level = "debug"
     fn parse_activate_hook() {
         let toml_str = r#"
 [tui]
-activate_hook = "open {working_dir}"
+activate_hook = "code \"$ACD_WORKING_DIR\""
 "#;
         let config: Config = toml::from_str(toml_str).expect("should parse activate_hook");
         assert_eq!(
             config.tui.activate_hook,
-            Some("open {working_dir}".to_string())
+            Some("code \"$ACD_WORKING_DIR\"".to_string())
         );
     }
 
@@ -436,24 +438,24 @@ activate_hook = "open {working_dir}"
     fn parse_reopen_hook() {
         let toml_str = r#"
 [tui]
-reopen_hook = "zellij action new-tab -c {working_dir}"
+reopen_hook = "zellij action new-tab -c \"$ACD_WORKING_DIR\""
 "#;
         let config: Config = toml::from_str(toml_str).expect("should parse reopen_hook");
         assert_eq!(
             config.tui.reopen_hook,
-            Some("zellij action new-tab -c {working_dir}".to_string())
+            Some("zellij action new-tab -c \"$ACD_WORKING_DIR\"".to_string())
         );
     }
 
     #[test]
     fn activate_hook_roundtrip() {
         let mut config = Config::default();
-        config.tui.activate_hook = Some("echo {session_id}".to_string());
+        config.tui.activate_hook = Some("echo \"$ACD_SESSION_ID\"".to_string());
         let toml_str = toml::to_string(&config).expect("serialization should succeed");
         let parsed: Config = toml::from_str(&toml_str).expect("roundtrip should parse");
         assert_eq!(
             parsed.tui.activate_hook,
-            Some("echo {session_id}".to_string())
+            Some("echo \"$ACD_SESSION_ID\"".to_string())
         );
     }
 
