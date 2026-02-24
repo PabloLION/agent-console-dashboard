@@ -39,12 +39,14 @@ Don't spawn actual child processes in tests - they can hang.
 ### Env Vars Pattern (acd-ynba)
 
 Hook env vars are set via `.env()` on `std::process::Command`:
+
 - `ACD_SESSION_ID` — session.session_id
 - `ACD_WORKING_DIR` — working_dir.display() or empty string
 - `ACD_STATUS` — session.status.to_string()
 
 Extract owned values BEFORE calling `session.into()` since `.into()` consumes
 the `&Session` reference:
+
 ```rust
 let session_id = session.session_id.clone();
 let working_dir_str = session.working_dir...;
@@ -90,3 +92,67 @@ Already complete - no changes needed:
 - Defined in `src/ipc.rs` as public struct
 - Re-exported from `src/lib.rs` via `pub use ipc::*;` (line 47)
 - Available to hook authors who depend on `agent-console-dashboard` crate
+
+## Files Modified (acd-hgaz)
+
+- `crates/agent-console-dashboard/src/config/schema.rs`: Added `HookConfig`
+  struct, changed `TuiConfig` fields from `activate_hook: Option<String>` /
+  `reopen_hook: Option<String>` to `activate_hooks: Vec<HookConfig>` /
+  `reopen_hooks: Vec<HookConfig>`. Removed `deserialize_optional_string` helper.
+- `crates/agent-console-dashboard/src/tui/app/mod.rs`: Changed `App` struct
+  fields, refactored `execute_hook()` to iterate `Vec<HookConfig>` with per-hook
+  timeout (polling `try_wait()` every 50ms), stdout/stderr capture via reader
+  threads, all running in a background thread.
+- `crates/agent-console-dashboard/src/tui/app/tests/interaction.rs`: Updated
+  tests to use `Vec<HookConfig>` with `HookConfig { command, timeout }`.
+- `crates/agent-console-dashboard/src/tui/event/tests.rs`: Same test updates.
+- `crates/agent-console-dashboard/src/main.rs`: Wire
+  `activate_hooks`/`reopen_hooks`.
+- `crates/agent-console-dashboard/src/config/default.rs`: Updated template to
+  use commented-out `[[tui.activate_hooks]]` entries.
+- `docs/configuration.md`, `docs/user/double-click-hook.md`,
+  `docs/decisions/resurrect-to-reopen.md`, `docs/decisions/hook-field-type.md`
+
+## HookConfig Struct Pattern
+
+```rust
+pub struct HookConfig {
+    pub command: String,
+    pub timeout: u64, // seconds, default 5
+}
+```
+
+Placed in `config/schema.rs`. No re-export needed for TUI internal use;
+accessible as `crate::config::schema::HookConfig`.
+
+## Timeout Implementation Pattern
+
+Use polling `try_wait()` + `child.kill()` in a background thread:
+
+1. Spawn reader threads for stdout/stderr pipes (avoids deadlock on large
+   output)
+2. Poll `try_wait()` every 50ms until process exits or deadline passes
+3. If deadline passes: `child.kill()` + log warning
+4. After loop: join reader threads to get output bytes
+5. Log output at debug level
+
+DO NOT use `wait_with_output()` after `try_wait()` — it double-waits. Read
+stdout/stderr via separate `std::thread::spawn` + `Read::read_to_end` instead.
+
+## TOML Array-of-Tables Syntax
+
+```toml
+[[tui.activate_hooks]]
+command = 'my-command "$ACD_WORKING_DIR"'
+timeout = 5
+```
+
+Double brackets `[[...]]` appends one entry to the array. Each block is one
+`HookConfig`. Serde + toml crate handle this natively with `Vec<HookConfig>`.
+
+## Markdown Linter Note
+
+`Vec<HookConfig>` in markdown headings or plain text triggers
+MD033/no-inline-html (treats `<HookConfig>` as HTML). Use backtick-quoted
+`` `Vec<HookConfig>` `` in headings or rephrase as "Vec of HookConfig" in plain
+text.
