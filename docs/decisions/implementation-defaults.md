@@ -94,9 +94,14 @@ becomes a concern.
 
 ## MSRV (Q53)
 
-**Decided:** 2026-01-18
+**Decided:** 2026-01-18 (updated 2026-02-24)
 
-Latest stable Rust only. New project with no legacy users.
+The project pins to a specific Rust version via `rust-toolchain.toml` for CI
+reproducibility. Pinning ensures identical `rustfmt` output across all machines
+(local and CI), preventing spurious formatting diffs from toolchain upgrades.
+
+The pinned version and component list (`rustfmt`, `clippy`) are recorded in
+`rust-toolchain.toml`. Update the pin deliberately when upgrading.
 
 ## Daemonization (Q56)
 

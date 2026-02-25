@@ -22,7 +22,7 @@ VARIABLE_NAME,default_value,"VARIABLE_NAME=value command"
 
 Additional details...
 
-```
+```text
 
 ### Function Documentation
 
@@ -46,4 +46,14 @@ Ready for orchestrator to commit.
 ## Pre-existing Test Failure
 
 `claude-usage` crate has a failing test: `client::tests::test_fetch_with_invalid_token`. This is unrelated to documentation work. All agent-console-dashboard tests pass.
+
+## Decision Doc Conventions
+
+- File name: `docs/decisions/<topic>.md`, lowercase kebab-case
+- `INDEX.md` keeps one-line summaries, sorted alphabetically by filename
+- Each doc: h1 title, optional metadata line (`**Decided:** ... **Status:** ...`),
+  then `## Decision`, `## Rationale`, `## Alternatives Considered` (not all required)
+- History/context sections optional but useful for tracking evolution
+- `agent_type` wire format: `"claudecode"` (Debug + lowercase), not `"claude-code"`
+  — doc comment at `src/ipc.rs:172` is wrong; code at line 235 is correct
 ```

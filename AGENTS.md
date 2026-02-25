@@ -89,6 +89,18 @@ Two modes only (renamed):
 
 The old "full" mode is dropped.
 
+## Decision Documentation
+
+Project-specific design decisions must have a counterpart in `docs/decisions/`.
+Agent memories are working notes — do not store decisions only in memory.
+
+When you make a design choice (choosing X over Y for reason Z), check
+`docs/decisions/INDEX.md`. If no matching doc exists, create one. Keep it
+concise: state the decision, alternatives considered, and rationale.
+
+A biweekly memory audit (each minor version bump) verifies all agent memories
+are in sync with `docs/decisions/`. See `docs/dev/release-checklist.md`.
+
 ## Terminology
 
 @docs/terminology.md

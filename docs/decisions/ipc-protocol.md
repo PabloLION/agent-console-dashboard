@@ -110,6 +110,22 @@ StatusChange
 └── at_secs: u64      # unix timestamp (seconds since epoch)
 ```
 
+### `agent_type` serialization
+
+The `agent_type` field in `SessionSnapshot` is produced by:
+
+```rust
+format!("{:?}", session.agent_type).to_lowercase()
+```
+
+`AgentType::ClaudeCode` serializes to `"claudecode"` (not `"claude-code"` or
+`"ClaudeCode"`). This is the guaranteed wire format. Hook authors who parse the
+`agent_type` field in the JSON payload must match against `"claudecode"`.
+
+Note: the doc comment at `src/ipc.rs:172` currently says `"claude-code"` but the
+actual output is `"claudecode"`. The code is correct; the comment is wrong and
+will be fixed separately.
+
 ### Design Rationale
 
 - **No `api_usage` in snapshot** — not consumed by any client yet. Add when

@@ -5,15 +5,18 @@ TUI.
 
 ## Decision
 
-Version string (`vX.Y.Z`) displayed in the **bottom-right corner of the footer
-row**, NOT in the header.
+Version string (`vX.Y.Z`) displayed **right-aligned in the header row**, NOT in
+the footer.
+
+The footer bottom-right is reserved for API usage display (acd-0i4i, future
+work).
 
 ## Implementation
 
 - **Constant**:
   `const VERSION_TEXT: &str = concat!("v", env!("CARGO_PKG_VERSION"))`
-- **Rendering**: Right-aligned `Paragraph` overlaying the footer area
-- **Header**: Stays as plain "Agent Console Dashboard" (no version)
+- **Rendering**: Right-aligned `Paragraph` overlaying the header area
+- **Footer**: Reserved for API usage (not yet implemented)
 
 ## Testing
 
@@ -24,12 +27,12 @@ compile-time comparison.
 
 ```rust
 let expected_version = format!("v{}", env!("CARGO_PKG_VERSION"));
-assert!(footer_text.contains(&expected_version));
+assert!(header_text.contains(&expected_version));
 ```
 
 ## History
 
 - **Agent 3 (acd-4mk)**: Initially placed version in the header
-- **Fixed in commit f8c2551**: Moved to bottom-right corner per specification
-- **Root cause**: Agent drift from issue specification (acd-4mk specified
-  bottom-right)
+- **Commit f8c2551**: Moved to bottom-right footer per original spec (acd-4mk)
+- **acd-mq6y**: Moved back to header right-aligned; footer bottom-right reserved
+  for API usage (acd-0i4i)

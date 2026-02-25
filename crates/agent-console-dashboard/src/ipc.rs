@@ -169,7 +169,7 @@ impl IpcResponse {
 pub struct SessionSnapshot {
     /// Session identifier (was `Session.id`).
     pub session_id: String,
-    /// Agent type as string (e.g., "claude-code").
+    /// Agent type as lowercase string (e.g., "claudecode").
     pub agent_type: String,
     /// Current status as lowercase string.
     pub status: String,
