@@ -5,12 +5,9 @@ use crate::commands::install::acd_hook_definitions;
 #[test]
 fn test_acd_hook_definitions_has_seven_entries() {
     let defs = acd_hook_definitions();
-    // 8 hooks: PostToolUse removed for experiment (acd-ws6), PreCompact added (acd-wdaj)
-    assert_eq!(
-        defs.len(),
-        8,
-        "should define 8 hooks (PostToolUse removed for experiment, PreCompact added)"
-    );
+    // 8 hooks: SessionStart, UserPromptSubmit, Stop, SessionEnd, 2×Notification,
+    // PostToolUse, PreCompact
+    assert_eq!(defs.len(), 8, "should define 8 hooks");
 }
 
 #[test]
@@ -43,18 +40,18 @@ fn test_acd_hook_definitions_notification_hooks_have_matchers() {
 }
 
 #[test]
-fn test_acd_hook_definitions_includes_pre_tool_use() {
+fn test_acd_hook_definitions_includes_post_tool_use() {
     let defs = acd_hook_definitions();
-    let has_pre_tool_use = defs
-        .iter()
-        .any(|(event, _, _)| *event == claude_hooks::HookEvent::PreToolUse);
-    assert!(has_pre_tool_use, "should have PreToolUse hook");
-    // PostToolUse removed for experiment (acd-ws6)
     let has_post_tool_use = defs
         .iter()
         .any(|(event, _, _)| *event == claude_hooks::HookEvent::PostToolUse);
+    assert!(has_post_tool_use, "should have PostToolUse hook");
+    // PreToolUse replaced by PostToolUse (acd-0amx)
+    let has_pre_tool_use = defs
+        .iter()
+        .any(|(event, _, _)| *event == claude_hooks::HookEvent::PreToolUse);
     assert!(
-        !has_post_tool_use,
-        "PostToolUse should be absent (acd-ws6 experiment)"
+        !has_pre_tool_use,
+        "PreToolUse should be absent (replaced by PostToolUse)"
     );
 }
