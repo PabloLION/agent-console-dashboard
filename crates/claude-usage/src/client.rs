@@ -57,6 +57,7 @@ fn map_response(response: reqwest::blocking::Response) -> Result<String, ApiErro
             .text()
             .map_err(|_| ApiError::Network("Failed to read response body".to_string())),
         401 => Err(ApiError::Unauthorized),
+        403 => Err(ApiError::Forbidden),
         429 => {
             let retry_after = response
                 .headers()
@@ -82,6 +83,23 @@ mod tests {
     #[test]
     fn test_beta_header_is_correct() {
         assert_eq!(BETA_HEADER, "oauth-2025-04-20");
+    }
+
+    #[test]
+    fn test_forbidden_error_display() {
+        let err = ApiError::Forbidden;
+        assert_eq!(
+            err.to_string(),
+            "Forbidden: OAuth token not authorized for third-party usage"
+        );
+    }
+
+    #[test]
+    fn test_forbidden_error_is_distinct_from_unauthorized() {
+        let forbidden = ApiError::Forbidden;
+        let unauthorized = ApiError::Unauthorized;
+        // They should have different display strings
+        assert_ne!(forbidden.to_string(), unauthorized.to_string());
     }
 
     // Integration test - requires valid token

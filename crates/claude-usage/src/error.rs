@@ -45,6 +45,13 @@ pub enum ApiError {
     #[error("Unauthorized. Run `claude` to re-login.")]
     Unauthorized,
 
+    /// API returned 403 Forbidden - OAuth token not authorized for third-party use.
+    ///
+    /// Anthropic blocked third-party use of subscription OAuth tokens in January 2026.
+    /// This error is permanent — retrying will not help.
+    #[error("Forbidden: OAuth token not authorized for third-party usage")]
+    Forbidden,
+
     /// API returned 429 Too Many Requests.
     #[error("Rate limited. Retry after: {retry_after:?}")]
     RateLimited {

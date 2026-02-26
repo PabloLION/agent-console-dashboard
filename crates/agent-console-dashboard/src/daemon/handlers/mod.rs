@@ -199,15 +199,17 @@ pub(super) async fn handle_sub_command(
     // Clone data and drop lock before I/O to avoid holding RwLock during writes.
     if let Some(fetcher) = usage_fetcher {
         let usage_state = fetcher.state();
-        let snapshot = {
+        let initial_notification = {
             let guard = usage_state.read().await;
             match &*guard {
-                super::usage::UsageState::Available(data) => Some(data.clone()),
+                super::usage::UsageState::Available(data) => {
+                    Some(IpcNotification::usage_update(data))
+                }
+                super::usage::UsageState::Blocked => Some(IpcNotification::usage_blocked()),
                 super::usage::UsageState::Unavailable => None,
             }
         };
-        if let Some(data) = snapshot {
-            let notification = IpcNotification::usage_update(&data);
+        if let Some(notification) = initial_notification {
             if write_or_disconnect(writer, &notification.to_json_line()).await {
                 return Ok(());
             }
@@ -264,6 +266,12 @@ pub(super) async fn handle_sub_command(
                     match result {
                         Ok(super::usage::UsageState::Available(data)) => {
                             let notification = IpcNotification::usage_update(&data);
+                            if write_or_disconnect(writer, &notification.to_json_line()).await {
+                                break;
+                            }
+                        }
+                        Ok(super::usage::UsageState::Blocked) => {
+                            let notification = IpcNotification::usage_blocked();
                             if write_or_disconnect(writer, &notification.to_json_line()).await {
                                 break;
                             }

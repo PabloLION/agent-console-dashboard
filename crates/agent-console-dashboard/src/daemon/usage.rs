@@ -8,7 +8,7 @@
 //! The daemon is the single source of truth for usage data (D3). TUIs never
 //! call `claude_usage::get_usage()` directly.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,6 +26,11 @@ pub enum UsageState {
     Available(UsageData),
     /// Usage data is unavailable (credential/network error).
     Unavailable,
+    /// Usage API is blocked by a 403 Forbidden response.
+    ///
+    /// Anthropic blocked third-party OAuth tokens from accessing this endpoint.
+    /// This state is permanent — further fetches are skipped to avoid log spam.
+    Blocked,
 }
 
 /// Periodic usage data fetcher.
@@ -48,6 +53,8 @@ pub struct UsageFetcher {
     subscriber_count: Arc<AtomicUsize>,
     /// Fetch interval (default: 3 minutes).
     interval: Duration,
+    /// Set to true when a 403 Forbidden is received; skips all future fetches.
+    blocked: Arc<AtomicBool>,
 }
 
 impl UsageFetcher {
@@ -64,6 +71,7 @@ impl UsageFetcher {
             update_tx,
             subscriber_count: Arc::new(AtomicUsize::new(0)),
             interval,
+            blocked: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -110,11 +118,18 @@ impl UsageFetcher {
 
     /// Performs a single fetch cycle.
     ///
-    /// Skips if no subscribers are present. On success, updates shared state
-    /// and broadcasts. On failure, logs warning and marks state as unavailable
-    /// (previous data is lost in the shared state but subscribers may retain
-    /// their last received value).
+    /// Skips if no subscribers are present, or if a prior fetch returned 403 Forbidden.
+    /// On success, updates shared state and broadcasts. On 403, sets state to `Blocked`
+    /// and stops all future fetches. On other failures, logs a warning and marks state
+    /// as unavailable (previous data is lost in the shared state but subscribers may
+    /// retain their last received value).
     async fn fetch_once(&self) {
+        // Skip permanently if the API blocked us.
+        if self.blocked.load(Ordering::SeqCst) {
+            debug!("usage API is blocked (403), skipping fetch");
+            return;
+        }
+
         let count = self.subscriber_count.load(Ordering::SeqCst);
         if count == 0 {
             debug!("no usage subscribers, skipping fetch");
@@ -132,6 +147,12 @@ impl UsageFetcher {
                 // Best-effort broadcast; no subscribers is not an error.
                 let _ = self.update_tx.send(new_state);
                 debug!("usage data fetched and broadcast successfully");
+            }
+            Ok(Err(claude_usage::Error::Api(claude_usage::ApiError::Forbidden))) => {
+                warn!("usage API returned 403 Forbidden — OAuth token blocked by Anthropic; disabling usage fetching");
+                self.blocked.store(true, Ordering::SeqCst);
+                *self.state.write().await = UsageState::Blocked;
+                let _ = self.update_tx.send(UsageState::Blocked);
             }
             Ok(Err(e)) => {
                 warn!(error = %e, "usage fetch failed");
@@ -276,10 +297,13 @@ mod tests {
 
         fetcher.fetch_once().await;
 
-        // State should be updated (either Available if credentials exist, or Unavailable)
+        // State should be updated (Available, Unavailable, or Blocked depending on environment)
         let state = fetcher.state.read().await;
         assert!(
-            matches!(*state, UsageState::Unavailable | UsageState::Available(_)),
+            matches!(
+                *state,
+                UsageState::Unavailable | UsageState::Available(_) | UsageState::Blocked
+            ),
             "state should be set after fetch"
         );
         drop(state);
@@ -306,5 +330,45 @@ mod tests {
     #[test]
     fn test_default_fetch_interval_is_3_minutes() {
         assert_eq!(DEFAULT_FETCH_INTERVAL, Duration::from_secs(180));
+    }
+
+    #[test]
+    fn test_usage_state_blocked_clone() {
+        let state = UsageState::Blocked;
+        let cloned = state.clone();
+        assert!(matches!(cloned, UsageState::Blocked));
+    }
+
+    #[test]
+    fn test_usage_state_blocked_debug_format() {
+        let state = UsageState::Blocked;
+        let debug_str = format!("{:?}", state);
+        assert!(debug_str.contains("Blocked"));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_once_skips_when_blocked() {
+        // When blocked flag is set, fetch_once should skip and not update state.
+        let fetcher = UsageFetcher::new();
+        let _sub = fetcher.subscribe();
+
+        // Pre-set state to Unavailable and mark as blocked
+        *fetcher.state.write().await = UsageState::Unavailable;
+        fetcher.blocked.store(true, Ordering::SeqCst);
+
+        fetcher.fetch_once().await;
+
+        // State should remain Unavailable (skipped due to blocked flag)
+        let state = fetcher.state.read().await;
+        assert!(
+            matches!(*state, UsageState::Unavailable),
+            "state should remain Unavailable when blocked"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_blocked_flag_defaults_to_false() {
+        let fetcher = UsageFetcher::new();
+        assert!(!fetcher.blocked.load(Ordering::SeqCst));
     }
 }

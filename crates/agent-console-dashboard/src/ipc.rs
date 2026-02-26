@@ -299,6 +299,21 @@ impl IpcNotification {
         }
     }
 
+    /// Creates a "usage_blocked" notification.
+    ///
+    /// Sent when the Anthropic API returns 403 Forbidden, indicating that the
+    /// OAuth token is not authorized for third-party usage fetching. The TUI
+    /// should display a permanent "blocked" indicator instead of "--".
+    pub fn usage_blocked() -> Self {
+        Self {
+            version: IPC_VERSION,
+            notification_type: "usage_blocked".to_string(),
+            session: None,
+            usage: None,
+            message: None,
+        }
+    }
+
     /// Serializes to a JSON line (with trailing newline).
     pub fn to_json_line(&self) -> String {
         let json = serde_json::to_string(self).expect("failed to serialize IpcNotification");

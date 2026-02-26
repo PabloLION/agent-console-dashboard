@@ -20,6 +20,10 @@ pub enum DaemonMessage {
     SessionUpdate(SessionSnapshot),
     /// Updated API usage data.
     UsageUpdate(UsageData),
+    /// The usage API is blocked (403 Forbidden from Anthropic).
+    ///
+    /// The TUI should display a permanent "blocked" indicator.
+    UsageBlocked,
 }
 
 /// Connects to the daemon via Unix socket, sends LIST to get initial state,
@@ -130,6 +134,7 @@ pub fn parse_daemon_line(line: &str) -> Option<DaemonMessage> {
                 }
             }
         }
+        "usage_blocked" => Some(DaemonMessage::UsageBlocked),
         "warn" => {
             if let Some(msg) = notification.message {
                 tracing::warn!("daemon warning: {}", msg);
@@ -230,5 +235,17 @@ mod tests {
     fn test_parse_unknown_notification_type_returns_none() {
         let json = r#"{"version":1,"type":"unknown","session":null,"usage":null,"message":null}"#;
         assert!(parse_daemon_line(json).is_none());
+    }
+
+    #[test]
+    fn test_parse_usage_blocked_message() {
+        let notification = IpcNotification::usage_blocked();
+        let json = serde_json::to_string(&notification).expect("failed to serialize");
+        let msg = parse_daemon_line(&json);
+        assert!(
+            matches!(msg, Some(DaemonMessage::UsageBlocked)),
+            "expected UsageBlocked, got {:?}",
+            msg
+        );
     }
 }
