@@ -106,7 +106,7 @@ fn main() {
                     ]
                 }
             ],
-            "PreToolUse": [
+            "PostToolUse": [
                 {
                     "matcher": "",
                     "hooks": [
@@ -130,21 +130,6 @@ fn main() {
                     ]
                 }
             ]
-            // Experiment (acd-ws6): PostToolUse commented out to test if
-            // PreToolUse alone provides accurate status transitions.
-            // Uncomment when experiment concludes.
-            /* "PostToolUse": [
-                {
-                    "matcher": "",
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": "acd claude-hook working",
-                            "timeout": 10
-                        }
-                    ]
-                }
-            ] */
         }
     });
 
