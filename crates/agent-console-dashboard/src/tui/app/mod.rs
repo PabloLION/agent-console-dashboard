@@ -100,6 +100,10 @@ pub struct App {
     pub layout_preset: u8,
     /// Latest API usage data from the daemon, if available.
     pub usage: Option<UsageData>,
+    /// Set to true when the daemon reports that the usage API is blocked (403 Forbidden).
+    ///
+    /// When true, the TUI shows "Quota: blocked" instead of "Quota: --".
+    pub usage_blocked: bool,
     /// Last click time and position for double-click detection.
     last_click: Option<(Instant, u16, u16)>,
     /// Hooks to execute on double-click/Enter for non-closed sessions.
@@ -163,6 +167,7 @@ impl App {
             history_scroll: 0,
             layout_preset: 1,
             usage: None,
+            usage_blocked: false,
             last_click: None,
             activate_hooks: Vec::new(),
             reopen_hooks: Vec::new(),
@@ -844,6 +849,9 @@ impl App {
                     DaemonMessage::SessionUpdate(info) => self.apply_update(&info),
                     DaemonMessage::UsageUpdate(data) => {
                         self.usage = Some(data);
+                    }
+                    DaemonMessage::UsageBlocked => {
+                        self.usage_blocked = true;
                     }
                 }
             }

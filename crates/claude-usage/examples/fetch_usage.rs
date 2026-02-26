@@ -93,6 +93,16 @@ fn main() {
             eprintln!("  2. Try this command again");
             std::process::exit(1);
         }
+        Err(Error::Api(ApiError::Forbidden)) => {
+            eprintln!("❌ Access to the usage API is blocked (403 Forbidden).");
+            eprintln!();
+            eprintln!("Anthropic blocked third-party use of subscription OAuth tokens in");
+            eprintln!("January 2026. The /api/oauth/usage endpoint is no longer accessible");
+            eprintln!("to tools like this one.");
+            eprintln!();
+            eprintln!("Usage data is unavailable until Anthropic restores API access.");
+            std::process::exit(1);
+        }
         Err(Error::Api(ApiError::RateLimited { retry_after })) => {
             eprintln!("❌ Rate limited by the API.");
             if let Some(retry) = retry_after {

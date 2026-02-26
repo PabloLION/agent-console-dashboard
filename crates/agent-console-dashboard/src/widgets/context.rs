@@ -31,6 +31,7 @@ use std::time::Instant;
 ///     now: std::time::Instant::now(),
 ///     selected_index: None,
 ///     usage: None,
+///     usage_blocked: false,
 /// };
 /// assert_eq!(ctx.sessions.len(), 1);
 /// ```
@@ -50,6 +51,11 @@ pub struct WidgetContext<'a> {
     /// `None` when usage data has not been fetched or credentials
     /// are unavailable.
     pub usage: Option<&'a UsageData>,
+
+    /// Whether the usage API is permanently blocked (403 Forbidden).
+    ///
+    /// When true, the widget shows "Quota: blocked" instead of "Quota: --".
+    pub usage_blocked: bool,
 }
 
 impl<'a> WidgetContext<'a> {
@@ -74,6 +80,7 @@ impl<'a> WidgetContext<'a> {
             now: Instant::now(),
             selected_index: None,
             usage: None,
+            usage_blocked: false,
         }
     }
 
@@ -86,6 +93,12 @@ impl<'a> WidgetContext<'a> {
     /// Sets the usage data reference.
     pub fn with_usage(mut self, usage: &'a UsageData) -> Self {
         self.usage = Some(usage);
+        self
+    }
+
+    /// Marks the usage API as blocked (403 Forbidden).
+    pub fn with_usage_blocked(mut self) -> Self {
+        self.usage_blocked = true;
         self
     }
 

@@ -248,6 +248,7 @@ mod tests {
             now: Instant::now(),
             selected_index: None,
             usage: None,
+            usage_blocked: false,
         }
     }
 
@@ -445,6 +446,7 @@ mod tests {
             now: base + Duration::from_secs(154),
             selected_index: None,
             usage: None,
+            usage_blocked: false,
         };
         let w = SessionStatusWidget::new();
         let line = w.render(80, &ctx);

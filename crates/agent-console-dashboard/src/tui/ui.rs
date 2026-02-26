@@ -126,10 +126,20 @@ fn render_large_layout(
                 Style::default().fg(Color::Yellow),
             )])
         } else {
-            render_footer_normal(&app.sessions, app.usage.as_ref(), chunks[3].width as usize)
+            render_footer_normal(
+                &app.sessions,
+                app.usage.as_ref(),
+                app.usage_blocked,
+                chunks[3].width as usize,
+            )
         }
     } else {
-        render_footer_normal(&app.sessions, app.usage.as_ref(), chunks[3].width as usize)
+        render_footer_normal(
+            &app.sessions,
+            app.usage.as_ref(),
+            app.usage_blocked,
+            chunks[3].width as usize,
+        )
     };
     let footer = Paragraph::new(footer_text);
     frame.render_widget(footer, chunks[3]);
@@ -183,6 +193,9 @@ fn render_two_line_layout(
             if let Some(ref usage) = app.usage {
                 ctx = ctx.with_usage(usage);
             }
+            if app.usage_blocked {
+                ctx = ctx.with_usage_blocked();
+            }
             let api_widget = ApiUsageWidget::new();
             let api_line = api_widget.render(chunks[1].width, &ctx);
             let api_paragraph = Paragraph::new(api_line);
@@ -194,6 +207,9 @@ fn render_two_line_layout(
         ctx.now = now;
         if let Some(ref usage) = app.usage {
             ctx = ctx.with_usage(usage);
+        }
+        if app.usage_blocked {
+            ctx = ctx.with_usage_blocked();
         }
         let api_widget = ApiUsageWidget::new();
         let api_line = api_widget.render(chunks[1].width, &ctx);
@@ -215,6 +231,7 @@ fn render_two_line_layout(
 fn render_footer_normal(
     sessions: &[crate::Session],
     usage: Option<&claude_usage::UsageData>,
+    usage_blocked: bool,
     footer_width: usize,
 ) -> Line<'static> {
     let hints_text = FOOTER_TEXT;
@@ -224,6 +241,9 @@ fn render_footer_normal(
     let mut ctx = WidgetContext::new(sessions);
     if let Some(u) = usage {
         ctx = ctx.with_usage(u);
+    }
+    if usage_blocked {
+        ctx = ctx.with_usage_blocked();
     }
     let api_widget = ApiUsageWidget::new();
 

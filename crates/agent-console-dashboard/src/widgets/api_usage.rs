@@ -51,8 +51,13 @@ impl Widget for ApiUsageWidget {
         let usage = match context.usage {
             Some(u) => u,
             None => {
+                let label = if context.usage_blocked {
+                    "Quota: blocked"
+                } else {
+                    "Quota: --"
+                };
                 return Line::from(vec![Span::styled(
-                    "Quota: --",
+                    label,
                     Style::default().fg(Color::DarkGray),
                 )]);
             }
@@ -209,6 +214,40 @@ mod tests {
         let line = w.render(40, &ctx);
         let span = &line.spans[0];
         assert_eq!(span.style.fg, Some(Color::DarkGray));
+    }
+
+    // --- Blocked usage (403 Forbidden) ---
+
+    #[test]
+    fn test_blocked_usage_shows_blocked_label() {
+        let sessions: Vec<Session> = vec![];
+        let ctx = WidgetContext::new(&sessions).with_usage_blocked();
+        let w = ApiUsageWidget::new();
+        let line = w.render(40, &ctx);
+        assert_eq!(line.to_string(), "Quota: blocked");
+    }
+
+    #[test]
+    fn test_blocked_usage_is_dark_gray() {
+        let sessions: Vec<Session> = vec![];
+        let ctx = WidgetContext::new(&sessions).with_usage_blocked();
+        let w = ApiUsageWidget::new();
+        let line = w.render(40, &ctx);
+        let span = &line.spans[0];
+        assert_eq!(span.style.fg, Some(Color::DarkGray));
+    }
+
+    #[test]
+    fn test_blocked_differs_from_unavailable() {
+        let sessions: Vec<Session> = vec![];
+        let ctx_blocked = WidgetContext::new(&sessions).with_usage_blocked();
+        let ctx_unavailable = WidgetContext::new(&sessions);
+        let w = ApiUsageWidget::new();
+        let blocked_text = w.render(40, &ctx_blocked).to_string();
+        let unavailable_text = w.render(40, &ctx_unavailable).to_string();
+        assert_ne!(blocked_text, unavailable_text);
+        assert_eq!(blocked_text, "Quota: blocked");
+        assert_eq!(unavailable_text, "Quota: --");
     }
 
     // --- Long format ---
