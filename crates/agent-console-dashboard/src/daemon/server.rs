@@ -406,7 +406,9 @@ async fn handle_client(
         };
 
         let response = match command_kind {
-            IpcCommandKind::Set => handle_set_command(&cmd, &state.store).await,
+            IpcCommandKind::Set => {
+                handle_set_command(&cmd, &state.store, state.usage_fetcher.as_ref()).await
+            }
             IpcCommandKind::Rm => handle_rm_command(&cmd, &state.store).await,
             IpcCommandKind::List => handle_list_command(&state.store).await,
             IpcCommandKind::Get => handle_get_command(&cmd, &state.store).await,

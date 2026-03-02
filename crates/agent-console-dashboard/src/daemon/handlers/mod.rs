@@ -34,7 +34,15 @@ pub(super) struct DaemonState {
 ///
 /// Expects `cmd.session_id` and `cmd.status`. Optional `cmd.working_dir`.
 /// Creates a new session if it doesn't exist, or updates the status if it does.
-pub(super) async fn handle_set_command(cmd: &IpcCommand, store: &SessionStore) -> String {
+///
+/// After a successful update, if usage data is `Unavailable`, triggers a
+/// background refresh. This handles the case where the daemon started but
+/// failed to fetch usage data initially (e.g., no TUI subscribers at start).
+pub(super) async fn handle_set_command(
+    cmd: &IpcCommand,
+    store: &SessionStore,
+    usage_fetcher: Option<&Arc<UsageFetcher>>,
+) -> String {
     let session_id = match &cmd.session_id {
         Some(id) => id,
         None => return IpcResponse::error("SET requires session_id").to_json_line(),
@@ -80,6 +88,12 @@ pub(super) async fn handle_set_command(cmd: &IpcCommand, store: &SessionStore) -
             dir.display()
         ),
         None => tracing::info!("SET session={} status={}", short_id, status),
+    }
+
+    // Trigger usage refresh if data is missing — hook events are a natural
+    // opportunity to fill in data that may not have been fetched at startup.
+    if let Some(fetcher) = usage_fetcher {
+        fetcher.trigger_refresh_if_unavailable().await;
     }
 
     let info = SessionSnapshot::from(&session);

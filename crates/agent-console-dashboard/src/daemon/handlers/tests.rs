@@ -1,5 +1,6 @@
 use super::*;
 use crate::daemon::store::SessionStore;
+use crate::daemon::usage::{UsageFetcher, UsageState};
 use crate::IpcCommandKind;
 use tokio::sync::broadcast;
 
@@ -570,4 +571,100 @@ async fn test_delete_closed_session() {
 
     // Verify session is completely removed
     assert!(state.store.get("closed-delete-test").await.is_none());
+}
+
+// =============================================================================
+// SET command usage-refresh tests
+// =============================================================================
+
+/// Build a minimal SET IpcCommand for a given session ID and status string.
+fn make_set_cmd(session_id: &str, status: &str) -> IpcCommand {
+    IpcCommand {
+        version: 1,
+        cmd: IpcCommandKind::Set.to_string(),
+        session_id: Some(session_id.to_string()),
+        status: Some(status.to_string()),
+        working_dir: None,
+        confirmed: None,
+        priority: None,
+    }
+}
+
+#[tokio::test]
+async fn test_set_command_without_usage_fetcher_succeeds() {
+    // handle_set_command with usage_fetcher=None must still work correctly.
+    let store = SessionStore::new();
+    let cmd = make_set_cmd("set-no-fetcher", "working");
+
+    let response = handle_set_command(&cmd, &store, None).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+
+    assert!(parsed.ok, "SET should succeed without a usage fetcher");
+    let snapshot: SessionSnapshot =
+        serde_json::from_value(parsed.data.unwrap()).expect("failed to parse snapshot");
+    assert_eq!(snapshot.session_id, "set-no-fetcher");
+    assert_eq!(snapshot.status, "working");
+}
+
+#[tokio::test]
+async fn test_set_command_triggers_refresh_when_unavailable() {
+    // When usage state is Unavailable, a SET command with a fetcher present
+    // should trigger a background refresh (a subscriber receives the broadcast).
+    let store = SessionStore::new();
+    let fetcher = Arc::new(UsageFetcher::new());
+    let mut sub = fetcher.subscribe();
+
+    // Confirm initial state is Unavailable.
+    assert!(matches!(
+        *fetcher.state().read().await,
+        UsageState::Unavailable
+    ));
+
+    let cmd = make_set_cmd("set-triggers-refresh", "attention");
+    let response = handle_set_command(&cmd, &store, Some(&fetcher)).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+    assert!(parsed.ok, "SET should succeed");
+
+    // The spawned task must broadcast to the subscriber within a reasonable timeout.
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), sub.recv()).await;
+    assert!(
+        result.is_ok(),
+        "subscriber should receive usage update after SET triggered refresh"
+    );
+}
+
+#[tokio::test]
+async fn test_set_command_no_refresh_when_available() {
+    // When usage state is Available, a SET command must NOT trigger a refresh.
+    let store = SessionStore::new();
+    let fetcher = Arc::new(UsageFetcher::new());
+
+    // Pre-populate state as Available.
+    let fake_data = claude_usage::UsageData {
+        five_hour: claude_usage::UsagePeriod {
+            utilization: 0.0,
+            resets_at: None,
+        },
+        seven_day: claude_usage::UsagePeriod {
+            utilization: 0.0,
+            resets_at: None,
+        },
+        seven_day_sonnet: None,
+        extra_usage: None,
+    };
+    *fetcher.state().write().await = UsageState::Available(fake_data);
+
+    let mut sub = fetcher.subscribe();
+
+    let cmd = make_set_cmd("set-no-refresh", "working");
+    let response = handle_set_command(&cmd, &store, Some(&fetcher)).await;
+    let parsed: IpcResponse = serde_json::from_str(&response).expect("failed to parse response");
+    assert!(parsed.ok, "SET should succeed");
+
+    // No broadcast should arrive — timeout is expected.
+    let result = tokio::time::timeout(std::time::Duration::from_millis(100), sub.recv()).await;
+    assert!(
+        result.is_err(),
+        "no usage refresh should occur when state is already Available"
+    );
 }
