@@ -108,6 +108,16 @@ fn main() {
             ],
             "PostToolUse": [
                 {
+                    "matcher": "AskUserQuestion",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "acd claude-hook question",
+                            "timeout": 10
+                        }
+                    ]
+                },
+                {
                     "matcher": "",
                     "hooks": [
                         {

@@ -3,11 +3,11 @@
 use crate::commands::install::acd_hook_definitions;
 
 #[test]
-fn test_acd_hook_definitions_has_seven_entries() {
+fn test_acd_hook_definitions_has_nine_entries() {
     let defs = acd_hook_definitions();
-    // 8 hooks: SessionStart, UserPromptSubmit, Stop, SessionEnd, 2×Notification,
-    // PostToolUse, PreCompact
-    assert_eq!(defs.len(), 8, "should define 8 hooks");
+    // 9 hooks: SessionStart, UserPromptSubmit, Stop, SessionEnd, 2×Notification,
+    // PreToolUse(AskUserQuestion), PostToolUse, PreCompact
+    assert_eq!(defs.len(), 9, "should define 9 hooks");
 }
 
 #[test]
@@ -46,12 +46,28 @@ fn test_acd_hook_definitions_includes_post_tool_use() {
         .iter()
         .any(|(event, _, _)| *event == claude_hooks::HookEvent::PostToolUse);
     assert!(has_post_tool_use, "should have PostToolUse hook");
-    // PreToolUse replaced by PostToolUse (acd-0amx)
-    let has_pre_tool_use = defs
-        .iter()
-        .any(|(event, _, _)| *event == claude_hooks::HookEvent::PreToolUse);
+}
+
+#[test]
+fn test_acd_hook_definitions_pre_tool_use_ask_user_question() {
+    let defs = acd_hook_definitions();
+    // Find the PreToolUse hook with AskUserQuestion matcher
+    let ask_user_question_hook = defs.iter().find(|(event, command, matcher)| {
+        *event == claude_hooks::HookEvent::PreToolUse
+            && *command == "acd claude-hook question"
+            && matcher.as_deref() == Some("AskUserQuestion")
+    });
     assert!(
-        !has_pre_tool_use,
-        "PreToolUse should be absent (replaced by PostToolUse)"
+        ask_user_question_hook.is_some(),
+        "should have PreToolUse(AskUserQuestion) hook that calls 'acd claude-hook question'"
+    );
+
+    // Verify the general PostToolUse(working) hook is also present (acd-0amx)
+    let post_tool_use_working = defs.iter().find(|(event, command, _)| {
+        *event == claude_hooks::HookEvent::PostToolUse && *command == "acd claude-hook working"
+    });
+    assert!(
+        post_tool_use_working.is_some(),
+        "should have PostToolUse hook that calls 'acd claude-hook working'"
     );
 }
