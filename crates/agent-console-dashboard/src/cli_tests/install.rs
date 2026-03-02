@@ -3,13 +3,15 @@
 use crate::commands::install::acd_hook_definitions;
 
 #[test]
-fn test_acd_hook_definitions_has_seven_entries() {
+fn test_acd_hook_definitions_has_nine_entries() {
     let defs = acd_hook_definitions();
-    // 8 hooks: PostToolUse removed for experiment (acd-ws6), PreCompact added (acd-wdaj)
+    // 9 hooks: PostToolUse removed for experiment (acd-ws6), PreCompact added (acd-wdaj),
+    // PreToolUse(AskUserQuestion) added for question status (acd-6sjw)
     assert_eq!(
         defs.len(),
-        8,
-        "should define 8 hooks (PostToolUse removed for experiment, PreCompact added)"
+        9,
+        "should define 9 hooks (PostToolUse removed for experiment, PreCompact added, \
+         PreToolUse(AskUserQuestion) added)"
     );
 }
 
@@ -56,5 +58,31 @@ fn test_acd_hook_definitions_includes_pre_tool_use() {
     assert!(
         !has_post_tool_use,
         "PostToolUse should be absent (acd-ws6 experiment)"
+    );
+}
+
+#[test]
+fn test_acd_hook_definitions_pre_tool_use_ask_user_question() {
+    let defs = acd_hook_definitions();
+    // Find the PreToolUse hook with AskUserQuestion matcher
+    let ask_user_question_hook = defs.iter().find(|(event, command, matcher)| {
+        *event == claude_hooks::HookEvent::PreToolUse
+            && *command == "acd claude-hook question"
+            && matcher.as_deref() == Some("AskUserQuestion")
+    });
+    assert!(
+        ask_user_question_hook.is_some(),
+        "should have PreToolUse(AskUserQuestion) hook that calls 'acd claude-hook question'"
+    );
+
+    // Verify the general PreToolUse(working) hook is also present
+    let pre_tool_use_working = defs.iter().find(|(event, command, matcher)| {
+        *event == claude_hooks::HookEvent::PreToolUse
+            && *command == "acd claude-hook working"
+            && matcher.is_none()
+    });
+    assert!(
+        pre_tool_use_working.is_some(),
+        "should still have PreToolUse (no matcher) hook that calls 'acd claude-hook working'"
     );
 }

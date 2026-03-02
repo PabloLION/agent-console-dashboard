@@ -26,6 +26,15 @@ pub(crate) fn acd_hook_definitions() -> Vec<(claude_hooks::HookEvent, &'static s
             "acd claude-hook attention",
             Some("permission_prompt".to_string()),
         ),
+        // PreToolUse(AskUserQuestion) fires when Claude asks the user a question
+        // via AskUserQuestion tool. AskUserQuestion does NOT fire elicitation_dialog
+        // (confirmed: GitHub #13830, #20169), so this is a separate trigger for
+        // the "question" status.
+        (
+            HookEvent::PreToolUse,
+            "acd claude-hook question",
+            Some("AskUserQuestion".to_string()),
+        ),
         // PreToolUse bridges the gap when Claude resumes after permission_prompt
         // or elicitation_dialog. Without it, status stays "attention" while
         // Claude is actively working.
