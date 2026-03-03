@@ -116,6 +116,29 @@ impl UsageFetcher {
         }
     }
 
+    /// Triggers a usage refresh if the current state is `Unavailable`.
+    ///
+    /// Called by hook event handlers after a session status update. If usage data
+    /// is already `Available` (or `Blocked`), this is a no-op — we never
+    /// re-fetch when we already have data (conservative API call policy).
+    ///
+    /// The check and spawn are non-blocking: the read-lock is held briefly to
+    /// inspect state, then dropped before spawning the fetch task.
+    pub(crate) async fn trigger_refresh_if_unavailable(self: &Arc<Self>) {
+        let should_fetch = {
+            let guard = self.state.read().await;
+            matches!(*guard, UsageState::Unavailable)
+        };
+
+        if should_fetch {
+            debug!("hook event triggered usage refresh (state was Unavailable)");
+            let fetcher = Arc::clone(self);
+            tokio::spawn(async move {
+                fetcher.fetch_once().await;
+            });
+        }
+    }
+
     /// Performs a single fetch cycle.
     ///
     /// Skips if no subscribers are present, or if a prior fetch returned 403 Forbidden.
@@ -123,7 +146,7 @@ impl UsageFetcher {
     /// and stops all future fetches. On other failures, logs a warning and marks state
     /// as unavailable (previous data is lost in the shared state but subscribers may
     /// retain their last received value).
-    async fn fetch_once(&self) {
+    pub(crate) async fn fetch_once(&self) {
         // Skip permanently if the API blocked us.
         if self.blocked.load(Ordering::SeqCst) {
             debug!("usage API is blocked (403), skipping fetch");
@@ -366,9 +389,96 @@ mod tests {
         );
     }
 
+    // -------------------------------------------------------------------------
+    // trigger_refresh_if_unavailable tests
+    // -------------------------------------------------------------------------
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_trigger_refresh_no_op_when_unavailable_and_no_subscribers() {
+        // With no subscribers, fetch_once skips the network call and leaves
+        // the state as Unavailable. trigger_refresh_if_unavailable should spawn
+        // the task (state is Unavailable) but fetch_once exits early.
+        let fetcher = Arc::new(UsageFetcher::new());
+        assert!(matches!(
+            *fetcher.state.read().await,
+            UsageState::Unavailable
+        ));
+
+        // Trigger refresh — spawns a task, but with 0 subscribers fetch_once skips.
+        fetcher.trigger_refresh_if_unavailable().await;
+
+        // Give the spawned task time to run.
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // State must still be Unavailable (no subscribers → no fetch).
+        let guard = fetcher.state.read().await;
+        assert!(
+            matches!(*guard, UsageState::Unavailable),
+            "state should remain Unavailable when no subscribers"
+        );
+    }
+
     #[tokio::test]
     async fn test_blocked_flag_defaults_to_false() {
         let fetcher = UsageFetcher::new();
         assert!(!fetcher.blocked.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_trigger_refresh_skips_when_available() {
+        // If state is Available, trigger_refresh_if_unavailable must be a no-op.
+        use claude_usage::UsageData;
+
+        let fetcher = Arc::new(UsageFetcher::new());
+
+        // Manually set state to Available.
+        let fake_data = UsageData {
+            five_hour: claude_usage::UsagePeriod {
+                utilization: 0.0,
+                resets_at: None,
+            },
+            seven_day: claude_usage::UsagePeriod {
+                utilization: 0.0,
+                resets_at: None,
+            },
+            seven_day_sonnet: None,
+            extra_usage: None,
+        };
+        *fetcher.state.write().await = UsageState::Available(fake_data.clone());
+
+        let state_ptr = Arc::as_ptr(&fetcher.state);
+
+        // Call trigger — should NOT spawn a fetch.
+        fetcher.trigger_refresh_if_unavailable().await;
+
+        // Give any hypothetical spawned task time to run.
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // State should still be Available (not reset to Unavailable by a fetch attempt).
+        let guard = fetcher.state.read().await;
+        assert!(
+            matches!(*guard, UsageState::Available(_)),
+            "trigger must not reset Available state"
+        );
+
+        // Sanity check: same Arc backing store throughout.
+        assert_eq!(Arc::as_ptr(&fetcher.state), state_ptr);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_trigger_refresh_spawns_when_unavailable_with_subscriber() {
+        // With a subscriber present, trigger causes fetch_once to attempt a
+        // fetch and broadcast. We verify the subscriber receives an update.
+        let fetcher = Arc::new(UsageFetcher::new());
+        let mut sub = fetcher.subscribe();
+
+        fetcher.trigger_refresh_if_unavailable().await;
+
+        // Wait for the spawned task to complete and the broadcast to arrive.
+        let result = tokio::time::timeout(Duration::from_secs(15), sub.recv()).await;
+        assert!(
+            result.is_ok(),
+            "subscriber should receive update after trigger_refresh_if_unavailable"
+        );
     }
 }

@@ -34,7 +34,10 @@ pub const BETA_HEADER: &str = "oauth-2025-04-20";
 /// The token is used only for this request and is not stored.
 #[cfg(feature = "blocking")]
 pub fn fetch_usage_raw(token: &str) -> Result<String, ApiError> {
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|_| ApiError::Network("Failed to build HTTP client".to_string()))?;
 
     let response = client
         .get(USAGE_API_URL)
