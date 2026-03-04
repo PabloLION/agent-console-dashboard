@@ -39,3 +39,7 @@ logs/security/
 
 # Personal notes (per-developer, not shared)
 .git-ignored/
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
