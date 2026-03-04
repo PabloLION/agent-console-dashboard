@@ -66,6 +66,14 @@ pub enum ApiError {
     /// API returned an unexpected status code.
     #[error("Unexpected status code: {0}")]
     Unexpected(u16),
+
+    /// Required rate limit headers were absent or unparseable in the response.
+    ///
+    /// This occurs when the `/v1/messages` header fallback is used but the
+    /// `anthropic-ratelimit-unified-5h-utilization` or
+    /// `anthropic-ratelimit-unified-7d-utilization` headers are missing.
+    #[error("Required rate limit headers missing from API response")]
+    MissingHeaders,
 }
 
 /// Unified error type for [`get_usage()`](crate::get_usage).

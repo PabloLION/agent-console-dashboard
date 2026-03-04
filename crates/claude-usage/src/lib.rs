@@ -136,7 +136,7 @@ pub mod napi;
 pub mod types;
 
 #[cfg(feature = "blocking")]
-pub use client::fetch_usage_raw;
+pub use client::{fetch_usage_from_headers, fetch_usage_raw};
 pub use credentials::get_token;
 pub use error::{ApiError, CredentialError, Error};
 pub use types::{ExtraUsage, UsageData, UsagePeriod};
@@ -167,10 +167,21 @@ pub use types::{ExtraUsage, UsageData, UsagePeriod};
 #[cfg(feature = "blocking")]
 pub fn get_usage() -> Result<UsageData, Error> {
     let token = credentials::get_token()?;
-    let response = client::fetch_usage_raw(&token)?;
-    let usage: UsageData =
-        serde_json::from_str(&response).map_err(|e| Error::Parse(e.to_string()))?;
-    Ok(usage)
+    match client::fetch_usage_raw(&token) {
+        Ok(response) => {
+            let usage: UsageData =
+                serde_json::from_str(&response).map_err(|e| Error::Parse(e.to_string()))?;
+            Ok(usage)
+        }
+        Err(ApiError::Forbidden) => {
+            // /api/oauth/usage requires user:profile scope; fall back to parsing
+            // rate limit headers from a 1-token /v1/messages probe, which only
+            // needs user:inference scope.
+            let usage = client::fetch_usage_from_headers(&token)?;
+            Ok(usage)
+        }
+        Err(e) => Err(Error::Api(e)),
+    }
 }
 
 #[cfg(test)]
