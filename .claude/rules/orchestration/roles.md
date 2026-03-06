@@ -16,8 +16,9 @@ This ruleset assumes the following are set up in the project:
   configured in agent frontmatter, not as prose rules.
 - **Git worktrees** — used for agent isolation via `isolation: worktree` in
   agent frontmatter. Each dispatch gets a fresh worktree from current main.
-- **Post-merge git hook** — runs formatting auto-fix and the project test suite
-  after each merge. Ensures drift is caught immediately.
+- **Pre-merge-commit git hook** — checks formatting and runs the project test
+  suite before each merge commit is created. Aborts the merge if checks fail,
+  keeping main clean.
 - **Project test suite** — a command (or set of commands) that runs tests and
   linting for the project. Referenced as "project test suite" throughout —
   substitute your actual commands (e.g., `cargo test && cargo clippy`,

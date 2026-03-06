@@ -1,11 +1,18 @@
 #!/bin/sh
 #
-# Post-merge hook: verify formatting and run tests after merge commits.
+# DEPRECATED: Superseded by scripts/pre-merge-commit.sh (Git 2.24+).
 #
-# Merges auto-commit (no pre-commit hook), so agent worktree code may have
-# formatting issues. This hook catches them immediately and runs the test suite.
+# pre-merge-commit runs BEFORE the merge commit is created, so failures abort
+# the merge cleanly. post-merge runs after — a bad merge commit already exists
+# and requires a follow-up fix commit.
 #
-# Install: ln -sf ../../scripts/post-merge.sh .git/hooks/post-merge
+# The post-merge hook slot is now owned by the beads (bd) sync shim.
+# Do not reinstall this script as .git/hooks/post-merge.
+#
+# This file is kept for reference and for environments that predated the
+# migration. Use scripts/pre-merge-commit.sh for new setups.
+#
+# Original install was: ln -sf ../../scripts/post-merge.sh .git/hooks/post-merge
 
 set -e
 

@@ -1,6 +1,7 @@
-# Post-Merge Git Hook
+# Pre-Merge-Commit Git Hook
 
 Created: 20260215T190000Z
+Updated: 20260306T000000Z (migrated from post-merge to pre-merge-commit)
 
 ## Problem
 
@@ -14,18 +15,32 @@ worktree's pre-commit hook may not run or may use a different version.
 
 ## Solution
 
-`scripts/post-merge.sh` — runs automatically after every `git merge`.
+`scripts/pre-merge-commit.sh` — runs automatically before every `git merge`
+commit is created (requires Git 2.24+).
+
+### Why pre-merge-commit instead of post-merge
+
+The original implementation used `scripts/post-merge.sh` (post-merge hook).
+`post-merge` runs after the merge commit is already on the branch — a failing
+check requires a follow-up fix commit to clean up main. `pre-merge-commit` runs
+before the commit is created, so a failed check aborts the merge cleanly with
+no commit produced.
+
+The `post-merge` hook slot is also now occupied by the `bd` (beads) sync shim,
+which handles issue tracker sync. `pre-merge-commit` is a separate slot with no
+competing use.
 
 ### What it checks
 
-1. **Formatting**: `cargo fmt --all -- --check`. If drift detected, auto-fixes
-   with `cargo fmt --all` and tells the user to commit the fix.
-2. **Tests**: `cargo test --workspace`. If tests fail, exits non-zero and tells
-   the user to fix before pushing.
+1. **Formatting**: `cargo fmt --all -- --check`. If drift is detected, the
+   merge is aborted. The developer must run `cargo fmt --all` and re-attempt
+   the merge.
+2. **Tests**: `cargo test --workspace`. If tests fail, the merge is aborted.
 
 ### When it fires
 
-Only when Rust files (`.rs`) were part of the merge. Skips entirely for
+Only when Rust files (`.rs`) differ between the current branch tip and the
+incoming branch tip (`git diff HEAD MERGE_HEAD -- '*.rs'`). Skips entirely for
 documentation-only or config-only merges.
 
 ## Trade-off
@@ -41,5 +56,5 @@ test run). This is acceptable because:
 ## Install
 
 ```sh
-ln -sf ../../scripts/post-merge.sh .git/hooks/post-merge
+ln -sf ../../scripts/pre-merge-commit.sh .git/hooks/pre-merge-commit
 ```
