@@ -56,9 +56,9 @@ alphabetically by filename.
 - **keychain-access-method.md**: Shell out to `/usr/bin/security` to read Claude
   Code's macOS Keychain credentials instead of using the `security-framework`
   crate directly, because only `/usr/bin/security` is in the item's ACL
-- **post-merge-hook.md**: Run `cargo fmt --check` and `cargo test` automatically
-  in a `scripts/post-merge.sh` hook to catch formatting drift from agent
-  worktrees
+- **post-merge-hook.md**: Run `cargo fmt --check` and `cargo test` in a
+  `scripts/pre-merge-commit.sh` hook (Git 2.24+) to abort a failing merge
+  before the commit is created; supersedes the original `post-merge` approach
 - **pre-commit-hooks.md**: Auto-fix and re-stage with `cargo fmt` in pre-commit,
   but keep `cargo clippy` as a report-only gate without auto-fix
 - **resurrect-to-reopen.md**: Replace the `acd resurrect` CLI command and
