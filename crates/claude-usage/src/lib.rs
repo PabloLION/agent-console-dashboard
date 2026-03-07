@@ -173,10 +173,10 @@ pub fn get_usage() -> Result<UsageData, Error> {
                 serde_json::from_str(&response).map_err(|e| Error::Parse(e.to_string()))?;
             Ok(usage)
         }
-        Err(ApiError::Forbidden) => {
-            // /api/oauth/usage requires user:profile scope; fall back to parsing
-            // rate limit headers from a 1-token /v1/messages probe, which only
-            // needs user:inference scope.
+        Err(ApiError::Forbidden) | Err(ApiError::RateLimited { .. }) => {
+            // /api/oauth/usage is inaccessible (403 scope mismatch, or 429 with
+            // retry-after:0 which is Anthropic's access block). Fall back to
+            // parsing rate limit headers from a 1-token /v1/messages probe.
             let usage = client::fetch_usage_from_headers(&token)?;
             Ok(usage)
         }

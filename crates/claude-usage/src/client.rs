@@ -116,7 +116,7 @@ pub fn fetch_usage_from_headers(token: &str) -> Result<UsageData, ApiError> {
 
     let response = client
         .post(MESSAGES_API_URL)
-        .header("Authorization", format!("Bearer {}", token))
+        .header("x-api-key", token)
         .header("Content-Type", "application/json")
         .header("anthropic-version", "2023-06-01")
         .body(body)
